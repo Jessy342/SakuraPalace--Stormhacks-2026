@@ -1,0 +1,83 @@
+{
+  "_help": "Edit this file to change the gacha roster. 'model' is a file in frontend/assets/characters/. Leave voice_id empty to use the default male/female voice. Rarities: Common, Rare, Epic, Legendary, Mythic, Unbound.",
+  "starter": "aiko",
+  "characters": [
+    {
+      "id": "aiko",
+      "name": "Aiko",
+      "title": "The Reluctant Study Buddy",
+      "rarity": "Rare",
+      "gender": "female",
+      "model": "char1.vrm",
+      "voice_id": "",
+      "personality": "tsundere",
+      "color": "#ff7eb6",
+      "intro_line": "It's not like I wanted to be your assistant or anything! ...Let's get to work."
+    },
+    {
+      "id": "ren",
+      "name": "Ren",
+      "title": "Midnight Coder",
+      "rarity": "Epic",
+      "gender": "male",
+      "model": "char2.vrm",
+      "voice_id": "",
+      "personality": "chill",
+      "color": "#7aa2ff",
+      "intro_line": "Hey. I'm Ren. Let's knock out your to-do list, one thing at a time."
+    },
+    {
+      "id": "mika",
+      "name": "Mika",
+      "title": "Sunshine Cheerleader",
+      "rarity": "Epic",
+      "gender": "female",
+      "model": "char3.vrm",
+      "voice_id": "",
+      "personality": "cheerful",
+      "color": "#ffd166",
+      "intro_line": "Yaaay, you pulled me! I'm Mika and I believe in you one hundred percent!"
+    },
+    {
+      "id": "yuki",
+      "name": "Yuki",
+      "title": "Frost Strategist",
+      "rarity": "Legendary",
+      "gender": "female",
+      "model": "char4.vrm",
+      "voice_id": "",
+      "personality": "sensei",
+      "color": "#9be7ff",
+      "intro_line": "Yuki, at your service. Efficiency is beauty. Show me your schedule."
+    },
+    {
+      "id": "kaito",
+      "name": "Kaito",
+      "title": "Blazing Rival",
+      "rarity": "Mythic",
+      "gender": "male",
+      "model": "char5.vrm",
+      "voice_id": "",
+      "personality": "rival",
+      "color": "#ff6b4a",
+      "intro_line": "So you finally summoned me. I'm Kaito. Try to keep up!"
+    },
+    {
+      "id": "celestia",
+      "name": "Celestia",
+      "title": "The Unbound Star",
+      "rarity": "Unbound",
+      "gender": "female",
+      "model": "char6.vrm",
+      "voice_id": "",
+      "personality": "cheerful",
+      "color": "#c792ea",
+      "intro_line": "The stars aligned for you today. I am Celestia, and your focus is now my destiny."
+    }
+  ],
+  "items": [
+    {"id": "stardust_s", "name": "Stardust Pouch", "rarity": "Common", "points": 20},
+    {"id": "stardust_m", "name": "Stardust Bag", "rarity": "Common", "points": 40},
+    {"id": "stardust_l", "name": "Stardust Chest", "rarity": "Rare", "points": 80}
+  ]
+}

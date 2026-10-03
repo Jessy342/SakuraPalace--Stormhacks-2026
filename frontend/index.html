@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anime Assistant</title>
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/three.module.min.js",
+        "three/addons/": "./vendor/three/",
+        "@pixiv/three-vrm": "./vendor/three-vrm.module.min.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- 3D character fills the background -->
+  <canvas id="stage"></canvas>
+  <div id="model-hint" class="hidden"></div>
+
+  <!-- Top HUD -->
+  <header id="hud">
+    <div class="hud-name"><span id="hud-char">Aiko</span><small id="hud-title"></small></div>
+    <div class="hud-level">
+      <span>Lv <b id="hud-level">1</b></span>
+      <div class="xpbar"><div id="hud-xp"></div></div>
+      <small id="hud-xptext">0 / 100 XP</small>
+    </div>
+    <div class="hud-points"><span class="gem">◆</span> <b id="hud-points">0</b></div>
+    <div id="hud-focus" class="focus-pill off">Focus off</div>
+  </header>
+
+  <!-- Subtitles / speech bubble -->
+  <div id="bubble" class="hidden"><div id="bubble-text"></div><div id="bubble-sub"></div></div>
+
+  <!-- Distraction warning banner -->
+  <div id="warning" class="hidden">
+    <div class="warn-title">⚠ DISTRACTION DETECTED</div>
+    <div id="warn-text"></div>
+  </div>
+
+  <!-- Floating reward popups go here -->
+  <div id="floaters"></div>
+
+  <!-- Right-side panel with tabs -->
+  <aside id="panel">
+    <nav id="tabs">
+      <button data-tab="chat" class="active">Chat</button>
+      <button data-tab="tasks">Tasks</button>
+      <button data-tab="focus">Focus</button>
+      <button data-tab="gacha">Gacha</button>
+      <button data-tab="shop">Shop</button>
+      <button data-tab="teacher">Teacher</button>
+      <button data-tab="settings">⚙</button>
+    </nav>
+
+    <!-- CHAT -->
+    <section id="tab-chat" class="tab active">
+      <div id="chat-log"></div>
+      <form id="chat-form">
+        <button type="button" id="mic-btn" title="Click to talk, click again to send">🎤</button>
+        <input id="chat-input" placeholder="Talk to your assistant… (try: remind me to study at 5pm)" autocomplete="off" />
+        <button type="submit">Send</button>
+      </form>
+    </section>
+
+    <!-- TASKS -->
+    <section id="tab-tasks" class="tab">
+      <form id="task-form" class="row">
+        <input id="task-title" placeholder="New task…" required />
+        <select id="task-diff">
+          <option value="easy">Easy (+15 XP)</option>
+          <option value="medium" selected>Medium (+30 XP)</option>
+          <option value="hard">Hard (+60 XP)</option>
+        </select>
+        <input id="task-due" type="date" />
+        <button type="submit">Add</button>
+      </form>
+      <h3>To do</h3>
+      <ul id="task-list" class="list"></ul>
+      <details>
+        <summary>Completed</summary>
+        <ul id="done-list" class="list done"></ul>
+      </details>
+      <h3>Plan my week ✨</h3>
+      <textarea id="plan-goals" rows="3" placeholder="Tell me your goals and interests this week (e.g. midterm Friday, gym 3x, learn guitar)…"></textarea>
+      <button id="plan-btn">Make my plan</button>
+    </section>
+
+    <!-- FOCUS -->
+    <section id="tab-focus" class="tab">
+      <div class="focus-card">
+        <div id="focus-timer">00:00</div>
+        <div id="focus-status">Not focusing</div>
+        <button id="focus-toggle" class="big">Start focus session</button>
+        <small>Earn 2 points + 1 XP per focused minute. Open a blocked app or site and your assistant gets angry!</small>
+      </div>
+      <h3>Blocked apps <small>(process names)</small></h3>
+      <textarea id="blocked-apps" rows="2"></textarea>
+      <h3>Blocked sites <small>(words in the tab title)</small></h3>
+      <textarea id="blocked-sites" rows="2"></textarea>
+      <div class="grid2">
+        <label>Grace period (s)<input id="grace" type="number" min="0" /></label>
+        <label>Drain every (s)<input id="drain-every" type="number" min="1" /></label>
+        <label>Points per drain<input id="drain-amount" type="number" min="0" /></label>
+        <label>Force-close after (s)<input id="force-close" type="number" min="5" /></label>
+      </div>
+      <label class="check"><input id="demo-mode" type="checkbox" /> Demo mode (fast timings + forced gacha rarity, for judges)</label>
+      <button id="save-focus">Save focus settings</button>
+      <div class="sim">
+        <button id="sim-on">Simulate distraction</button>
+        <button id="sim-off">Stop simulating</button>
+      </div>
+      <small id="focus-platform"></small>
+    </section>
+
+    <!-- GACHA -->
+    <section id="tab-gacha" class="tab">
+      <div id="banner">
+        <div class="banner-title">Starfall Wish</div>
+        <div class="banner-sub">Featured: <b>Celestia, the Unbound Star</b></div>
+        <div id="pity-text"></div>
+      </div>
+      <div class="row">
+        <button id="pull1" class="big"></button>
+        <button id="pull10" class="big gold"></button>
+      </div>
+      <div id="force-row" class="hidden">
+        <label>Demo: force rarity of first pull
+          <select id="force-rarity">
+            <option value="">(random)</option>
+            <option>Rare</option><option>Epic</option><option>Legendary</option><option>Mythic</option><option>Unbound</option>
+          </select>
+        </label>
+      </div>
+      <details><summary>Rates</summary><table id="rates"></table>
+        <small>10-pull guarantees Epic or better. Duplicates refund points and raise Bond (max 6).</small></details>
+      <h3>Collection</h3>
+      <div id="collection" class="cards"></div>
+    </section>
+
+    <!-- SHOP -->
+    <section id="tab-shop" class="tab">
+      <h3>Accessories</h3>
+      <div id="shop-acc" class="cards"></div>
+      <h3>Backgrounds</h3>
+      <div id="shop-bg" class="cards"></div>
+    </section>
+
+    <!-- TEACHER -->
+    <section id="tab-teacher" class="tab">
+      <div class="row">
+        <input id="teach-file" type="file" accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.docx,.pptx" />
+        <button id="teach-upload">Upload</button>
+      </div>
+      <small id="teach-file-name">No file yet. Upload notes, slides or a textbook chapter.</small>
+      <div id="lesson"></div>
+      <form id="teach-form" class="row">
+        <input id="teach-q" placeholder="Ask a question about the material…" />
+        <button type="submit">Ask</button>
+      </form>
+      <button id="teach-start">Teach me this file</button>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="tab-settings" class="tab">
+      <h3>Assistant</h3>
+      <div id="char-select" class="cards"></div>
+      <h3>Personality</h3>
+      <select id="personality">
+        <option value="tsundere">Tsundere</option>
+        <option value="cheerful">Cheerful &amp; supportive</option>
+        <option value="sensei">Strict sensei</option>
+        <option value="chill">Chill &amp; deadpan</option>
+        <option value="rival">Hot-blooded rival</option>
+        <option value="custom">Custom…</option>
+      </select>
+      <textarea id="personality-custom" rows="2" class="hidden" placeholder="Describe the personality you want…"></textarea>
+      <button id="save-personality">Save personality</button>
+      <h3>Voice</h3>
+      <label class="check"><input type="radio" name="vmode" value="dub" /> Dub (English voice)</label>
+      <label class="check"><input type="radio" name="vmode" value="sub" /> Sub (Japanese voice + English subtitles)</label>
+      <h3>Background</h3>
+      <div id="bg-select" class="cards"></div>
+      <h3>System</h3>
+      <div id="sys-status"></div>
+      <button id="reset-btn" class="danger">Reset all progress</button>
+    </section>
+  </aside>
+
+  <!-- Gacha cutscene overlay -->
+  <div id="cutscene" class="hidden">
+    <canvas id="cut-canvas"></canvas>
+    <div id="cut-content"></div>
+    <button id="cut-skip">Skip ▸</button>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

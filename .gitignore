@@ -1,0 +1,17 @@
+# secrets - NEVER commit these
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# personal save data / caches (each person has their own)
+backend/data/save.json
+backend/data/*.tmp
+backend/data/uploads/
+backend/data/tts_cache/
+
+# OS junk
+.DS_Store
+Thumbs.db

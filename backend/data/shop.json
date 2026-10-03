@@ -1,0 +1,18 @@
+{
+  "_help": "Accessories are simple 3D shapes attached to the character's head (see frontend/js/accessories.js). Backgrounds are CSS backgrounds or image files in frontend/assets/backgrounds/.",
+  "accessories": [
+    {"id": "cat_ears", "name": "Cat Ears", "price": 150},
+    {"id": "glasses", "name": "Study Glasses", "price": 120},
+    {"id": "halo", "name": "Golden Halo", "price": 300},
+    {"id": "crown", "name": "Royal Crown", "price": 500},
+    {"id": "witch_hat", "name": "Witch Hat", "price": 400},
+    {"id": "bow", "name": "Big Ribbon Bow", "price": 200}
+  ],
+  "backgrounds": [
+    {"id": "sakura", "name": "Sakura Evening", "price": 0, "css": "linear-gradient(180deg,#ffd1e8 0%,#ff9fc8 45%,#7b4f9e 100%)"},
+    {"id": "night_city", "name": "Neon Night", "price": 200, "css": "linear-gradient(180deg,#0f0c29 0%,#302b63 55%,#ff2e88 130%)"},
+    {"id": "classroom", "name": "Sunny Classroom", "price": 150, "css": "linear-gradient(180deg,#fff6d6 0%,#ffe2a8 50%,#c9a27a 100%)"},
+    {"id": "beach", "name": "Sunset Beach", "price": 250, "css": "linear-gradient(180deg,#ff9a8b 0%,#ff6a88 40%,#3a6ea5 75%,#f6d365 100%)"},
+    {"id": "galaxy", "name": "Galaxy Dream", "price": 400, "css": "radial-gradient(circle at 30% 20%,#6a3093 0%,#1a1a40 45%,#000 100%)"}
+  ]
+}
