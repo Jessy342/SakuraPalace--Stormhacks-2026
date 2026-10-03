@@ -59,7 +59,8 @@ def parse_json(text):
     return {"emotion": "neutral", "reply": (text or "...").strip()[:600]}
 
 
-def gemini_json(system, contents):
+def gemini_json(system, contents, thinking="minimal"):
+    """thinking: minimal (fast + cheap, used for chat) | low | medium | high. Thinking tokens are billed as output."""
     from google.genai import types
     resp = client().models.generate_content(
         model=GEMINI_MODEL,
@@ -68,6 +69,7 @@ def gemini_json(system, contents):
             system_instruction=system,
             response_mime_type="application/json",
             temperature=0.9,
+            thinking_config=types.ThinkingConfig(thinking_level=thinking),
         ),
     )
     return parse_json(resp.text)
@@ -219,7 +221,7 @@ Respond ONLY with JSON: {{"emotion": "happy|neutral|surprised|relaxed",
     contents += history_to_contents(body.history)
     contents.append({"role": "user", "parts": [{"text": body.question}]})
     try:
-        data = gemini_json(system, contents)
+        data = gemini_json(system, contents, thinking="low")  # a bit more thinking for better lessons
     except Exception as e:
         raise HTTPException(500, f"Gemini error: {e}")
     return {"emotion": data.get("emotion", "neutral"), "speech": data.get("speech", ""),
