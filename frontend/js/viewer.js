@@ -5,6 +5,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { REST, DEFAULT, blend, writePose } from './poses.js';
 
+const KEEP = 4; // how many loaded models stay in memory
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const frame = () => new Promise(r => requestAnimationFrame(r));
+
 export class ModelViewer {
   constructor() {
     this.canvas = document.createElement('canvas');
@@ -21,6 +25,8 @@ export class ModelViewer {
     this.id = null;     // which character is (being) shown
     this.vrm = null;
     this.yaw = 0;
+    this.cache = new Map();   // id -> { vrm, root, H }: models already loaded
+    this.loading = new Map(); // id -> load in progress
     this.turn = 0;      // goes up with every request, so a slow load never replaces a newer pick
     // drag to rotate
     let last = null;
@@ -39,31 +45,62 @@ export class ModelViewer {
     this.fit();
     if (id === this.id) { if (this.vrm) holder.classList.add('live'); return; } // same character: just re-attach
     const turn = ++this.turn;
-    this.clearModel();
+    this.hideModel();
     this.id = id;
     try {
-      const loader = new GLTFLoader();
-      loader.register(parser => new VRMLoaderPlugin(parser));
-      const gltf = await loader.loadAsync(url);
-      const vrm = gltf.userData.vrm;
-      if (turn !== this.turn) { VRMUtils.deepDispose(vrm.scene); return; }
-      VRMUtils.rotateVRM0(vrm);
-      vrm.scene.traverse(o => { o.frustumCulled = false; });
-      this.vrm = vrm;
+      let entry = this.cache.get(id);
+      if (!entry) {
+        await wait(170); // flicking through the list with the arrow keys: only load the one you stop on
+        if (turn !== this.turn) return;
+        const loader = new GLTFLoader();
+        loader.register(parser => new VRMLoaderPlugin(parser));
+        const gltf = await (this.loading.get(id) || this.loading.set(id, loader.loadAsync(url)).get(id)).finally(() => this.loading.delete(id));
+        const vrm = gltf.userData.vrm;
+        if (this.cache.has(id)) entry = this.cache.get(id); // (asked for twice while it loaded)
+        else {
+          VRMUtils.rotateVRM0(vrm);
+          vrm.scene.traverse(o => { o.frustumCulled = false; });
+          const root = new THREE.Group();
+          root.add(vrm.scene);
+          root.visible = false;
+          this.scene.add(root);
+          vrm.update(0);
+          const head = vrm.humanoid.getRawBoneNode('head').getWorldPosition(new THREE.Vector3());
+          entry = { vrm, root, H: head.y + 0.18 };
+          this.cache.set(id, entry);
+          // get the graphics card ready a little at a time, so the first frame of a new model doesn't make the screen hitch
+          await frame();
+          const textures = new Set();
+          root.traverse(o => { for (const m of [].concat(o.material || [])) for (const v of [...Object.values(m), ...Object.values(m.uniforms || {}).map(u => u?.value)]) if (v?.isTexture) textures.add(v); });
+          for (const tex of textures) { this.renderer.initTexture(tex); await frame(); }
+          const meshes = [];
+          root.traverse(o => { if (o.isMesh) meshes.push(o); });
+          for (const m of meshes) { await this.renderer.compileAsync(m, this.camera, this.scene); await frame(); }
+        }
+        if (turn !== this.turn) { this.trim(); return; }
+      }
+      this.cache.delete(id); this.cache.set(id, entry); // most recently used goes last
+      this.trim();
+      this.vrm = entry.vrm; this.root = entry.root;
       this.personality = personality;
-      this.root = new THREE.Group();
-      this.root.add(vrm.scene);
-      this.scene.add(this.root);
+      this.root.visible = true;
       this.yaw = -0.25;
-      vrm.update(0);
-      const head = vrm.humanoid.getRawBoneNode('head').getWorldPosition(new THREE.Vector3());
-      const H = head.y + 0.18, span = H * 0.66; // from the knees to just above the head
+      const H = entry.H, span = H * 0.66; // from the knees to just above the head
       this.camera.position.set(0, H * 0.7, span / (2 * Math.tan(THREE.MathUtils.degToRad(12))));
       this.camera.lookAt(0, H * 0.7, 0);
-      this.nextBlink = 2; this.blinkStart = -1;
+      this.nextBlink = this.clock.elapsedTime + 2; this.blinkStart = -1;
       this.holder.classList.add('live');
       this.renderer.setAnimationLoop(() => this.frame());
     } catch (e) { console.warn('[viewer] model not available:', e.message); }
+  }
+
+  /** Keeps the last few models ready (coming back to one is instant) and frees the older ones. */
+  trim() {
+    for (const [id, e] of this.cache) {
+      if (this.cache.size <= KEEP) break;
+      if (e.root === this.root) continue;
+      this.scene.remove(e.root); VRMUtils.deepDispose(e.vrm.scene); this.cache.delete(id);
+    }
   }
 
   fit() {
@@ -96,17 +133,18 @@ export class ModelViewer {
     this.renderer.render(this.scene, this.camera);
   }
 
-  clearModel() {
+  hideModel() {
     this.renderer.setAnimationLoop(null);
-    if (this.root) this.scene.remove(this.root);
-    if (this.vrm) VRMUtils.deepDispose(this.vrm.scene);
+    if (this.root) this.root.visible = false;
     this.vrm = this.root = null;
   }
 
-  /** Called when the Characters screen closes: frees the model. */
+  /** Called when the Characters screen closes: frees the models. */
   stop() {
     this.turn++;
-    this.clearModel();
+    this.hideModel();
+    for (const e of this.cache.values()) { this.scene.remove(e.root); VRMUtils.deepDispose(e.vrm.scene); }
+    this.cache.clear();
     this.id = null;
     this.canvas.remove();
   }

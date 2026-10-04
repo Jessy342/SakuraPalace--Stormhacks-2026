@@ -496,6 +496,37 @@ export function startScene(overlay) {
   }
   rays.position.y = 0.8;
   scene.add(pillar, pillarCore, rays);
+  // more to the pillar: a soft aura around it, two ribbons of light winding up it, rings climbing it and motes rising beside it
+  const auraMat = new THREE.MeshBasicMaterial({ map: canvasTexture(128, 256, (g, w, h) => {
+    const across = g.createLinearGradient(0, 0, w, 0);
+    across.addColorStop(0, 'rgba(255,255,255,0)'); across.addColorStop(0.5, 'rgba(255,255,255,.9)'); across.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = across; g.fillRect(0, 0, w, h);
+    g.globalCompositeOperation = 'destination-in';
+    const up = g.createLinearGradient(0, 0, 0, h);
+    up.addColorStop(0, 'rgba(0,0,0,0)'); up.addColorStop(0.6, 'rgba(0,0,0,.7)'); up.addColorStop(1, 'rgba(0,0,0,1)');
+    g.fillStyle = up; g.fillRect(0, 0, w, h);
+  }), side: THREE.DoubleSide, ...additive({ opacity: 0 }) });
+  const aura = new THREE.Group();
+  for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(7, 60), auraMat); m.rotation.y = i * Math.PI / 3; aura.add(m); }
+  aura.position.y = 30;
+  class Helix extends THREE.Curve {
+    constructor(phase) { super(); this.phase = phase; }
+    getPoint(u, target = new THREE.Vector3()) { const a = u * TAU * 7 + this.phase, r = 1.6 + u * 1.8; return target.set(Math.cos(a) * r, u * 34, Math.sin(a) * r); }
+  }
+  const ribbonMat = new THREE.MeshBasicMaterial({ color: 0xfff4d6, ...additive({ opacity: 0 }) });
+  const ribbons = new THREE.Group();
+  for (const phase of [0, Math.PI]) ribbons.add(new THREE.Mesh(new THREE.TubeGeometry(new Helix(phase), 260, 0.05, 5), ribbonMat));
+  const beamRingGeo = new THREE.TorusGeometry(1, 0.035, 6, 64);
+  const beamRings = Array.from({ length: 4 }, () => { const m = new THREE.Mesh(beamRingGeo, new THREE.MeshBasicMaterial({ ...additive({ opacity: 0 }) })); m.rotation.x = Math.PI / 2; return m; });
+  const N_MOTES = 240, moteTop = 26;
+  const motes = Array.from({ length: N_MOTES }, () => ({ a: Math.random() * TAU, r: rnd(1.3, 4.6), y: Math.random() * moteTop, v: rnd(2.5, 7), w: rnd(-1.2, 1.2) }));
+  const motePos = new Float32Array(N_MOTES * 3);
+  const moteGeo = new THREE.BufferGeometry();
+  moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+  const moteMat = new THREE.PointsMaterial({ size: 0.5, map: flare, color: 0xfff4d6, ...additive({ opacity: 0 }) });
+  const motePoints = new THREE.Points(moteGeo, moteMat);
+  motePoints.frustumCulled = false;
+  scene.add(aura, ribbons, ...beamRings, motePoints);
 
   // --- sakura petals drawn in toward the flower, and fireflies over the water ---
   const N_PETALS = 280;
@@ -574,7 +605,7 @@ export function startScene(overlay) {
     else color.lerp(tint.set(RARITY[rarity]), Math.min(1, dt * 6));
     petalMat.color.set(0xffffff).lerp(color, 0.42); petalMat.emissive.copy(petalMat.color);
     mirrorMat.color.copy(petalMat.color);
-    for (const m of [halo.material, waterGlow.material, pillarMat, rayMat, circleMat]) m.color.copy(color);
+    for (const m of [halo.material, waterGlow.material, pillarMat, rayMat, circleMat, auraMat, ...beamRings.map(r => r.material)]) m.color.copy(color);
     heart.color.copy(color).lerp(tint.set(0xffffff), 0.35);
 
     charge = Math.min(1, charge + dt * 0.3);
@@ -624,6 +655,21 @@ export function startScene(overlay) {
     pillar.scale.x = pillar.scale.z = 1 + 0.08 * Math.sin(t * 7);
     pillar.rotation.y = t * 0.8; pillarTex.offset.y = -t * 0.6;
     rayMat.opacity = pillarOn * (0.3 + 0.12 * Math.sin(t * 5)); rays.rotation.y = -t * 0.25;
+    auraMat.opacity = pillarOn * (0.14 + 0.05 * Math.sin(t * 6)); aura.rotation.y = t * 0.3;
+    ribbonMat.opacity = pillarOn * 0.6; ribbons.rotation.y = -t * 2.4;
+    beamRings.forEach((ring, i) => {
+      const u = (t * 0.35 + i / beamRings.length) % 1;
+      ring.position.y = 0.6 + u * 22; ring.scale.setScalar(2 + u * 3); ring.material.opacity = pillarOn * 0.7 * Math.sin(u * Math.PI);
+    });
+    moteMat.opacity = pillarOn;
+    if (pillarOn > 0.01) {
+      motes.forEach((m, i) => {
+        m.y += m.v * dt; if (m.y > moteTop) m.y = 0;
+        m.a += m.w * dt;
+        motePos[i * 3] = Math.cos(m.a) * m.r; motePos[i * 3 + 1] = m.y; motePos[i * 3 + 2] = Math.sin(m.a) * m.r;
+      });
+      moteGeo.attributes.position.needsUpdate = true;
+    }
 
     // sakura petals: spiral inward while the bud charges, drift up and outward once it has bloomed
     for (let i = 0; i < N_PETALS; i++) {

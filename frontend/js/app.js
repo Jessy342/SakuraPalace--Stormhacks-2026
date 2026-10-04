@@ -1099,6 +1099,20 @@ function clickItem(kind, id) {
   renderDress();
 }
 
+// What the companion says when something new is put on: [English, Japanese]
+const WEAR_LINES = [['Sugoi! I love it!', 'すごい！これ、気に入った！'], ['Super! Nice pick!', '最高！いいセンスだね！'], ['Ooh, how do I look?', 'ねえ、どう？似合う？'],
+  ['Perfect fit!', 'ぴったり！'], ['Not bad at all!', 'なかなかいいね！'], ['Yay, this one is great!', 'やった、これすごくいい！']];
+const ROOM_LINES = [['Wow, what a view!', 'わあ、いい景色！'], ['Sugoi! I like it here!', 'すごい！ここ、気に入った！'], ['Ooh, nice place!', 'おお、いい場所だね！']];
+
+/** A brief happy reaction to a new item: a small gesture, a sparkle and a short line. */
+function reactToItem(kind) {
+  const lines = kind === 'background' ? ROOM_LINES : WEAR_LINES;
+  const [text, ja] = lines[Math.floor(Math.random() * lines.length)];
+  character.react();
+  vfx.burst(innerWidth / 2, innerHeight * 0.42, '#ffd27a', 22);
+  say(text, { emotion: 'happy', ja, seconds: 3 });
+}
+
 /** The button under the picked item: buy it if it isn't owned, otherwise wear / take off / use it. */
 async function applyPicked() {
   const { kind, id } = picked;
@@ -1107,13 +1121,15 @@ async function applyPicked() {
     voice.sfx('task_done');
     vfx.burst(innerWidth / 2, innerHeight * 0.4, '#ff8fc4', 60);
     await setState(await post('/equip', { kind, id, on: true })); // wear / use it right away
-    say('Ooh, thank you! I love it!', { emotion: 'happy' });
+    reactToItem(kind);
   } else if (kind !== 'background') {
     const on = !isOn(kind, id);
     await setState(await post('/equip', { kind, id, on }));
-    if (on) character.setEmotion('happy', 3);
+    if (on) reactToItem(kind);
   } else {
+    const changed = !isOn(kind, id);
     await setState(await post('/equip', { kind, id }));
+    if (changed) reactToItem(kind);
   }
 }
 

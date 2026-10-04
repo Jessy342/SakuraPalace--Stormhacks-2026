@@ -55,6 +55,14 @@ export const GESTURES = [
   [{ rightUpperArm: [-0.75, 0, 1.2], rightLowerArm: [0, 2.15, 0], head: [0.06, -0.08, 0.05] }, 3],     // hand to chin, thinking
 ];
 
+// ---- quick happy reactions (putting on a new item): [pose, seconds] ----
+export const REACTIONS = [
+  [{ leftUpperArm: [0, 0, -0.4], rightUpperArm: [0, 0, 0.4], leftLowerArm: [0, 0, 1.8], rightLowerArm: [0, 0, -1.8], head: [-0.1, 0, 0], spine: [-0.05, 0, 0], fingers: { left: 0.9, right: 0.9 } }, 2.0], // both fists up: yay!
+  [{ rightUpperArm: [-0.75, 0, 1.2], rightLowerArm: [0, 2.15, 0], head: [0.05, -0.1, 0.14], spine: [0, 0, 0.04] }, 2.4],   // hand to her cheek, admiring
+  [{ leftUpperArm: [0, 0, -0.9], rightUpperArm: [0, 0, 0.9], head: [0.3, 0, 0], spine: [0.08, 0, 0], fingers: { left: 0, right: 0 } }, 2.4], // arms out a little, looking down at herself
+  [{ leftUpperArm: [-0.25, 0, -0.35], leftLowerArm: [0, -0.3, 2.05], head: [0.04, -0.15, 0.1] }, 2.2], // touches her hair, pleased
+];
+
 const BONES = ['hips', 'spine', 'chest', 'neck', 'head', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm',
   'leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg'];
 const FINGERS = ['index', 'middle', 'ring', 'little', 'thumb'];

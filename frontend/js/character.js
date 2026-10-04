@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { buildAccessory, DEFAULT_FACE } from './accessories.js';
-import { REST, GESTURES, DEFAULT, blend, writePose } from './poses.js';
+import { REST, GESTURES, REACTIONS, DEFAULT, blend, writePose } from './poses.js';
 import { wearModelOutfit } from './outfits.js';
 
 const EMOTIONS = ['happy', 'angry', 'sad', 'surprised', 'relaxed'];
@@ -76,7 +76,7 @@ export class Character {
         if (Math.abs(dx) > 4) this.drag.moved = true;
         if (this.drag.moved) { this.spin = this.spinTarget = this.drag.spin + dx * 0.012; canvas.style.cursor = 'grabbing'; return; }
       }
-      if (e.target === canvas) canvas.style.cursor = this.hitTest(this.cursor) ? 'pointer' : this.dragRotate ? 'grab' : '';
+      if (e.target === canvas) canvas.style.cursor = this.hitTest(this.cursor) ? 'var(--hand)' : this.dragRotate ? 'grab' : '';
     });
 
     // Poking: click her body for a reaction, click her head for a headpat.
@@ -554,6 +554,13 @@ export class Character {
     return ray.intersectsBox(body) ? 'body' : null;
   }
 
+  /** A quick happy reaction (trying on something new): a little gesture, played even while talking. */
+  react() {
+    const [pose, seconds] = REACTIONS[Math.floor(Math.random() * REACTIONS.length)];
+    this.gesture = { pose, start: this.clock.elapsedTime, seconds, force: true };
+    this.setEmotion('happy', seconds + 1);
+  }
+
   /** Waves hello with her right arm for a few seconds. */
   wave(seconds = 2.5) {
     this.waveUntil = this.clock.elapsedTime + seconds;
@@ -610,7 +617,7 @@ export class Character {
     }
     if (this.gesture) {
       const p = (t - this.gesture.start) / this.gesture.seconds;
-      if (p >= 1 || busy) { this.gesture = null; this.nextGesture = t + 7 + Math.random() * 9; }
+      if (p >= 1 || (busy && !this.gesture.force)) { this.gesture = null; this.nextGesture = t + 7 + Math.random() * 9; }
       else pose = blend(pose, { ...(REST[this.personality] || DEFAULT), ...this.gesture.pose }, Math.sin(Math.min(1, p * 2.2) * Math.PI / 2) * Math.sin(Math.min(1, (1 - p) * 2.2) * Math.PI / 2));
     }
 
