@@ -1,15 +1,13 @@
-"""Gemini brain: chat with the assistant, Teacher mode (upload a file and learn it), and weekly planning."""
+"""Gemini brain: chat with the assistant and weekly planning."""
 import json
 import re
-import shutil
-import uuid
 from datetime import date
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 import storage
-from config import GEMINI_API_KEY, GEMINI_MODEL, UPLOAD_DIR
+from config import GEMINI_API_KEY, GEMINI_MODEL
 from game import create_task, public_state
 from storage import Transaction, get_character
 
@@ -177,56 +175,3 @@ Respond ONLY with JSON: {{"emotion": "happy", "reply": "one or two spoken senten
                 added.append(create_task(st, t["title"], t.get("difficulty", "medium"), t.get("due")))
     return {"emotion": data.get("emotion", "happy"), "reply": data.get("reply", ""), "added_tasks": added,
             "state": public_state(storage.load())}
-
-
-# ---------------- Teacher mode ----------------
-TEACHER = {"file": None, "name": None}
-
-
-@router.post("/teacher/upload")
-async def teacher_upload(file: UploadFile = File(...)):
-    if not client():
-        raise HTTPException(400, "Add GEMINI_API_KEY to .env to use Teacher mode")
-    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", file.filename or "upload")
-    path = UPLOAD_DIR / f"{uuid.uuid4().hex[:6]}_{safe_name}"
-    with open(path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    try:
-        uploaded = client().files.upload(file=str(path))
-    except Exception as e:
-        raise HTTPException(500, f"Could not upload to Gemini: {e}")
-    TEACHER["file"] = uploaded
-    TEACHER["name"] = file.filename
-    return {"ok": True, "name": file.filename}
-
-
-class TeachIn(BaseModel):
-    question: str = "Teach me the key ideas in this file, starting from the basics."
-    history: list[dict] = []
-
-
-@router.post("/teacher/ask")
-def teacher_ask(body: TeachIn):
-    if not client():
-        raise HTTPException(400, "Add GEMINI_API_KEY to .env to use Teacher mode")
-    state = storage.load()
-    char = get_character(state["active_character"])
-    sub = state["settings"].get("voice_mode") == "sub"
-    system = f"""You are {char['name']}, acting as the user's personal tutor. Personality: {personality_for(state, char)}
-Teach like a great tutor: explain step by step, use simple examples, check understanding, and end with one short quiz question.
-{"The user uploaded a file called '" + TEACHER['name'] + "'. Base your teaching on it." if TEACHER['file'] else "No file uploaded; teach from general knowledge."}
-Respond ONLY with JSON: {{"emotion": "happy|neutral|surprised|relaxed",
-"speech": "1-2 short sentences you say out loud (in character, no markdown)",
-"speech_ja": "{'Japanese version of speech' if sub else ''}",
-"text": "the full lesson in markdown (headings, bullet points, examples, quiz question at the end)"}}"""
-    contents = []
-    if TEACHER["file"]:
-        contents.append({"role": "user", "parts": [{"file_data": {"file_uri": TEACHER["file"].uri, "mime_type": TEACHER["file"].mime_type}}]})
-    contents += history_to_contents(body.history)
-    contents.append({"role": "user", "parts": [{"text": body.question}]})
-    try:
-        data = gemini_json(system, contents, thinking="low")  # a bit more thinking for better lessons
-    except Exception as e:
-        raise HTTPException(500, f"Gemini error: {e}")
-    return {"emotion": data.get("emotion", "neutral"), "speech": data.get("speech", ""),
-            "speech_ja": data.get("speech_ja", ""), "text": data.get("text", "")}

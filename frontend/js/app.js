@@ -10,7 +10,6 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 
 let S = null;            // full game state from the backend
 let chatHistory = [];
-let teachHistory = [];
 let loadedModelFor = null;
 let lastPoints = null;
 let lastEventId = 0;
@@ -783,59 +782,6 @@ document.addEventListener('click', async e => {
     }
   } catch (err) { toastError(err); }
 });
-
-// ======================= Teacher =======================
-function renderMarkdown(md) {
-  const lines = esc(md).split('\n');
-  let html = '', list = null;
-  const inline = s => s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>').replace(/`(.+?)`/g, '<code>$1</code>');
-  for (const line of lines) {
-    const m = line.match(/^\s*([-*]|\d+\.)\s+(.*)/);
-    if (m) {
-      const tag = /\d/.test(m[1]) ? 'ol' : 'ul';
-      if (list !== tag) { if (list) html += `</${list}>`; html += `<${tag}>`; list = tag; }
-      html += `<li>${inline(m[2])}</li>`;
-      continue;
-    }
-    if (list) { html += `</${list}>`; list = null; }
-    const h = line.match(/^(#{1,3})\s+(.*)/);
-    if (h) html += `<h${h[1].length + 1}>${inline(h[2])}</h${h[1].length + 1}>`;
-    else if (line.trim()) html += `<p>${inline(line)}</p>`;
-  }
-  if (list) html += `</${list}>`;
-  return html;
-}
-
-$('teach-upload').addEventListener('click', async () => {
-  const f = $('teach-file').files[0];
-  if (!f) return;
-  const form = new FormData();
-  form.append('file', f);
-  $('teach-file-name').textContent = 'Uploading…';
-  try {
-    await api('/teacher/upload', { method: 'POST', form });
-    teachHistory = [];
-    $('teach-file-name').textContent = `📄 ${f.name} ready.`;
-    await teach('Teach me the key ideas in this file, starting from the basics.');
-  } catch (err) { $('teach-file-name').textContent = '⚠ ' + err.message; }
-});
-
-$('teach-start').addEventListener('click', () => teach('Teach me the key ideas in this file, starting from the basics.'));
-$('teach-form').addEventListener('submit', e => {
-  e.preventDefault();
-  const q = $('teach-q').value.trim();
-  if (q) { $('teach-q').value = ''; teach(q); }
-});
-
-async function teach(question) {
-  $('lesson').innerHTML = '<p><i>Preparing your lesson…</i></p>';
-  try {
-    const res = await post('/teacher/ask', { question, history: teachHistory });
-    teachHistory.push({ role: 'user', text: question }, { role: 'model', text: res.text });
-    $('lesson').innerHTML = renderMarkdown(res.text);
-    say(res.speech, { emotion: res.emotion, ja: res.speech_ja });
-  } catch (err) { $('lesson').textContent = '⚠ ' + err.message; }
-}
 
 // ======================= Options =======================
 function renderOptions() {

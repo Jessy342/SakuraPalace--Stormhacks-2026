@@ -21,13 +21,13 @@ backend/                 Python 3.12, FastAPI. One file per system.
   config.py              .env settings, model names
   storage.py             JSON save file (backend/data/save.json) + Transaction() helper
   game.py                tasks, XP/levels, shop, gacha (rates, pity, 10-pull, duplicates)  -> /api/state, /api/tasks, /api/gacha/pull ...
-  ai.py                  Gemini chat (JSON replies w/ emotion + add_tasks), weekly planner, Teacher mode -> /api/chat, /api/plan, /api/teacher/*
+  ai.py                  Gemini chat (JSON replies w/ emotion + add_tasks), weekly planner -> /api/chat, /api/plan
   voice.py               ElevenLabs TTS (+cache), STT (Scribe), sound effects, angry/praise lines -> /api/tts, /api/stt, /api/sfx/{name}, /api/yell
   focus.py               background watcher thread (Windows ctypes + psutil), warning -> drain -> force close -> /api/focus/*
   data/characters.json   gacha roster + banners (edit to add characters)   data/shop.json  accessories & backgrounds
 frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. three.js + three-vrm are vendored in frontend/vendor/.
   index.html, style.css  game-style HUD: lobby (dock, quest tracker, dialogue box), side drawer menus, full-screen Convene + Characters
-  js/app.js              all UI wiring (menus + keyboard shortcuts, chat, quests, focus polling, convene, characters, dressing room, shop, teacher)
+  js/app.js              all UI wiring (menus + keyboard shortcuts, chat, quests, focus polling, convene, characters, dressing room, shop)
   js/environment.js      animated room behind the character (one canvas scene per background id in shop.json)
   js/character.js        3D scene, VRM loading, procedural idle/emotion animation, blink, lip sync, placeholder chibi
   js/accessories.js      accessories built from three.js shapes, attached to the head bone

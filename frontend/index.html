@@ -29,7 +29,6 @@
       <symbol id="i-chars" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></symbol>
       <symbol id="i-dress" viewBox="0 0 24 24"><path d="M12 7.5a2 2 0 1 0-2-2 M12 7.5v2l8.6 6.2a1 1 0 0 1-.6 1.8H4a1 1 0 0 1-.6-1.8L12 9.5"/></symbol>
       <symbol id="i-shop" viewBox="0 0 24 24"><path d="M5 8h14l-1 13H6z M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
-      <symbol id="i-teacher" viewBox="0 0 24 24"><path d="M12 5v15 M12 5c-2-1.5-5-2-8-1.500v14c3-.5 6 0 8 1.500 M12 5c2-1.500 5-2 8-1.500v14c-3-.5-6 0-8 1.500"/></symbol>
       <symbol id="i-log" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z M8 9h8 M8 12h5"/></symbol>
       <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.500"/><path d="M12 2v3.500 M12 18.500V22 M2 12h3.500 M18.500 12H22 M4.900 4.900l2.500 2.500 M16.600 16.600l2.500 2.500 M4.900 19.100l2.500-2.500 M16.600 7.400l2.500-2.500"/></symbol>
       <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M5.500 11.500a6.500 6.500 0 0 0 13 0 M12 18v3"/></symbol>
@@ -73,7 +72,6 @@
     <button data-tab="chars" data-key="c"><svg><use href="#i-chars"/></svg><span>Characters</span><kbd>C</kbd></button>
     <button data-tab="dress" data-key="d"><svg><use href="#i-dress"/></svg><span>Dressing Room</span><kbd>D</kbd></button>
     <button data-tab="shop" data-key="s"><svg><use href="#i-shop"/></svg><span>Shop</span><kbd>S</kbd></button>
-    <button data-tab="teacher" data-key="t"><svg><use href="#i-teacher"/></svg><span>Teacher</span><kbd>T</kbd></button>
     <button data-tab="chat" data-key="l"><svg><use href="#i-log"/></svg><span>Log</span><kbd>L</kbd></button>
     <button data-tab="settings" data-key="o"><svg><use href="#i-settings"/></svg><span>Options</span><kbd>O</kbd></button>
   </nav>
@@ -221,21 +219,6 @@
       <div id="shop-bg" class="cards"></div>
     </section>
 
-    <!-- TEACHER -->
-    <section id="tab-teacher" class="tab" data-title="Teacher">
-      <div class="row">
-        <input id="teach-file" type="file" accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.docx,.pptx" />
-        <button id="teach-upload" class="primary">Upload</button>
-      </div>
-      <small id="teach-file-name">No file yet. Upload notes, slides or a textbook chapter.</small>
-      <div id="lesson"></div>
-      <form id="teach-form" class="row">
-        <input id="teach-q" placeholder="Ask a question about the material…" />
-        <button type="submit" class="primary">Ask</button>
-      </form>
-      <button id="teach-start">Teach me this file</button>
-    </section>
-
     <!-- LOG (chat history) -->
     <section id="tab-chat" class="tab" data-title="Log">
       <div id="chat-log"></div>
@@ -249,7 +232,7 @@
       <div class="keys">
         <span><kbd>Enter</kbd> talk</span><span><kbd>Esc</kbd> close menu</span><span><kbd>Q</kbd> quests</span><span><kbd>F</kbd> focus</span>
         <span><kbd>G</kbd> convene</span><span><kbd>C</kbd> characters</span><span><kbd>D</kbd> dressing room</span><span><kbd>S</kbd> shop</span>
-        <span><kbd>T</kbd> teacher</span><span><kbd>L</kbd> log</span><span><kbd>O</kbd> options</span>
+        <span><kbd>L</kbd> log</span><span><kbd>O</kbd> options</span>
       </div>
       <h3>System</h3>
       <div id="sys-status"></div>

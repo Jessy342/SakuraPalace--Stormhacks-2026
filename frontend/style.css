@@ -30,7 +30,7 @@ body {
   color: var(--text); background: var(--bg); transition: background .8s;
   font-size: 15px; user-select: none;
 }
-input, textarea, #lesson, #chat-log, #bubble-text { user-select: text; }
+input, textarea, #chat-log, #bubble-text { user-select: text; }
 .hidden { display: none !important; }
 svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -292,12 +292,6 @@ body[data-view="drawer"] .hud-right { margin-right: calc(var(--drawer-w) + 14px)
 .msg.bot { align-self: flex-start; background: rgba(255,255,255,.1); border-bottom-left-radius: 3px; }
 .msg.sys { align-self: center; color: var(--muted); font-size: .8rem; text-align: center; }
 
-/* teacher */
-#lesson { background: rgba(0,0,0,.3); border: 1px solid var(--line-soft); border-radius: 12px; padding: 12px 16px; margin: 10px 0; line-height: 1.55; font-size: .92rem; min-height: 80px; }
-#lesson:empty::before { content: "Your lesson will appear here."; color: var(--muted); }
-#lesson h2, #lesson h3, #lesson h4 { font: 700 1rem var(--display); letter-spacing: .04em; text-transform: none; color: var(--gold-hi); margin: 12px 0 6px; display: block; }
-#lesson h3::after { display: none; }
-#lesson code { background: rgba(255,255,255,.12); padding: 1px 5px; border-radius: 5px; }
 .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: .85rem; color: var(--muted); }
 
 /* rarity colours */
