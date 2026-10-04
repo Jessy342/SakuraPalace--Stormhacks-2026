@@ -47,6 +47,17 @@
       <input id="title-name" maxlength="24" placeholder="Your name" autocomplete="off" spellcheck="false" />
       <div class="row"><button type="button" data-back>Back</button><button type="submit" class="primary">Begin</button></div>
     </form>
+    <div id="title-options" class="t-login t-options hidden">
+      <label>Options</label>
+      <small>Voice</small>
+      <label class="check"><input type="radio" name="t-voice" value="dub" /> English voice</label>
+      <label class="check"><input type="radio" name="t-voice" value="sub" /> Japanese voice with English subtitles</label>
+      <small>Sound</small>
+      <label class="check"><input type="checkbox" id="t-sounds" /> Click sounds on buttons</label>
+      <small>Graphics</small>
+      <label class="check"><input type="checkbox" id="t-perf" /> Performance mode (smoother on slower laptops)</label>
+      <div class="row"><button type="button" class="primary" data-back>Back</button></div>
+    </div>
     <div class="t-loading">Loading…</div>
     <div class="t-foot">Ver. 1.0<br>StormHacks 2026<br>Sakura Palace</div>
     <div class="t-flash"></div>
@@ -124,6 +135,8 @@
     <button data-tab="games" data-key="m"><svg><use href="#i-game"/></svg><span>Mini Games</span><kbd>M</kbd></button>
     <button data-tab="settings" data-key="o"><svg><use href="#i-settings"/></svg><span>Options</span><kbd>O</kbd></button>
   </nav>
+
+  <button id="to-title" title="Back to the main menu"><svg viewBox="0 0 24 24"><path d="M4 11.500L12 4l8 7.500M6.500 10v9.500h11V10M10 19.500v-5h4v5"/></svg><span>Main Menu</span></button>
 
   <!-- Quest tracker (right side of the lobby) -->
   <aside id="tracker" class="frame">

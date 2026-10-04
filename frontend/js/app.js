@@ -1368,42 +1368,32 @@ async function boot() {
   let daily = null;
   try { daily = await post('/daily'); await setState(daily.state); } catch (e) { console.warn(e); }
 
-  // The title screen: wait there until the player enters (and tells us their name the first time)
-  let entered = null;
-  if (new URLSearchParams(location.search).has('notitle')) skipTitle();
-  else {
-    character.paused = true;
-    entered = await runTitle({ name: S.player_name || '', saveName: async name => setState(await post('/player', { name })), click: () => voice.uiClick() });
-    character.paused = false;
-    document.body.classList.add('arrive');
-    setTimeout(() => document.body.classList.remove('arrive'), 1600);
-    voice.sfx('task_done', 0.5);
-  }
-
-  const c = activeChar();
-  addMsg('bot', `${c.intro_line}`);
-  showBubble(c.intro_line);
-  if (S.player_name) addMsg('sys', `Welcome back, ${S.player_name}!`);
-  if (daily?.claimed) addMsg('sys', `🎁 Daily gift: +${daily.gift} ◆ (day ${daily.streak} streak${daily.streak >= 7 ? ', max bonus!' : ''})`);
   const reminder = reminderLine();
-  if (reminder) addMsg('sys', '⏰ ' + reminder);
-  character.wave(3);
+  if (daily?.claimed) addMsg('sys', `🎁 Daily gift: +${daily.gift} ◆ (day ${daily.streak} streak${daily.streak >= 7 ? ', max bonus!' : ''})`, true);
+  if (reminder) addMsg('sys', '⏰ ' + reminder, true);
   setTimeout(watchFrameRate, 2500); // once the model has settled in
   setTimeout(preloadSummonArt, 4000); // the summon scene's painted pictures
   setTimeout(checkEvents, 8000);
 
-  // Browsers block sound until the first click or key press, so greet out loud on the first interaction.
-  let greeted = false;
+  // The companion greets you out loud (by name) every time you come in; the gift and reminders only the first time.
+  let firstGreeting = true;
   const greet = async () => {
-    if (greeted) return;
-    greeted = true;
+    const first = firstGreeting;
+    firstGreeting = false;
+    const c = activeChar();
     if (Date.now() - lastPokeLine < 500) await new Promise(r => setTimeout(r, 3500)); // let the poke reaction finish
     const h = new Date().getHours();
     const stage = h >= 5 && h < 11 ? 'greet_morning' : h < 17 && h >= 11 ? 'greet_afternoon' : h >= 17 && h < 22 ? 'greet_evening' : 'greet_night';
+    character.wave(3);
     try {
-      const line = await post('/yell', { stage });
-      await say(withName(line.tts_text), { emotion: stage === 'greet_night' ? 'surprised' : 'happy', expressive: true });
-    } catch { await say(c.intro_line, { emotion: 'happy' }); }
+      const line = withName((await post('/yell', { stage })).tts_text);
+      addMsg('bot', stripTags(line)); // the Log shows the greeting that was actually spoken
+      await say(line, { emotion: stage === 'greet_night' ? 'surprised' : 'happy', expressive: true });
+    } catch {
+      addMsg('bot', withName(c.intro_line));
+      await say(withName(c.intro_line), { emotion: 'happy' });
+    }
+    if (!first) return;
     if (daily?.claimed) {
       voice.sfx('task_done');
       floater(`🎁 +${daily.gift} ◆`, 'big');
@@ -1412,12 +1402,39 @@ async function boot() {
     }
     if (reminder) await say(reminder, { emotion: reminder.includes('overdue') ? 'angry' : 'surprised' });
   };
-  if (entered) { // coming in from the title screen counts as the first click
-    if (entered.options) openTab('settings');
+
+  // The title screen: wait there until the player enters (and tells us their name the first time), then greet.
+  const mainMenu = async () => {
+    voice.stopSpeaking();
+    $('bubble').classList.add('hidden');
+    character.paused = true; environment.paused = true; // the lobby rests behind the title
+    await runTitle({
+      name: S.player_name || '', saveName: async name => setState(await post('/player', { name })), click: () => voice.uiClick(),
+      options: {
+        get: () => ({ voice: S.settings.voice_mode, sounds: uiSounds, perf: perfMode }),
+        set: async (key, value) => {
+          if (key === 'voice') await setState(await post('/settings', { settings: { voice_mode: value } }));
+          else if (key === 'sounds') { $('ui-sounds').checked = value; $('ui-sounds').dispatchEvent(new Event('change')); }
+          else if (key === 'perf') setPerfMode(value);
+        },
+      },
+    });
+    environment.paused = false; character.paused = FULL.includes(currentTab);
+    document.body.classList.add('arrive');
+    setTimeout(() => document.body.classList.remove('arrive'), 1600);
+    voice.sfx('task_done', 0.5);
     setTimeout(greet, 900);
-    return;
-  }
-  document.addEventListener('pointerdown', greet, { once: true });
-  document.addEventListener('keydown', greet, { once: true });
+  };
+  $('to-title').addEventListener('click', () => { if (currentTab) openTab(null); mainMenu(); });
+
+  if (new URLSearchParams(location.search).has('notitle')) { // (automated tests) straight into the lobby
+    skipTitle();
+    showBubble(activeChar().intro_line);
+    // Browsers block sound until the first click or key press, so greet out loud on the first interaction.
+    let greeted = false;
+    const once = () => { if (!greeted) { greeted = true; greet(); } };
+    document.addEventListener('pointerdown', once, { once: true });
+    document.addEventListener('keydown', once, { once: true });
+  } else mainMenu();
 }
 boot();

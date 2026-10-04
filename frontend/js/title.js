@@ -88,76 +88,107 @@ function burst() {
   }
 }
 
+// ---------------- menu, name login and options (wired once; runTitle() can be called again and again) ----------------
+const menu = $('title-menu'), login = $('title-login'), input = $('title-name'), opts = $('title-options');
+const items = [...menu.querySelectorAll('button')];
+let ctx = null;      // what the current run was started with: { name, saveName, click, options, resolve }
+let sel = 0, leaving = false, after = 'start';
+
+const refresh = () => {
+  items[0].textContent = ctx.name ? 'Continue' : 'New Game';
+  items[1].textContent = ctx.name ? 'Change Name' : 'Enter Name';
+  $('title-welcome').textContent = ctx.name ? `Welcome back, ${ctx.name}` : '';
+  items.forEach((b, i) => b.classList.toggle('sel', i === sel));
+};
+const pick = i => { if (i !== sel) ctx.click(); sel = (i + items.length) % items.length; refresh(); };
+const panelOpen = () => !login.classList.contains('hidden') || !opts.classList.contains('hidden');
+const closePanels = () => { root.classList.remove('asking'); login.classList.add('hidden'); opts.classList.add('hidden'); };
+
+function showLogin(then) {
+  after = then;
+  root.classList.add('asking');
+  login.classList.remove('hidden');
+  input.value = ctx.name || '';
+  setTimeout(() => input.focus(), 60);
+}
+
+function showOptions() { // the title's own options: they never open the app itself
+  const now = ctx.options.get();
+  opts.querySelectorAll('input[name=t-voice]').forEach(r => { r.checked = r.value === now.voice; });
+  $('t-sounds').checked = now.sounds;
+  $('t-perf').checked = now.perf;
+  root.classList.add('asking');
+  opts.classList.remove('hidden');
+}
+
+function leave() {
+  if (leaving) return;
+  leaving = true;
+  burst();
+  root.classList.add('leaving');
+  const done = ctx.resolve;
+  setTimeout(done, 620);                                  // the app comes alive behind the flash
+  setTimeout(() => { if (leaving) { running = false; root.classList.add('hidden'); } }, 1500);
+}
+
+function act(what) {
+  ctx.click();
+  if (what === 'options') return showOptions();
+  if (what === 'name') return showLogin('stay');
+  if (!ctx.name) return showLogin('start'); // first visit: ask for the name on the way in
+  leave();
+}
+
+if (root) {
+  login.addEventListener('submit', async e => {
+    e.preventDefault();
+    const typed = input.value.trim().slice(0, 24);
+    if (!typed) { input.focus(); return; }
+    ctx.click();
+    if (typed !== ctx.name) { try { await ctx.saveName(typed); } catch (err) { console.warn(err); } ctx.name = typed; }
+    closePanels(); refresh();
+    if (after !== 'stay') leave();
+  });
+  root.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', () => { ctx.click(); closePanels(); }));
+  opts.addEventListener('change', e => {
+    const el = e.target;
+    if (el.name === 't-voice') ctx.options.set('voice', el.value);
+    else if (el.id === 't-sounds') ctx.options.set('sounds', el.checked);
+    else if (el.id === 't-perf') ctx.options.set('perf', el.checked);
+  });
+  items.forEach((b, i) => {
+    b.addEventListener('pointerenter', () => pick(i));
+    b.addEventListener('click', () => act(b.dataset.act));
+  });
+  addEventListener('keydown', e => { // the title owns the keyboard while it is up
+    if (!ctx || root.classList.contains('hidden')) return;
+    e.stopPropagation();
+    if (leaving) return;
+    if (panelOpen()) { if (e.key === 'Escape') closePanels(); return; }
+    if (e.key === 'ArrowDown' || e.key === 's') { e.preventDefault(); pick(sel + 1); }
+    else if (e.key === 'ArrowUp' || e.key === 'w') { e.preventDefault(); pick(sel - 1); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(items[sel].dataset.act); }
+  }, true);
+}
+
 /**
- * Runs the title screen until the player enters.
+ * Shows the title screen (again, if it was left before) and waits until the player enters.
  *  name      the saved player name ('' on a first visit)
  *  saveName  async (name) => stores a new name
  *  click     plays the little menu sound
- * Resolves with { options: true } when "Options" was chosen (the app opens them once inside).
+ *  options   { get() -> { voice: 'dub' | 'sub', sounds, perf }, set(key, value) } for the title's Options menu
  */
-export function runTitle({ name, saveName, click = () => {} }) {
+export function runTitle({ name, saveName, click = () => {}, options }) {
   return new Promise(resolve => {
-    const menu = $('title-menu'), login = $('title-login'), input = $('title-name');
-    const items = [...menu.querySelectorAll('button')];
-    let sel = 0, leaving = false, after = 'start';
-    const refresh = () => {
-      items[0].textContent = name ? 'Continue' : 'New Game';
-      items[1].textContent = name ? 'Change Name' : 'Enter Name';
-      $('title-welcome').textContent = name ? `Welcome back, ${name}` : '';
-      items.forEach((b, i) => b.classList.toggle('sel', i === sel));
-    };
-    const pick = i => { if (i !== sel) click(); sel = (i + items.length) % items.length; refresh(); };
-
-    const showLogin = then => {
-      after = then;
-      root.classList.add('asking');
-      login.classList.remove('hidden');
-      input.value = name || '';
-      setTimeout(() => input.focus(), 60);
-    };
-    const hideLogin = () => { root.classList.remove('asking'); login.classList.add('hidden'); };
-
-    const leave = result => {
-      if (leaving) return;
-      leaving = true;
-      burst();
-      root.classList.add('leaving');
-      removeEventListener('keydown', onKey, true);
-      setTimeout(() => resolve(result), 620);          // the app comes alive behind the flash
-      setTimeout(() => { running = false; root.classList.add('hidden'); }, 1500);
-    };
-
-    const act = what => {
-      click();
-      if (what === 'name') return showLogin('stay');
-      if (!name) return showLogin(what); // first visit: ask for the name on the way in
-      leave({ options: what === 'options' });
-    };
-
-    login.addEventListener('submit', async e => {
-      e.preventDefault();
-      const typed = input.value.trim().slice(0, 24);
-      if (!typed) { input.focus(); return; }
-      click();
-      if (typed !== name) { try { await saveName(typed); } catch (err) { console.warn(err); } name = typed; }
-      hideLogin(); refresh();
-      if (after !== 'stay') leave({ options: after === 'options' });
-    });
-    login.querySelector('[data-back]').addEventListener('click', () => { click(); hideLogin(); });
-
-    items.forEach((b, i) => {
-      b.addEventListener('pointerenter', () => pick(i));
-      b.addEventListener('click', () => act(b.dataset.act));
-    });
-    function onKey(e) { // the title owns the keyboard while it is up
-      e.stopPropagation();
-      if (leaving) return;
-      if (!login.classList.contains('hidden')) { if (e.key === 'Escape') hideLogin(); return; }
-      if (e.key === 'ArrowDown' || e.key === 's') { e.preventDefault(); pick(sel + 1); }
-      else if (e.key === 'ArrowUp' || e.key === 'w') { e.preventDefault(); pick(sel - 1); }
-      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(items[sel].dataset.act); }
+    ctx = { name, saveName, click, options, resolve };
+    sel = 0; leaving = false;
+    closePanels();
+    if (root.classList.contains('hidden') || root.classList.contains('leaving')) { // coming back from the lobby
+      petals.length = 0;
+      for (let i = 0; i < 80; i++) petals.push(newPetal(true));
+      root.classList.remove('hidden', 'leaving');
+      if (!running) { running = true; last = 0; requestAnimationFrame(frame); }
     }
-    addEventListener('keydown', onKey, true);
     refresh();
     root.classList.add('ready'); // the menu fades in once the app has loaded
   });
