@@ -828,3 +828,12 @@ button.focus-pill { cursor: pointer; font: inherit; font-weight: 700; color: inh
 .c-detail .d-line { margin: 2px 0 8px; }
 .d-buttons { display: flex; gap: 8px; }
 .d-buttons .big { flex: 1; margin-top: 8px; padding: 10px 8px; font-size: .95rem; white-space: nowrap; }
+
+/* ---------- summon: a soft white-out between shots ---------- */
+.cut-white { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; transition: opacity .4s ease-in-out;
+  background: radial-gradient(circle at 50% 55%, #fff 0%, #fff6fb 60%, #ffe1f0 100%); }
+.cut-white.on { opacity: 1; }
+/* ---------- Characters: choosing the voice language ---------- */
+.lang-pick small { display: block; margin-bottom: -2px; color: var(--cyan); font-weight: 700; font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; }
+.lang-pick button { flex: 1; }
+.lang-pick button.active { color: #2a1c05; background: linear-gradient(180deg, #fff3cf, #ffc24f); border-color: #fff; box-shadow: 0 0 14px rgba(255,194,79,.6); }

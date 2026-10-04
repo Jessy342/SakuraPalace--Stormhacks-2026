@@ -152,6 +152,23 @@ const sakuraTexture = flip => canvasTexture(64, 64, (g, w) => { // one sakura pe
   g.fillStyle = gr; g.beginPath(); g.moveTo(0, 28); g.bezierCurveTo(24, 10, 20, -22, 6, -27); g.lineTo(0, -19); g.lineTo(-6, -27); g.bezierCurveTo(-20, -22, -24, 10, 0, 28); g.fill();
 });
 
+const blossomTexture = () => canvasTexture(128, 128, (g, w) => { // a puff of cherry blossom: lots of little five-petal flowers
+  for (let i = 0; i < 90; i++) {
+    const a = Math.random() * TAU, d = Math.sqrt(Math.random()) * w * 0.42, x = w / 2 + Math.cos(a) * d, y = w / 2 + Math.sin(a) * d, r = rnd(3, 7);
+    g.fillStyle = `hsla(${rnd(325, 345)},100%,${rnd(78, 94)}%,${rnd(0.55, 0.95)})`;
+    for (let k = 0; k < 5; k++) { g.beginPath(); g.arc(x + Math.cos(k * TAU / 5) * r * 0.6, y + Math.sin(k * TAU / 5) * r * 0.6, r * 0.55, 0, TAU); g.fill(); }
+    g.fillStyle = 'rgba(255,214,120,.9)'; g.beginPath(); g.arc(x, y, r * 0.22, 0, TAU); g.fill();
+  }
+});
+const auroraTexture = () => canvasTexture(256, 128, (g, w, h) => { // curtains of light: bright streaks that fade out above and below
+  for (let x = 0; x < w; x++) {
+    const a = 0.25 + 0.75 * Math.pow(Math.abs(Math.sin(x * 0.09) * Math.sin(x * 0.023 + 1)), 0.7), top = h * rnd(0.05, 0.3);
+    const gr = g.createLinearGradient(0, top, 0, h);
+    gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.55, `rgba(255,255,255,${a})`); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(x, top, 1, h - top);
+  }
+}, true);
+
 /** One lotus petal as a smooth curved surface: a pointed oval, cupped toward the heart of the flower, its tip flicking outward. */
 function petalGeometry(len, wid) {
   const NV = 16, NU = 8, pos = [], uv = [], idx = [];
@@ -319,6 +336,50 @@ export function startScene(overlay) {
     scene.add(pad);
   }
 
+  // --- scenery around the lake: cherry trees on little islands, a torii gate, lanterns, an aurora ---
+  const blossom = blossomTexture();
+  const bark = new THREE.MeshStandardMaterial({ color: 0x4a2c2a, roughness: 0.9 }), moss = new THREE.MeshStandardMaterial({ color: 0x2f6a4a, roughness: 0.9 });
+  for (const [a, d, size] of [[0.4, 18, 1.2], [1.7, 20, 1.5], [2.9, 17.5, 1.0], [4.0, 22, 1.6], [5.2, 19, 1.25], [0.95, 27, 1.9], [3.5, 29, 2.0]]) {
+    const tree = new THREE.Group();
+    const islet = new THREE.Mesh(new THREE.SphereGeometry(2.1, 18, 10), moss); islet.scale.set(1, 0.16, 1);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.24, 2.4, 8), bark); trunk.position.y = 1.2; trunk.rotation.z = rnd(-0.15, 0.15);
+    tree.add(islet, trunk);
+    for (const side of [-1, 1]) { const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.09, 1.5, 6), bark); branch.position.set(side * 0.45, 2.3, 0); branch.rotation.z = -side * 0.9; tree.add(branch); }
+    for (let i = 0; i < 16; i++) { // the canopy: overlapping puffs of blossom
+      const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: blossom, color: i % 3 ? 0xffffff : 0xffd0e4, transparent: true, depthWrite: false }));
+      const pa = Math.random() * TAU, pr = Math.sqrt(Math.random()) * 1.5;
+      puff.position.set(Math.cos(pa) * pr, 2.5 + rnd(-0.3, 1.2), Math.sin(pa) * pr); puff.scale.setScalar(rnd(1.5, 2.4));
+      tree.add(puff);
+    }
+    tree.position.set(Math.cos(a) * d, 0, Math.sin(a) * d); tree.scale.setScalar(size);
+    scene.add(tree);
+  }
+  const red = new THREE.MeshStandardMaterial({ color: 0xd6402f, emissive: 0x5a1208, emissiveIntensity: 0.5, roughness: 0.6 });
+  const torii = new THREE.Group(); // a shrine gate standing in the water
+  for (const x of [-2.6, 2.6]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 6.4, 12), red); post.position.set(x, 3.2, 0); torii.add(post); }
+  const beamTop = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 0.7), new THREE.MeshStandardMaterial({ color: 0x1c1420, roughness: 0.7 })); beamTop.position.y = 6.6;
+  const beamRed = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.42, 0.55), red); beamRed.position.y = 6.15;
+  const beamLow = new THREE.Mesh(new THREE.BoxGeometry(6, 0.34, 0.4), red); beamLow.position.y = 4.9;
+  torii.add(beamTop, beamRed, beamLow);
+  torii.position.set(Math.cos(3.75) * 24, 0, Math.sin(3.75) * 24); torii.lookAt(0, 0, 0);
+  scene.add(torii);
+  const lanternMat = new THREE.MeshBasicMaterial({ color: 0xffc98a }), lanternGeo = new THREE.BoxGeometry(0.22, 0.3, 0.22);
+  const lanterns = Array.from({ length: 34 }, (_, i) => { // paper lanterns: most float on the water, some rise into the sky
+    const sky = i >= 22, a = Math.random() * TAU, d = sky ? rnd(8, 34) : rnd(3.5, 17);
+    const g = new THREE.Group(), box = new THREE.Mesh(lanternGeo, lanternMat);
+    const light = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xffa24a, ...additive({ opacity: 0.7 }) })); light.scale.setScalar(1.3);
+    g.add(box, light); g.position.set(Math.cos(a) * d, 0, Math.sin(a) * d);
+    scene.add(g);
+    return { g, sky, y: sky ? rnd(2, 26) : 0.16, p: Math.random() * TAU, s: rnd(0.25, 0.6) };
+  });
+  const auroraMaps = [0x7affd6, 0xff9ad6].map((c, i) => {
+    const map = auroraTexture(); map.repeat.set(2, 1);
+    const ribbon = new THREE.Mesh(new THREE.CylinderGeometry(175, 175, 70, 48, 1, true, i * 2.6 + 0.4, 1.7), new THREE.MeshBasicMaterial({ map, color: c, side: THREE.BackSide, ...additive({ opacity: 0.22 }) }));
+    ribbon.position.y = 78 + i * 10;
+    scene.add(ribbon);
+    return map;
+  });
+
   const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: flare, color: 0xfff1c9, ...additive() }));
   core.position.y = 0.78;
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, ...additive({ opacity: 0.5 }) })); // big soft light in the rarity colour
@@ -459,6 +520,12 @@ export function startScene(overlay) {
     starsSmall.rotation.y = t * 0.006; starsBig.rotation.y = t * 0.006;
     starsBig.material.opacity = 0.65 + 0.35 * Math.sin(t * 2.3);
     for (const c of clouds) { c.a += dt * c.s; c.cl.position.set(Math.cos(c.a) * 150, c.y, Math.sin(c.a) * 150); }
+    for (const l of lanterns) { // lanterns bob on the water or drift up into the sky
+      if (l.sky) { l.y += dt * l.s; if (l.y > 30) l.y = 1.5; }
+      l.g.position.y = l.y + Math.sin(t * 1.3 + l.p) * (l.sky ? 0.3 : 0.035);
+      l.g.rotation.y = t * 0.2 + l.p;
+    }
+    auroraMaps[0].offset.x = t * 0.006; auroraMaps[1].offset.x = -t * 0.004;
     shimmers[0].offset.x = t * 0.012; shimmers[0].offset.y = t * 0.005;
     shimmers[1].offset.x = -t * 0.009; shimmers[1].offset.y = t * 0.014;
 

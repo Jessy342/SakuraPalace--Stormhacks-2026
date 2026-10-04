@@ -46,13 +46,15 @@ export async function playCutscene(results, bestRarity, { japanese = false, deta
   const firstReveal = (results.length === 1 ? results : results.filter(r => r.type === 'character' && (r.new || rank(r.rarity) >= 3)))[0];
   const firstInfo = firstReveal && details(firstReveal);
   let preloadStage = null;
-  const firstModel = firstInfo && firstInfo.model ? (preloadStage = new SummonStage()).load(firstInfo.model) : Promise.resolve(null);
+  const firstModel = firstInfo && firstInfo.model ? (preloadStage = new SummonStage()).load(firstInfo.model).then(m => preloadStage.prewarm(m)) : Promise.resolve(null);
 
   // 1. GATE
   const show = startScene(overlay); // the 3D lotus scene (summonscene.js)
   sfx('gacha_charge');
   if (!skipping) riser(2.6);
-  await wait(1700); // the camera glides in over the water
+  // The camera glides in over the water. Loading the character's model makes the picture stutter for a moment, so that is
+  // finished here, during the calm opening, and not in the middle of the bloom or the reveal.
+  await Promise.all([wait(1700), Promise.race([firstModel, wait(7000)])]);
 
   // 2. TEASE: blue... purple... gold?! Each step up is a pulse and a higher chime.
   for (let i = 1; i <= top && !skipping; i++) {
@@ -84,14 +86,19 @@ export async function playCutscene(results, bestRarity, { japanese = false, deta
   const reveals = results.length === 1 ? results : results.filter(r => r.type === 'character' && (r.new || rank(r.rarity) >= 3));
   const stage = preloadStage || new SummonStage();
   // Models are loaded one step ahead (the first during the build-up above, the next while you look at the current one)
-  const prepare = r => { const d = r && details(r); return d && d.model ? stage.load(d.model) : Promise.resolve(null); };
+  const prepare = r => { const d = r && details(r); return d && d.model ? stage.load(d.model).then(m => stage.prewarm(m)) : Promise.resolve(null); };
+  // a soft white-out carries each shot into the next, so nothing pops in abruptly
+  const white = document.createElement('div');
+  white.className = 'cut-white';
+  overlay.appendChild(white);
+  const whiteOut = async ms => { white.style.transitionDuration = ms + 'ms'; white.classList.add('on'); await wait(ms); };
   const patience = p => Promise.race([p, new Promise(res => setTimeout(() => res(null), 12000))]);
   let fx = null, coming = firstModel;
   for (const [i, r] of reveals.entries()) {
     if (skipping) break;
     const model = await patience(coming);
     coming = prepare(reveals[i + 1]);
-    content.innerHTML = '';
+    if (!i) content.innerHTML = '';
     show.setRarity(r.rarity);
     if (r.type === 'character' && rank(r.rarity) >= 4) { // the rarest get their rarity slammed on screen first
       const slam = document.createElement('div');
@@ -104,7 +111,10 @@ export async function playCutscene(results, bestRarity, { japanese = false, deta
     }
     const d = details(r);
     const shot = reveal(r, d, !!model);
+    await whiteOut(i ? 240 : 420);
+    content.innerHTML = '';
     content.appendChild(shot);
+    requestAnimationFrame(() => { white.style.transitionDuration = '650ms'; white.classList.remove('on'); });
     show.erupt(0.6);
     if (fx) fx.stop();
     fx = startFx(shot.querySelector('.rv-fx'), d.personality, d.color || '#9aa5b1');
@@ -122,8 +132,11 @@ export async function playCutscene(results, bestRarity, { japanese = false, deta
     }
     await clickToContinue(overlay, 1800);
     stopSpeaking();
+    if (i === reveals.length - 1 || skipping) { await whiteOut(240); content.innerHTML = ''; }
     stage.clear();
   }
+  white.style.transitionDuration = '500ms'; white.classList.remove('on');
+  setTimeout(() => white.remove(), 700);
   if (fx) fx.stop();
   coming.then(discardModel); // a model that was loaded ahead but never shown
   stage.dispose();

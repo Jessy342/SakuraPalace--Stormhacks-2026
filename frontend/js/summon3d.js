@@ -53,6 +53,24 @@ export class SummonStage {
     }
   }
 
+  /** Readies a loaded model for drawing (builds its shaders, sends its pictures to the graphics chip) so that
+   *  showing it later doesn't cause a stutter. Resolves to the same model. */
+  async prewarm(vrm) {
+    if (!vrm) return vrm;
+    try {
+      this.scene.add(vrm.scene);
+      if (this.renderer.compileAsync) await this.renderer.compileAsync(this.scene, this.camera);
+      else this.renderer.compile(this.scene, this.camera);
+      vrm.scene.traverse(o => {
+        for (const m of [].concat(o.material || [])) {
+          for (const v of [...Object.values(m), ...Object.values(m.uniforms || {}).map(u => u && u.value)]) if (v && v.isTexture) this.renderer.initTexture(v);
+        }
+      });
+    } catch (e) { console.warn('[summon] prewarm skipped:', e.message); }
+    this.scene.remove(vrm.scene);
+    return vrm;
+  }
+
   /** Starts the entrance of a loaded model inside `holder`. onLand() fires when the feet touch down. */
   play(vrm, holder, { personality, color }, onLand) {
     this.clear();

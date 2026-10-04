@@ -237,7 +237,7 @@ function openTab(name) {
   if (name !== 'dress') setFrame('full');
   if (name === 'chat') $('chat-log').scrollTop = 1e9;
   if (name === 'chars') { // the cards pop in only when the screen opens, not on every update
-    charPick = S.active_character; renderChars();
+    charPick = S.active_character; langPick = null; renderChars();
     $('collection').classList.add('intro'); setTimeout(() => $('collection').classList.remove('intro'), 900);
   }
   if (name === 'dress') renderDress();
@@ -957,6 +957,7 @@ $('pull10').addEventListener('click', () => doPull(10));
 // ======================= Characters (data bank) =======================
 let charFilter = 'all';
 let charPick = null;
+let langPick = null; // 'en' or 'ja': the voice chosen for the picked character (needed before they can become your companion)
 
 function renderChars() {
   const all = S.catalog.characters;
@@ -984,6 +985,7 @@ function renderCharDetail() {
   const own = S.owned_characters[c.id];
   const isActive = c.id === S.active_character;
   const voices = [c.voice_id && 'English', c.voice_id_ja && 'Japanese'].filter(Boolean).join(' + ') || 'Default voice';
+  const lang = isActive ? (S.settings.voice_mode === 'sub' ? 'ja' : 'en') : langPick; // the current companion shows the language in use
   $('char-detail').innerHTML = `
     <div class="d-art r-${c.rarity} ${own ? '' : 'locked'}"><div class="initial">${esc(c.name[0])}</div>${portraitImg(c.id)}${own ? '<span class="d-hint">Drag to rotate</span>' : ''}</div>
     <div class="rarity-label r-${c.rarity} ${c.rarity === 'Unbound' ? 'rainbow-text' : ''}">${c.rarity.toUpperCase()}</div>
@@ -992,12 +994,13 @@ function renderCharDetail() {
     <div class="stars">${stars(c.rarity)}</div>
     <div class="d-meta"><span>${classOf(c)[1]} ${classOf(c)[0]}</span>${own ? `<span>Bond ${own.bond}/6</span>` : ''}<span>Voice: ${voices}</span></div>
     ${own ? `<p class="d-line">“${esc(c.intro_line)}”</p>
-      <div class="row"><button data-preview="en" data-id="${c.id}">▶ English</button><button data-preview="ja" data-id="${c.id}">▶ Japanese</button></div>`
+      <div class="lang-pick"><small>${isActive ? 'Speaks to you in' : 'Choose how they speak to you'}</small><div class="row">
+        <button data-lang="en" class="${lang === 'en' ? 'active' : ''}">▶ English</button><button data-lang="ja" class="${lang === 'ja' ? 'active' : ''}">▶ Japanese</button></div></div>`
       : '<p class="d-line">You have not met this character yet. Summon to bring them to your room.</p>'}
     <div class="spacer"></div>
     ${!own ? '<button class="primary big" data-open="gacha">Go to Summon</button>'
       : isActive ? '<div class="d-buttons"><button class="big" disabled>Current companion</button><button class="primary big" data-open="dress">Customize</button></div>'
-      : `<button class="primary big" data-char="${c.id}">Set as companion</button>`}`;
+      : `<button class="primary big" data-char="${c.id}" ${lang ? '' : 'disabled'}>${lang ? 'Set as companion' : 'Pick English or Japanese first'}</button>`}`;
   // characters you own are shown as their real 3D model (the picture stays until it has loaded)
   if (currentTab === 'chars' && own) (viewer ||= new ModelViewer()).show($('char-detail').querySelector('.d-art'), c.id, `/models/${c.model}`, S.personality_overrides[c.id] || c.personality);
 }
@@ -1137,7 +1140,7 @@ document.querySelectorAll('input[name=vmode]').forEach(r => r.addEventListener('
 
 // ======================= One click handler for all the generated buttons =======================
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-item],[data-apply],[data-cat],[data-turn],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del],[data-delevent],[data-delnote],[data-sub]');
+  const t = e.target.closest('[data-item],[data-apply],[data-cat],[data-lang],[data-turn],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del],[data-delevent],[data-delnote],[data-sub]');
   if (!t || t.disabled) return;
   const d = t.dataset;
   try {
@@ -1163,7 +1166,12 @@ document.addEventListener('click', async e => {
       renderDress();
     } else if (d.turn) {
       character.turn(+d.turn);
+    } else if (d.lang) { // English / Japanese in the Characters screen: hear it, and choose it
+      previewVoice(charPick, d.lang);
+      if (charPick === S.active_character) await setState(await post('/settings', { settings: { voice_mode: d.lang === 'ja' ? 'sub' : 'dub' } }));
+      else { langPick = d.lang; renderCharDetail(); }
     } else if (d.char) {
+      if (langPick) await post('/settings', { settings: { voice_mode: langPick === 'ja' ? 'sub' : 'dub' } }); // they speak in the language you chose
       await setState(await post('/equip', { kind: 'character', id: d.char }));
       const c = activeChar();
       openTab(null);
@@ -1171,6 +1179,7 @@ document.addEventListener('click', async e => {
       say(c.intro_line, { emotion: 'happy', ja: c.intro_line_ja });
     } else if (d.pick) {
       charPick = d.pick;
+      langPick = null;
       document.querySelectorAll('#collection .ccard').forEach(c => c.classList.toggle('selected', c.dataset.pick === d.pick));
       renderCharDetail();
       $('char-detail').animate([{ opacity: 0.35, transform: 'translateX(10px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'ease-out' });
