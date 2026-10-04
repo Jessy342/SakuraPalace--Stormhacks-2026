@@ -47,6 +47,41 @@ async function yell(stage, app = '', emotion = 'angry') {
   } catch (e) { console.warn(e); }
 }
 
+// ======================= UI click sounds =======================
+let uiSounds = true;
+try { uiSounds = localStorage.getItem('uiSounds') !== 'off'; } catch { /* storage blocked */ }
+document.addEventListener('pointerdown', e => {
+  const b = e.target.closest?.('button, input[type=checkbox], input[type=radio], .check');
+  if (uiSounds && b && !b.disabled) voice.uiClick();
+}, true);
+$('ui-sounds').checked = uiSounds;
+$('ui-sounds').addEventListener('change', () => {
+  uiSounds = $('ui-sounds').checked;
+  try { localStorage.setItem('uiSounds', uiSounds ? 'on' : 'off'); } catch { /* storage blocked */ }
+});
+
+// ======================= Poking =======================
+let pokeTimes = [];
+let lastPokeLine = 0;
+character.onPoke = async zone => {
+  const now = Date.now();
+  pokeTimes = pokeTimes.filter(t => now - t < 6000);
+  pokeTimes.push(now);
+  const spam = pokeTimes.length >= 5;
+  floater(zone === 'head' ? '♥' : spam ? '💢' : '!', zone === 'head' ? 'heart' : '');
+  character.setEmotion(spam ? 'angry' : zone === 'head' ? 'happy' : 'surprised', 2.5);
+  // Don't talk over important lines (focus warnings) and don't stack voice lines when clicked fast
+  if (focusActive && $('warning') && !$('warning').classList.contains('hidden')) return;
+  if (now - lastPokeLine < 2500 && !spam) return;
+  if (spam) pokeTimes = [];
+  lastPokeLine = now;
+  voice.stopSpeaking();
+  try {
+    const line = await post('/yell', { stage: spam ? 'poke_spam' : zone === 'head' ? 'headpat' : 'poke' });
+    await say(line.tts_text, { emotion: spam ? 'angry' : zone === 'head' ? 'happy' : 'surprised', expressive: true });
+  } catch (e) { console.warn(e); }
+};
+
 function floater(text, cls = '') {
   const f = document.createElement('div');
   f.className = 'floater ' + cls;
@@ -169,12 +204,58 @@ $('task-form').addEventListener('submit', async e => {
   } catch (err) { toastError(err); }
 });
 
-function renderTasks() {
+// ---- due dates ----
+const localISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function dueInfo(due) {
+  if (!due) return null;
+  const day = String(due).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { cls: 'later', label: `Due ${due}`, day: '9999' };
+  const now = new Date();
+  const today = localISO(now);
+  const tmr = new Date(now); tmr.setDate(now.getDate() + 1);
+  if (day < today) return { cls: 'overdue', label: 'Overdue', day };
+  if (day === today) return { cls: 'today', label: 'Due today', day };
+  if (day === localISO(tmr)) return { cls: 'soon', label: 'Due tomorrow', day };
+  const label = new Date(day + 'T00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return { cls: 'later', label: `Due ${label}`, day };
+}
+
+/** What Aiko should say about deadlines, or '' if nothing is urgent. */
+function reminderLine() {
   const pending = S.tasks.filter(t => !t.done);
+  const by = cls => pending.filter(t => dueInfo(t.due)?.cls === cls);
+  const say1 = (list, one, many) => list.length === 1 ? `"${list[0].title}" ${one}` : `${list.length} tasks ${many}`;
+  const parts = [];
+  const over = by('overdue'), today = by('today'), soon = by('soon');
+  if (over.length) parts.push(say1(over, 'is overdue!', 'are overdue!'));
+  if (today.length) parts.push(say1(today, 'is due today.', 'are due today.'));
+  if (soon.length) parts.push(say1(soon, 'is due tomorrow.', 'are due tomorrow.'));
+  return parts.length ? `Heads up! ${parts.join(' And ')}` : '';
+}
+
+function renderWeek() {
+  const w = S.week || { focus_seconds: 0, tasks: 0 };
+  const h = Math.floor(w.focus_seconds / 3600), m = Math.floor((w.focus_seconds % 3600) / 60);
+  const streak = S.login?.streak || 0;
+  $('week-card').innerHTML = `
+    <div><b>🔥 ${streak}</b><small>day streak</small></div>
+    <div><b>${h ? h + 'h ' : ''}${m}m</b><small>focused this week</small></div>
+    <div><b>✅ ${w.tasks}</b><small>tasks this week</small></div>
+    <div><b>🍅 ${S.stats.pomodoros || 0}</b><small>pomodoros</small></div>`;
+  $('hud-streak').textContent = `🔥 ${streak}`;
+  $('hud-streak').title = `${streak}-day streak (best: ${S.login?.best || streak}). Open the app every day for a bigger daily gift!`;
+}
+
+function renderTasks() {
+  renderWeek();
+  const pending = S.tasks.filter(t => !t.done)
+    .map((t, i) => ({ t, i, d: dueInfo(t.due) }))
+    .sort((a, b) => (a.d?.day || '9999z').localeCompare(b.d?.day || '9999z') || a.i - b.i) // soonest deadline first
+    .map(x => x.t);
   const done = S.tasks.filter(t => t.done).slice(-20).reverse();
   $('task-list').innerHTML = pending.length ? pending.map(t => `
     <li><span class="diff ${t.difficulty}">${t.difficulty}</span>
-      <span class="t">${esc(t.title)}${t.due ? `<small>Due ${esc(t.due)}</small>` : ''}</span>
+      <span class="t">${esc(t.title)}${t.due ? `<span class="due ${dueInfo(t.due).cls}">${esc(dueInfo(t.due).label)}</span>` : ''}</span>
       <button data-done="${t.id}">✓</button><button class="ghost" data-del="${t.id}">✕</button></li>`).join('')
     : '<li><span class="t"><small>Nothing to do! Add a task or ask your assistant to plan your week.</small></span></li>';
   $('done-list').innerHTML = done.map(t => `<li><span class="t">${esc(t.title)}</span></li>`).join('');
@@ -218,6 +299,33 @@ $('plan-btn').addEventListener('click', async () => {
 
 // ======================= Focus =======================
 let focusActive = false;
+let pomoChoice = 25; // 0 = free session, 25 / 50 = pomodoro minutes
+try { const saved = localStorage.getItem('pomoChoice'); if (saved !== null) pomoChoice = +saved; } catch { /* storage blocked */ }
+const BREAK_FOR = { 25: 5, 50: 10 };
+const fmt = sec => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+
+function pomoHint(m) {
+  return m ? `${m} min work, then a ${BREAK_FOR[m]} min break. The timer pauses while you're distracted. Earn 2 points + 1 XP per focused minute, plus a bonus for every finished round.`
+    : 'Free session: counts up until you end it. Earn 2 points + 1 XP per focused minute.';
+}
+
+function renderPomoPicker() {
+  document.querySelectorAll('#pomo-picker button').forEach(b => {
+    b.classList.toggle('active', +b.dataset.pomo === pomoChoice);
+    b.disabled = focusActive;
+  });
+  $('pomo-picker').classList.toggle('locked', focusActive);
+  $('focus-hint').textContent = pomoHint(pomoChoice);
+}
+
+$('pomo-picker').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b || focusActive) return;
+  pomoChoice = +b.dataset.pomo;
+  try { localStorage.setItem('pomoChoice', pomoChoice); } catch { /* storage blocked */ }
+  renderPomoPicker();
+  $('focus-timer').textContent = pomoChoice ? fmt(isDemo() ? 30 : pomoChoice * 60) : '00:00';
+});
 
 function renderFocusSettings() {
   const s = S.settings;
@@ -252,20 +360,29 @@ $('save-focus').addEventListener('click', async () => {
 $('focus-toggle').addEventListener('click', async () => {
   try {
     if (!focusActive) {
-      await post('/focus/start');
-      say(`Focus mode on. I'm watching you.`, { emotion: 'relaxed' });
+      await post('/focus/start', { pomodoro: pomoChoice });
+      say(pomoChoice ? `Focus mode on. ${pomoChoice} minutes, then you get a break. I'm watching you.`
+        : `Focus mode on. I'm watching you.`, { emotion: 'relaxed' });
     } else {
       const res = await post('/focus/stop');
       $('warning').classList.add('hidden');
       await setState(res.state);
       floater(`+${res.points_gained} ◆  +${res.xp_gained} XP`);
-      addMsg('sys', `Focus session done: ${res.minutes} min focused, earned ${res.points_gained} points, lost ${res.points_lost}.`);
+      const rounds = res.pomodoros ? ` Finished ${res.pomodoros} pomodoro${res.pomodoros > 1 ? 's' : ''} (+${res.pomodoro_bonus} bonus).` : '';
+      addMsg('sys', `Focus session done: ${res.minutes} min focused, earned ${res.points_gained} points, lost ${res.points_lost}.${rounds}`);
       if (res.levels_gained) { voice.sfx('level_up'); yell('levelup', '', 'surprised'); }
     }
   } catch (err) { toastError(err); }
 });
 
 $('sim-on').addEventListener('click', () => post('/focus/simulate', { name: 'YouTube', on: true }));
+$('sim-app').addEventListener('click', () => post('/focus/simulate', { name: 'discord.exe', kind: 'app', on: true }));
+$('open-taskmgr').addEventListener('click', async () => {
+  try {
+    const res = await post('/focus/taskmanager');
+    if (!res.ok) addMsg('sys', `⚠ ${res.reason}`);
+  } catch (err) { toastError(err); }
+});
 $('sim-off').addEventListener('click', () => post('/focus/simulate', { on: false }));
 
 function timings() {
@@ -276,17 +393,30 @@ function timings() {
 async function pollFocus() {
   try {
     const st = await api('/focus/status?since=' + lastEventId);
+    const wasActive = focusActive;
     focusActive = st.active;
-    const mins = String(Math.floor(st.focused_seconds / 60)).padStart(2, '0');
-    const secs = String(st.focused_seconds % 60).padStart(2, '0');
-    $('focus-timer').textContent = `${mins}:${secs}`;
+    if (wasActive !== focusActive) renderPomoPicker();
+    const pomo = st.active && st.pomodoro;
+    const onBreak = pomo && st.phase === 'break';
+    const shown = pomo ? fmt(st.phase_left) : st.active || !pomoChoice ? fmt(st.focused_seconds)
+      : fmt(isDemo() ? 30 : pomoChoice * 60);
+    $('focus-timer').textContent = shown;
+    $('focus-phase').textContent = !pomo ? (st.active ? 'Free session' : '')
+      : onBreak ? `☕ Break time` : `🍅 Round ${st.rounds + 1}${st.stage !== 'ok' ? ' · paused' : ''}`;
+    document.querySelector('.focus-card').classList.toggle('break', !!onBreak);
+    $('pomo-fill').parentElement.classList.toggle('hidden', !pomo);
+    $('pomo-fill').style.width = pomo && st.phase_total ? (100 * (1 - st.phase_left / st.phase_total)) + '%' : '0';
     $('focus-toggle').textContent = st.active ? 'End focus session' : 'Start focus session';
     $('focus-platform').textContent = st.windows_detection ? 'Watching real apps and browser tabs (Windows).'
       : 'Real app detection only works on Windows. Use "Simulate distraction" to test.';
     const pill = $('hud-focus');
-    pill.className = 'focus-pill ' + (!st.active ? 'off' : st.stage === 'ok' ? 'on' : st.stage);
-    pill.textContent = !st.active ? 'Focus off' : st.stage === 'ok' ? `Focusing ${mins}:${secs}` : st.stage === 'warning' ? `⚠ ${st.offender}` : `▼ Losing points`;
-    $('focus-status').textContent = !st.active ? 'Not focusing' : st.stage === 'ok' ? 'Focused ✓' : `Distracted by ${st.offender}!`;
+    pill.className = 'focus-pill ' + (!st.active ? 'off' : onBreak ? 'break' : st.stage === 'ok' ? 'on' : st.stage);
+    pill.textContent = !st.active ? 'Focus off' : onBreak ? `☕ Break ${shown}` : st.stage === 'ok' ? `${pomo ? '🍅' : 'Focusing'} ${shown}`
+      : st.stage === 'warning' ? `⚠ ${st.offender}` : `▼ Losing points`;
+    $('focus-status').textContent = !st.active ? 'Not focusing' : onBreak ? 'Relax! Distractions are allowed on breaks.'
+      : st.stage === 'ok' ? 'Focused ✓' : st.offender_kind === 'app'
+        ? `${st.offender} is still running! Timer paused until you end it in Task Manager.`
+        : `Distracted by ${st.offender}! Timer paused.`;
     if (S && st.points !== S.points) { S.points = st.points; updatePoints(st.points); }
 
     // warning banner
@@ -298,6 +428,13 @@ async function pollFocus() {
       $('warn-text').textContent = st.stage === 'warning'
         ? `Close ${st.offender} within ${Math.max(0, t.grace - st.distracted_for)}s or you start losing points!`
         : `Losing points! ${st.offender} gets force-closed in ${Math.max(0, t.force - st.distracted_for)}s`;
+      // Apps like Discord keep running in the system tray after you close the window,
+      // so the session stays paused until the process is really gone.
+      const isApp = st.offender_kind === 'app';
+      $('warn-app').classList.toggle('hidden', !isApp);
+      banner.classList.toggle('has-action', isApp); // no shaking, so the button is easy to click
+      if (isApp) $('warn-app-text').textContent = `Closing the window isn't enough. ${st.offender} keeps running in the background `
+        + `until you quit it from the system tray or end it in Task Manager (Ctrl+Shift+Esc → ${st.offender} → End task).`;
     } else banner.classList.add('hidden');
 
     for (const ev of st.events) {
@@ -323,6 +460,15 @@ function handleFocusEvent(ev) {
     yell('close', ev.app);
   } else if (ev.type === 'recovered') {
     yell('recovered', ev.app, 'relaxed');
+  } else if (ev.type === 'break_start') {
+    voice.sfx('level_up');
+    floater(`🍅 Round done! +${ev.points} ◆`, 'big');
+    addMsg('sys', `🍅 Pomodoro finished! +${ev.points} bonus points. Break: ${ev.app}.`);
+    lastYellAt = now;
+    yell('break_start', ev.app, 'happy');
+  } else if (ev.type === 'break_over') {
+    voice.sfx('warning');
+    yell('break_over', '', 'relaxed');
   }
 }
 
@@ -521,13 +667,38 @@ async function boot() {
     addMsg('sys', '⚠ Could not reach the backend. Is the Python server running?');
     return;
   }
+  renderPomoPicker();
   pollFocus();
   if (elevenOn) voice.preloadSfx(['task_done', 'level_up', 'warning', 'gacha_charge', 'gacha_meteor',
     'reveal_common', 'reveal_epic', 'reveal_gold', 'reveal_unbound']);
+  // Daily login gift (once per calendar day)
+  let daily = null;
+  try { daily = await post('/daily'); await setState(daily.state); } catch (e) { console.warn(e); }
+
   const c = activeChar();
   addMsg('bot', `${c.intro_line}`);
-  // Browsers block sound until the first click, so greet on the first interaction.
-  const greet = () => { say(c.intro_line, { emotion: 'happy' }); };
+  if (daily?.claimed) addMsg('sys', `🎁 Daily gift: +${daily.gift} ◆ (day ${daily.streak} streak${daily.streak >= 7 ? ', max bonus!' : ''})`);
+  const reminder = reminderLine();
+  if (reminder) addMsg('sys', '⏰ ' + reminder);
+  character.wave(3);
+
+  // Browsers block sound until the first click, so greet out loud on the first interaction.
+  const greet = async () => {
+    if (Date.now() - lastPokeLine < 500) await new Promise(r => setTimeout(r, 3500)); // let the poke reaction finish
+    character.wave(2.5);
+    const h = new Date().getHours();
+    const stage = h >= 5 && h < 11 ? 'greet_morning' : h < 17 && h >= 11 ? 'greet_afternoon' : h >= 17 && h < 22 ? 'greet_evening' : 'greet_night';
+    try {
+      const line = await post('/yell', { stage });
+      await say(line.tts_text, { emotion: stage === 'greet_night' ? 'surprised' : 'happy', expressive: true });
+    } catch { await say(c.intro_line, { emotion: 'happy' }); }
+    if (daily?.claimed) {
+      voice.sfx('task_done');
+      floater(`🎁 +${daily.gift} ◆`, 'big');
+      await say(`Here's your daily gift: ${daily.gift} points! ${daily.streak > 1 ? `That's a ${daily.streak} day streak!` : 'Come back tomorrow for more!'}`, { emotion: 'happy' });
+    }
+    if (reminder) await say(reminder, { emotion: reminder.includes('overdue') ? 'angry' : 'surprised' });
+  };
   document.addEventListener('pointerdown', greet, { once: true });
 }
 boot();

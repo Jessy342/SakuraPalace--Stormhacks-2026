@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="body" cx="36%" cy="30%" r="78%">
+      <stop offset="0" stop-color="#a9a4ff"/>
+      <stop offset=".45" stop-color="#6c63ff"/>
+      <stop offset=".85" stop-color="#4a3fd6"/>
+      <stop offset="1" stop-color="#3426a8"/>
+    </radialGradient>
+    <linearGradient id="drip" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5146e0"/>
+      <stop offset="1" stop-color="#3a2db8"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+  </defs>
+
+  <!-- drips (behind the heart so they look like they ooze out of it) -->
+  <g fill="url(#drip)">
+    <path d="M60 140 C60 169.7 75 177.2 75 190.4 C66.2 195.2 68 207.8 80 207.8 C92 207.8 93.8 195.2 85 190.4 C85 177.2 100 169.7 100 140 Z"/>
+    <path d="M151 150 C151 178.8 163.5 190.0 163.5 201.0 C156.5 205.0 158 215.5 168 215.5 C178 215.5 179.5 205.0 172.5 201.0 C172.5 190.0 185 178.8 185 150 Z"/>
+    <path d="M115 186 C115 208.5 124.5 215.6 124.5 224.95 C118.225 228.35 119.5 237.275 128 237.275 C136.5 237.275 137.775 228.35 131.5 224.95 C131.5 215.6 141 208.5 141 186 Z"/>
+  </g>
+
+  <!-- heart -->
+  <path fill="url(#body)" d="M128 214 C 62 170 18 132 18 84 C 18 48 44 22 78 22 C 100 22 118 34 128 54 C 138 34 156 22 178 22 C 212 22 238 48 238 84 C 238 132 194 170 128 214 Z"/>
+
+  <!-- slime gloss -->
+  <path fill="#ffffff" opacity=".55" filter="url(#soft)" d="M52 70 C 52 50 68 40 84 42 C 96 44 98 54 88 58 C 74 62 66 72 64 86 C 62 98 52 94 52 70 Z"/>
+  <ellipse cx="168" cy="52" rx="18" ry="8" fill="#ffffff" opacity=".35" transform="rotate(18 168 52)" filter="url(#soft)"/>
+  <circle cx="98" cy="40" r="5" fill="#ffffff" opacity=".9"/>
+  <circle cx="190" cy="92" r="4" fill="#ffffff" opacity=".55"/>
+  <!-- drip shines -->
+  <circle cx="76" cy="197" r="3.5" fill="#ffffff" opacity=".7"/>
+  <circle cx="164.5" cy="205" r="3" fill="#ffffff" opacity=".7"/>
+  <circle cx="125.5" cy="229" r="2.3" fill="#ffffff" opacity=".7"/>
+  <!-- bubbles inside the slime -->
+  <circle cx="150" cy="120" r="7" fill="none" stroke="#ffffff" stroke-opacity=".35" stroke-width="2.5"/>
+  <circle cx="104" cy="150" r="4.5" fill="none" stroke="#ffffff" stroke-opacity=".3" stroke-width="2"/>
+</svg>

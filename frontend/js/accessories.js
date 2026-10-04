@@ -7,7 +7,11 @@ const HEAD_TOP = 0.2;
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.4, side: THREE.DoubleSide, ...extra });
 
-export function buildAccessory(id) {
+// Where the eyes are, in the same head-bone space. character.js measures this for each model
+// so the glasses sit on the face instead of floating or hiding inside the head.
+export const DEFAULT_FACE = { eyeX: 0.034, eyeY: 0.075, frontZ: 0.105 };
+
+export function buildAccessory(id, face = DEFAULT_FACE) {
   const g = new THREE.Group();
   g.name = id;
   switch (id) {
@@ -25,14 +29,25 @@ export function buildAccessory(id) {
     }
     case 'glasses': {
       const frame = mat('#3b2a4a', { metalness: 0.6 });
+      const lensMat = mat('#bfe6ff', { transparent: true, opacity: 0.18, metalness: 0.2, roughness: 0.05 });
+      const { eyeX, eyeY, frontZ } = face;
+      const r = eyeX * 0.78;          // lens size scales with how far apart the eyes are
+      const thick = r * 0.15;
       for (const side of [-1, 1]) {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.026, 0.004, 8, 24), frame);
-        ring.position.set(side * 0.034, 0.075, 0.105);
-        g.add(ring);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, thick, 10, 32), frame);
+        ring.position.set(side * eyeX, eyeY, frontZ);
+        const lens = new THREE.Mesh(new THREE.CircleGeometry(r, 32), lensMat);
+        lens.position.copy(ring.position);
+        // little arm going back toward the ear
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(thick * 0.8, thick * 0.8, frontZ * 0.9), frame);
+        arm.rotation.x = Math.PI / 2;
+        arm.position.set(side * (eyeX + r), eyeY, frontZ * 0.55);
+        g.add(ring, lens, arm);
       }
-      const bridge = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.02), frame);
+      const gap = Math.max(0.001, 2 * eyeX - 2 * r);
+      const bridge = new THREE.Mesh(new THREE.CylinderGeometry(thick * 0.8, thick * 0.8, gap + thick * 2), frame);
       bridge.rotation.z = Math.PI / 2;
-      bridge.position.set(0, 0.078, 0.105);
+      bridge.position.set(0, eyeY + r * 0.15, frontZ);
       g.add(bridge);
       break;
     }

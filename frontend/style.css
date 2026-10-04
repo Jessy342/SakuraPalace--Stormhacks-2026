@@ -91,6 +91,9 @@ small { color: var(--muted); }
   animation: shake .4s infinite;
 }
 #warning.soft { animation: pulse 1s infinite; }
+#warning.has-action { animation: none; }
+.warn-app { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.35); font-size: .9rem; }
+.warn-app button { margin-top: 8px; background: white; color: #d62f4f; font-weight: 700; }
 .warn-title { font-weight: 800; font-size: 1.2rem; letter-spacing: .05em; }
 @keyframes shake { 25% { transform: translateX(-4px) rotate(-1deg); } 75% { transform: translateX(4px) rotate(1deg); } }
 
@@ -99,6 +102,7 @@ small { color: var(--muted); }
 .floater { position: absolute; font-weight: 800; font-size: 1.4rem; white-space: nowrap; transform: translateX(-50%);
   text-shadow: 0 0 6px white, 0 0 12px white; animation: floatup 1.8s ease-out forwards; color: #6a2cbf; }
 .floater.bad { color: #ff4d6d; }
+.floater.heart { color: #ff4d8d; font-size: 2rem; }
 .floater.big { font-size: 2.6rem; color: var(--gold); }
 @keyframes floatup { from { opacity: 0; transform: translate(-50%, 20px) scale(.8); } 15% { opacity: 1; } to { opacity: 0; transform: translate(-50%, -90px) scale(1.1); } }
 
@@ -142,11 +146,33 @@ label.check input { width: auto; }
 .list li button { padding: 6px 10px; }
 .list.done li { opacity: .6; text-decoration: line-through; }
 .diff { font-size: .7rem; padding: 2px 8px; border-radius: 99px; color: white; }
+.due { display: inline-block; margin-left: 6px; font-size: .7rem; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: rgba(0,0,0,.07); color: var(--muted); }
+.due.overdue { background: #e5484d; color: white; }
+.due.today { background: #f0a43a; color: white; }
+.due.soon { background: #ffe7b8; color: #8a5a00; }
+.week-card { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+.week-card > div { background: white; border-radius: 12px; padding: 8px 4px; text-align: center; }
+.week-card b { display: block; font-size: 1.05rem; }
+.week-card small { color: var(--muted); font-size: .68rem; }
+.streak-pill { font-weight: 700; cursor: default; }
 .diff.easy { background: #3ccf91; } .diff.medium { background: #f0a43a; } .diff.hard { background: #e5484d; }
 
 /* focus */
 .focus-card { text-align: center; background: white; border-radius: 18px; padding: 16px; }
 #focus-timer { font-size: 3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pomo-picker { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 10px; background: rgba(0,0,0,.06); border-radius: 999px; }
+.pomo-picker button { background: transparent; color: var(--text); box-shadow: none; padding: 6px 14px; border-radius: 999px; font-weight: 600; }
+.pomo-picker button.active { background: white; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+.pomo-picker button:disabled { cursor: default; }
+.pomo-picker.locked button:not(.active) { opacity: .35; }
+.focus-phase { min-height: 1.2em; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; font-size: .8rem; opacity: .7; }
+.focus-card.break { background: #e6f7ff; }
+.focus-card.break #focus-timer { color: #1f8ac0; }
+.pomo-bar { height: 6px; margin: 4px 24px 8px; background: rgba(0,0,0,.08); border-radius: 999px; overflow: hidden; }
+.pomo-bar.hidden { visibility: hidden; }
+#pomo-fill { height: 100%; width: 0; background: var(--accent, #ff5fa2); border-radius: 999px; transition: width 1s linear; }
+.focus-card.break #pomo-fill { background: #3bb0e6; }
+.focus-pill.break { background: #cdeeff !important; }
 #focus-status { margin-bottom: 10px; color: var(--muted); }
 .sim { display: flex; gap: 8px; margin: 10px 0; }
 .sim button { background: #555; flex: 1; }

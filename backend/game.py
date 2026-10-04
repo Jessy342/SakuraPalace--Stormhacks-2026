@@ -2,6 +2,7 @@
 import random
 import time
 import uuid
+from datetime import date, timedelta
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -53,9 +54,34 @@ def add_xp(state, amount):
     return gained
 
 
+DAILY_GIFT_BASE = 50      # points on day 1 of a streak
+DAILY_GIFT_PER_DAY = 10   # extra points for each streak day, up to day 7
+DAILY_GIFT_MAX_DAYS = 7
+
+
+def log_day(state, key, amount):
+    """Adds to today's activity log (focus seconds, tasks done) for the weekly stats card."""
+    today = date.today().isoformat()
+    day = state.setdefault("daily", {}).setdefault(today, {"focus": 0, "tasks": 0})
+    day[key] = day.get(key, 0) + amount
+    for old in sorted(state["daily"])[:-60]:  # keep the file small
+        del state["daily"][old]
+
+
+def week_summary(state):
+    today = date.today()
+    days = [(today - timedelta(days=i)).isoformat() for i in range(7)]
+    log = state.get("daily", {})
+    return {
+        "focus_seconds": sum(log.get(d, {}).get("focus", 0) for d in days),
+        "tasks": sum(log.get(d, {}).get("tasks", 0) for d in days),
+    }
+
+
 def public_state(state):
     return {
         **state,
+        "week": week_summary(state),
         "xp_to_next": xp_to_next(state["level"]),
         "catalog": {
             "characters": CHARACTERS["characters"],
@@ -126,6 +152,7 @@ def complete_task(task_id: str):
         xp, pts = TASK_REWARDS[task["difficulty"]]
         state["points"] += pts
         state["stats"]["tasks_done"] += 1
+        log_day(state, "tasks", 1)
         levels = add_xp(state, xp)
     return {
         "xp_gained": xp,
@@ -134,6 +161,26 @@ def complete_task(task_id: str):
         "level_bonus": levels * LEVEL_UP_BONUS,
         "state": public_state(storage.load()),
     }
+
+
+@router.post("/daily")
+def claim_daily():
+    """Once per calendar day: grows the login streak and gives free points."""
+    today = date.today()
+    with Transaction() as state:
+        login = state.setdefault("login", {"last_day": None, "streak": 0, "best": 0})
+        if login.get("last_day") == today.isoformat():
+            claimed, gift = False, 0
+        else:
+            yesterday = (today - timedelta(days=1)).isoformat()
+            login["streak"] = login.get("streak", 0) + 1 if login.get("last_day") == yesterday else 1
+            login["best"] = max(login.get("best", 0), login["streak"])
+            login["last_day"] = today.isoformat()
+            gift = DAILY_GIFT_BASE + DAILY_GIFT_PER_DAY * (min(login["streak"], DAILY_GIFT_MAX_DAYS) - 1)
+            state["points"] += gift
+            claimed = True
+        streak = login["streak"]
+    return {"claimed": claimed, "gift": gift, "streak": streak, "state": public_state(storage.load())}
 
 
 @router.delete("/tasks/{task_id}")

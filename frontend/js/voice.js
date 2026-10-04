@@ -144,6 +144,37 @@ export function sfx(name, volume = 0.8) {
   beep(name);
 }
 
+/** Short crisp "tick" for UI buttons (synthesized, so there's no audio file to load). */
+export function uiClick(volume = 0.35) {
+  const ac = audioCtx();
+  const t0 = ac.currentTime;
+  const pitch = 1 + (Math.random() - 0.5) * 0.08; // tiny variation so repeated clicks don't sound robotic
+  // 1) the "tick": a few milliseconds of filtered noise
+  const len = Math.floor(ac.sampleRate * 0.03);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 6);
+  const noise = ac.createBufferSource();
+  noise.buffer = buf;
+  const hp = ac.createBiquadFilter();
+  hp.type = 'bandpass';
+  hp.frequency.value = 3800 * pitch;
+  hp.Q.value = 0.9;
+  const ng = ac.createGain();
+  ng.gain.value = volume * 1.4;
+  noise.connect(hp).connect(ng).connect(ac.destination);
+  noise.start(t0);
+  // 2) the "body": a tiny sine blip that drops in pitch
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(1900 * pitch, t0);
+  o.frequency.exponentialRampToValueAtTime(700 * pitch, t0 + 0.035);
+  g.gain.setValueAtTime(volume, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.06);
+  o.connect(g).connect(ac.destination);
+  o.start(t0); o.stop(t0 + 0.07);
+}
+
 function beep(name) {
   // simple synthesized fallback so there's always some feedback
   const ac = audioCtx();

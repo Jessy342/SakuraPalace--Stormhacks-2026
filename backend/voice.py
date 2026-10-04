@@ -162,6 +162,70 @@ YELLS = {
         "chill": ["[relaxed] There we go."],
         "rival": ["[grins] That's more like it!"],
     },
+    # time-of-day greetings when the app opens
+    "greet_morning": {
+        "tsundere": ["[huffs] Morning. D-don't think I waited up for you or anything. Let's get to work."],
+        "cheerful": ["[excited] Good morning! New day, new quests! Let's crush it!"],
+        "sensei": ["[calm] Good morning. A fresh mind learns best. Shall we begin?"],
+        "chill": ["[yawns] Morning... coffee first, then tasks."],
+        "rival": ["[excited] Morning! I've been up for hours. Try to keep up!"],
+    },
+    "greet_afternoon": {
+        "tsundere": ["[annoyed] Oh, it's you. Afternoon already, and you're just showing up? Hmph."],
+        "cheerful": ["[happy] Good afternoon! Perfect time for a focus session!"],
+        "sensei": ["[calm] Good afternoon. Let's make steady progress."],
+        "chill": ["[relaxed] Hey. Good afternoon. What are we doing today?"],
+        "rival": ["[smirks] Afternoon! I already finished three tasks. Your move."],
+    },
+    "greet_evening": {
+        "tsundere": ["[huffs] Evening. You'd better not slack off just because it's late."],
+        "cheerful": ["[happy] Good evening! Let's finish strong today!"],
+        "sensei": ["[calm] Good evening. Let's review what you learned today."],
+        "chill": ["[relaxed] Evening. Chill session? Let's do a bit."],
+        "rival": ["[excited] Evening grind? Now we're talking!"],
+    },
+    "greet_night": {
+        "tsundere": ["[annoyed] Why are you still up?! Go to sleep, idiot! ...I-I'm just worried about your grades!"],
+        "cheerful": ["[worried] It's super late! Let's do something quick, and then sleep, okay?"],
+        "sensei": ["[stern] It is very late. Sleep is part of studying too. Keep it short tonight."],
+        "chill": ["[yawns] Dude, it's the middle of the night. Go to bed."],
+        "rival": ["[laughs] Still awake? Fine, but a tired rival is no fun to beat. Sleep soon!"],
+    },
+    "poke": {
+        "tsundere": ["[surprised] H-hey! Don't just poke me!", "[embarrassed] W-what?! I'm working here, idiot!", "[huffs] Do that again and see what happens."],
+        "cheerful": ["[giggles] Hehe, that tickles!", "[surprised] Eep! Oh, hi there!", "[laughs] Boop! Did you need something?"],
+        "sensei": ["[calm] Yes? Do you have a question?", "[amused] I'm right here. No need to poke.", "[curious] Hm? Something on your mind?"],
+        "chill": ["[deadpan] ...Hi.", "[relaxed] Yeah? What's up?", "[yawns] Mm? You poked me."],
+        "rival": ["[laughs] Ha! Is that an attack? Pathetic!", "[smirks] Trying to distract me? Won't work!", "[excited] Oh, you want a fight? Bring it!"],
+    },
+    "headpat": {
+        "tsundere": ["[embarrassed] W-why are you patting my head?! ...I-I didn't say stop.", "[flustered] Hmph! I'm not a pet! ...Okay, one more."],
+        "cheerful": ["[happy] Aww, headpats! You're the best!", "[giggles] Ehehe, I love headpats!"],
+        "sensei": ["[soft chuckle] A headpat? Well... I suppose I'll allow it.", "[pleased] Mm. Thank you. Now, back to studying."],
+        "chill": ["[relaxed] Oh... that's nice. Keep going.", "[content sigh] Headpats. Nice."],
+        "rival": ["[flustered] D-don't pat me like a kid! ...Hmph.", "[embarrassed] You think headpats will make me go easy on you?!"],
+    },
+    "poke_spam": {
+        "tsundere": ["[shouting] STOP POKING ME! Go do your homework!"],
+        "cheerful": ["[pouting] Okay, okay, that's enough pokes! Let's study!"],
+        "sensei": ["[stern] That's enough. Your tasks are waiting."],
+        "chill": ["[sighs] Bro. Please. Stop."],
+        "rival": ["[angry] Poking me won't level you up! Get to work!"],
+    },
+    "break_start": {
+        "tsundere": ["[huffs] Fine, you earned a break. {app}. Go stretch, and don't you dare open YouTube!"],
+        "cheerful": ["[excited] Pomodoro done! Okay, {app}. Stretch! Drink some water!"],
+        "sensei": ["[pleased] Well done. Rest for {app}. Stand up and stretch."],
+        "chill": ["[relaxed] Nice. Take {app}. Stretch or something."],
+        "rival": ["[laughs] Round cleared! {app} break. Stretch, then we go again!"],
+    },
+    "break_over": {
+        "tsundere": ["[annoyed] Break's over! Back to work. I'm watching you."],
+        "cheerful": ["[happy] Break's over! Ready for another round? Let's go!"],
+        "sensei": ["[calm] The break is over. Return to your work."],
+        "chill": ["[sighs] Okay, break's done. Back at it."],
+        "rival": ["[shouting] Break's over! Next round, let's go!"],
+    },
     "close": {
         "tsundere": ["[shouting] ENOUGH! I'm closing {app} myself! Don't make me do that again!"],
         "cheerful": ["[determined] Sorry, I had to close {app}! It's for your own good!"],
@@ -173,7 +237,7 @@ YELLS = {
 
 
 class YellIn(BaseModel):
-    stage: str  # warning | drain | close
+    stage: str  # warning | drain | close | praise | levelup | recovered | break_start | break_over | poke | headpat | poke_spam | greet_morning | greet_afternoon | greet_evening | greet_night
     app: str = "that"
 
 

@@ -29,7 +29,9 @@ DEFAULT_STATE = {
     "owned_backgrounds": ["sakura"],
     "background": "sakura",
     "pity": {"since_legendary": 0},
-    "stats": {"pulls": 0, "focus_seconds": 0, "tasks_done": 0, "distractions": 0},
+    "stats": {"pulls": 0, "focus_seconds": 0, "tasks_done": 0, "distractions": 0, "pomodoros": 0},
+    "daily": {},  # "YYYY-MM-DD" -> {"focus": seconds, "tasks": count}, last 60 days (for the weekly stats card)
+    "login": {"last_day": None, "streak": 0, "best": 0},  # daily login gift + streak
     "settings": {
         "voice_mode": "dub",  # "dub" = English voice, "sub" = Japanese voice + English subtitles
         "blocked_apps": ["discord.exe", "steam.exe", "epicgameslauncher.exe", "riotclientservices.exe"],

@@ -4,6 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Anime Assistant</title>
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+  <link rel="icon" type="image/png" sizes="256x256" href="assets/icon-256.png" />
+  <link rel="alternate icon" href="assets/icon.ico" />
+  <link rel="apple-touch-icon" href="assets/icon-180.png" />
   <link rel="stylesheet" href="style.css" />
   <script type="importmap">
     {
@@ -29,6 +33,7 @@
       <small id="hud-xptext">0 / 100 XP</small>
     </div>
     <div class="hud-points"><span class="gem">◆</span> <b id="hud-points">0</b></div>
+    <div id="hud-streak" class="streak-pill" title="Daily streak">🔥 0</div>
     <div id="hud-focus" class="focus-pill off">Focus off</div>
   </header>
 
@@ -39,6 +44,10 @@
   <div id="warning" class="hidden">
     <div class="warn-title">⚠ DISTRACTION DETECTED</div>
     <div id="warn-text"></div>
+    <div id="warn-app" class="warn-app hidden">
+      <div id="warn-app-text"></div>
+      <button id="open-taskmgr">Open Task Manager</button>
+    </div>
   </div>
 
   <!-- Floating reward popups go here -->
@@ -68,6 +77,7 @@
 
     <!-- TASKS -->
     <section id="tab-tasks" class="tab">
+      <div id="week-card" class="week-card"></div>
       <form id="task-form" class="row">
         <input id="task-title" placeholder="New task…" required />
         <select id="task-diff">
@@ -92,10 +102,17 @@
     <!-- FOCUS -->
     <section id="tab-focus" class="tab">
       <div class="focus-card">
-        <div id="focus-timer">00:00</div>
+        <div id="pomo-picker" class="pomo-picker" role="radiogroup" aria-label="Session length">
+          <button data-pomo="0">Free</button>
+          <button data-pomo="25" class="active">🍅 25 min</button>
+          <button data-pomo="50">🍅 50 min</button>
+        </div>
+        <div id="focus-phase" class="focus-phase"></div>
+        <div id="focus-timer">25:00</div>
+        <div class="pomo-bar"><div id="pomo-fill"></div></div>
         <div id="focus-status">Not focusing</div>
         <button id="focus-toggle" class="big">Start focus session</button>
-        <small>Earn 2 points + 1 XP per focused minute. Open a blocked app or site and your assistant gets angry!</small>
+        <small id="focus-hint">25 min work, then a 5 min break. The timer pauses while you're distracted. Earn 2 points + 1 XP per focused minute, plus a bonus for every finished round.</small>
       </div>
       <h3>Blocked apps <small>(process names)</small></h3>
       <textarea id="blocked-apps" rows="2"></textarea>
@@ -111,6 +128,7 @@
       <button id="save-focus">Save focus settings</button>
       <div class="sim">
         <button id="sim-on">Simulate distraction</button>
+        <button id="sim-app">Simulate app (Discord)</button>
         <button id="sim-off">Stop simulating</button>
       </div>
       <small id="focus-platform"></small>
@@ -182,6 +200,7 @@
       <h3>Voice</h3>
       <label class="check"><input type="radio" name="vmode" value="dub" /> Dub (English voice)</label>
       <label class="check"><input type="radio" name="vmode" value="sub" /> Sub (Japanese voice + English subtitles)</label>
+      <label class="check"><input type="checkbox" id="ui-sounds" checked /> Click sounds on buttons</label>
       <h3>Background</h3>
       <div id="bg-select" class="cards"></div>
       <h3>System</h3>
