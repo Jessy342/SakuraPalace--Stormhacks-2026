@@ -1211,7 +1211,7 @@ function renderOptions() {
   $('dev-off').classList.toggle('hidden', !S.dev_mode);
   $('dev-status').textContent = S.dev_mode ? 'Dev Mode is ON: every character, outfit, accessory and background is unlocked and lotus is unlimited. Turning it off brings back your real progress.'
     : 'Unlocks every character and item with unlimited lotus. Enter the password to turn it on.';
-  $('sys-status').innerHTML = `<small>ElevenLabs voice: ${elevenOn ? '✅ connected' : '❌ no key (using browser voice)'}<br>
+  $('sys-status').innerHTML = `<small>${elevenOn ? '' : 'ElevenLabs voice: ❌ no key (using browser voice)<br>'}
     Quests done: ${S.stats.tasks_done} · Pulls: ${S.stats.pulls} · Distractions caught: ${S.stats.distractions}</small>`;
 }
 
