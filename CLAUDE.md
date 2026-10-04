@@ -36,7 +36,10 @@ frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. th
 ```
 
 ## Rules
-1. **One coder:** Jonathan is the only person changing code, through his Claude session. You may edit any file. Teammates deliver assets (VRM models, voice IDs, images, sound effects) that you drop in.
+1. **Two coders, two branches:** Jonathan codes on `main` through his Claude session. The second coder codes **only** on the `Test_run` branch through their own AI session. Other teammates deliver assets (VRM models, voice IDs, images, sound effects).
+   - **If you are on `Test_run`:** before starting work run `git pull` then `git merge origin/main` so you build on the latest code. Commit real file changes and `git push` to `Test_run` after each working feature. Never upload zip files of the project and never push to `main`.
+   - **If you are on `main` (Jonathan's session):** when Jonathan says "merge Test_run" (about once an hour), run `git fetch`, `git merge origin/Test_run`, fix any conflicts, restart the app, test chat/voice/focus, then push `main`.
+   - Tell the other coder which files you are working on to avoid both editing the same lines.
 2. Keep the API contract stable. If you change an endpoint's request/response shape, update both sides in the same commit and list the change in your summary.
 3. No new frameworks (no React, no bundlers, no databases). Plain JS modules + FastAPI only. New Python packages go in `requirements.txt`.
 4. Never commit `.env` or API keys. Read keys only through `config.py`.
