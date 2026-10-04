@@ -10,6 +10,11 @@ const MAX_YAW = 0.7;    // how far she can turn her head left/right (radians, ~4
 const MAX_PITCH = 0.35; // how far she can look up/down (~20°)
 const IDLE_LOOK_BACK = 4; // seconds without mouse movement before she looks back at you
 
+// Idle gestures: every so often, when she's calm and quiet, she does a little something on her own.
+const IDLE_LENGTH = { stretch: 3.4, lookAround: 4.2, hairTouch: 3.2, handsBehind: 4.5, headTilt: 2.8, yawn: 3.4, handOnHip: 3.8 };
+const IDLE_GAP = [7, 16]; // seconds between gestures (random in this range)
+const smooth = (a, b, x) => { const k = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return k * k * (3 - 2 * k); };
+
 export class Character {
   constructor(canvas, getMouthLevel) {
     this.getMouthLevel = getMouthLevel || (() => 0);
@@ -78,6 +83,10 @@ export class Character {
     this.blushUntil = 0;
     this.waveUntil = 0;
     this.waveAmt = 0;
+    this.idle = null;     // the idle gesture playing now: { name, start, dir }
+    this.idleAmt = 0;     // fades gestures in/out when she gets interrupted
+    this.nextIdle = 6;
+    this.gesture = null;  // this frame's gesture pose (see idlePose)
     canvas.addEventListener('pointerdown', e => {
       const r = canvas.getBoundingClientRect();
       const ndc = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
@@ -416,6 +425,7 @@ export class Character {
     if (Math.abs(this.zoomTarget - this.zoom) > 0.002) { this.zoom += (this.zoomTarget - this.zoom) * Math.min(1, dt * 5); this.frameCamera(); }
     if (!this.dragRotate) this.spin += (0 - this.spin) * Math.min(1, dt * 5);
 
+    this.updateIdle(t, dt);
     this.updateLook(dt, t);
     const w = this.weights;
     if (this.root) {
@@ -427,6 +437,7 @@ export class Character {
       const since = t - this.pokeAt;
       const squish = since < 0.6 ? Math.sin(since * 22) * Math.exp(-since * 7) * 0.12 : 0;
       this.root.scale.set(1 + squish * 0.6, 1 - squish, 1 + squish * 0.6);
+      if (this.gesture) this.root.position.y += this.gesture.rise * this.gesture.k;
     }
     this.blush += ((t < this.blushUntil ? 1 : 0) - this.blush) * Math.min(1, dt * 5);
     this.waveAmt += ((t < this.waveUntil ? 1 : 0) - this.waveAmt) * Math.min(1, dt * 6);
@@ -455,6 +466,92 @@ export class Character {
     this.waveUntil = this.clock.elapsedTime + seconds;
   }
 
+  /** Plays an idle gesture now. Random if no name given. Try it in DevTools: character.playIdle('stretch') */
+  playIdle(name) {
+    if (!IDLE_LENGTH[name]) { // random, but never the same one twice in a row
+      const pool = Object.keys(IDLE_LENGTH).filter(n => n !== this.lastIdle);
+      name = pool[Math.floor(Math.random() * pool.length)];
+    }
+    this.idle = { name, start: this.clock.elapsedTime, dir: Math.random() < 0.5 ? -1 : 1 };
+    this.lastIdle = name;
+  }
+
+  /** Starts a gesture now and then while she's calm; fades it out if she starts talking, emoting or gets poked. */
+  updateIdle(t, dt) {
+    const calm = this.emotion === 'neutral' && this.mouth < 0.05 && t > this.waveUntil + 0.5 && t - this.pokeAt > 1.5 && !this.drag;
+    if (!calm) this.nextIdle = Math.max(this.nextIdle, t + 5);
+    else if (!this.idle && t > this.nextIdle) this.playIdle();
+    if (this.idle && t - this.idle.start > IDLE_LENGTH[this.idle.name]) {
+      this.idle = null;
+      this.nextIdle = t + IDLE_GAP[0] + Math.random() * (IDLE_GAP[1] - IDLE_GAP[0]);
+    }
+    this.idleAmt += ((this.idle && calm ? 1 : 0) - this.idleAmt) * Math.min(1, dt * 4);
+    this.gesture = this.idle && this.idleAmt > 0.01 ? this.idlePose(t) : null;
+  }
+
+  /** The pose for the current gesture. Arm angles replace the normal pose; body/head angles are added on top.
+   *  Bone angles are for VRM normalized bones; `ph` is the simpler version for the chibi placeholder. */
+  idlePose(t) {
+    const { name, start, dir } = this.idle;
+    const s = t - start, p = s / IDLE_LENGTH[name];
+    const env = smooth(0, 0.2, p) * (1 - smooth(0.75, 1, p)); // ease in, hold, ease out
+    const g = { k: env * this.idleAmt, arms: {}, add: {}, look: null, mouth: 0, eyes: 0, rise: 0, ph: { armR: null, armL: null, armX: 0, head: [0, 0, 0] } };
+    switch (name) {
+      case 'stretch': { // both arms up over the head, lean back, up on tiptoes
+        const side = Math.sin(s * 2.2) * 0.07;
+        g.arms = { rightUpperArm: [0, 0, -1.25], leftUpperArm: [0, 0, 1.25], rightLowerArm: [0, 0.2, -0.8], leftLowerArm: [0, -0.2, 0.8] };
+        g.add = { spine: [-0.1, 0, side], chest: [-0.08, 0, side], head: [-0.15, 0, 0] };
+        g.eyes = 0.8 * smooth(0.25, 0.4, p) * (1 - smooth(0.6, 0.7, p));
+        g.rise = 0.02;
+        g.ph = { armR: 2.7, armL: 2.7, armX: 0, head: [-0.15, 0, side] };
+        break;
+      }
+      case 'lookAround': { // glance to one side, then the other, then back at you
+        const yaw = 0.5 * dir * (smooth(0.1, 0.25, p) - 2 * smooth(0.42, 0.58, p) + smooth(0.78, 0.92, p));
+        g.look = { yaw, pitch: -0.06 };
+        g.add = { spine: [0, yaw * 0.15, 0] };
+        break;
+      }
+      case 'hairTouch': { // right hand up to fiddle with her hair
+        const fiddle = Math.sin(s * 5) * 0.12;
+        g.arms = { rightUpperArm: [0, 0.25, 0.05], rightLowerArm: [0, 0.15, -2.85 + fiddle] };
+        g.add = { head: [0.05, 0, -0.14], neck: [0, 0, -0.05] };
+        g.ph = { armR: 2.2 + fiddle, armL: null, armX: 0, head: [0.05, 0, -0.14] };
+        break;
+      }
+      case 'handsBehind': { // hands clasped behind her back, rocking on her heels
+        const rock = Math.sin(s * 2.6) * 0.03;
+        g.arms = { rightUpperArm: [0.45, 0, 1.3], leftUpperArm: [0.45, 0, -1.3], rightLowerArm: [0, 0, 0.5], leftLowerArm: [0, 0, -0.5] };
+        g.add = { hips: [rock, 0, 0], chest: [-0.06, 0, 0], head: [-rock, 0, Math.sin(s * 1.3) * 0.08] };
+        g.ph = { armR: 0.1, armL: 0.1, armX: 0.6, head: [0, 0, Math.sin(s * 1.3) * 0.08] };
+        break;
+      }
+      case 'headTilt': { // a curious head tilt
+        g.add = { head: [0.04, 0.1 * dir, 0.25 * dir], neck: [0, 0, 0.08 * dir], spine: [0, 0, -0.04 * dir] };
+        g.ph.head = [0.04, 0.1 * dir, 0.3 * dir];
+        break;
+      }
+      case 'yawn': { // hand to mouth, big yawn, eyes squeezed shut
+        const open = smooth(0.15, 0.35, p) * (1 - smooth(0.6, 0.75, p));
+        g.arms = { rightUpperArm: [-0.6, 0, 1.15], rightLowerArm: [0, 2.2, 0.35] };
+        g.add = { head: [-0.18 * open, 0, 0.05], chest: [-0.05 * open, 0, 0] };
+        g.mouth = 0.9 * open;
+        g.eyes = open;
+        g.ph = { armR: 1.6, armL: null, armX: -0.5, head: [-0.18 * open, 0, 0.05] };
+        break;
+      }
+      case 'handOnHip': { // weight on one leg, one hand on her hip
+        g.arms = dir > 0
+          ? { leftUpperArm: [0.2, 0, -0.85], leftLowerArm: [0, -0.3, -1.4] }
+          : { rightUpperArm: [0.2, 0, 0.85], rightLowerArm: [0, 0.3, 1.4] };
+        g.add = { hips: [0, 0, 0.06 * dir], spine: [0, 0, -0.07 * dir], head: [0, 0, 0.07 * dir] };
+        g.ph = { armR: dir < 0 ? 0.9 : null, armL: dir > 0 ? 0.9 : null, armX: 0, head: [0, 0, 0.1 * dir] };
+        break;
+      }
+    }
+    return g;
+  }
+
   /** Rosy cheeks for a few seconds (chibi placeholder; VRM models use their happy face). */
   setBlush(seconds = 2.5) {
     this.blushUntil = this.clock.elapsedTime + seconds;
@@ -471,6 +568,11 @@ export class Character {
       this.raycaster.setFromCamera(this.cursor, this.camera);
       const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -(headPos.z + 0.8));
       if (!this.raycaster.ray.intersectPlane(plane, goal)) goal.copy(this.camera.position);
+    } else if (this.gesture?.look) { // looking around on her own (idle gesture)
+      const { yaw: gy, pitch: gp } = this.gesture.look, k = this.gesture.k;
+      const toCam = this.camera.position.clone().sub(headPos);
+      const dir = new THREE.Vector3(Math.sin(gy), -Math.sin(gp), Math.cos(gy)).multiplyScalar(toCam.length());
+      goal.copy(headPos).add(toCam.lerp(dir, k));
     } else {
       goal.copy(this.camera.position); // look back at the user
     }
@@ -511,11 +613,23 @@ export class Character {
     set('head', talkNod + w.sad * 0.15 - w.surprised * 0.1 + pitch * 0.6,
       yaw * 0.6 + Math.sin(t * 25) * 0.05 * w.angry, Math.sin(t * 0.7) * 0.05 + w.happy * 0.1);
 
+    const g = this.gesture;
+    if (g) { // blend in the idle gesture
+      for (const [name, [x, y, z]] of Object.entries(g.arms)) {
+        const n = b(name);
+        if (n) n.rotation.set(n.rotation.x + (x - n.rotation.x) * g.k, n.rotation.y + (y - n.rotation.y) * g.k, n.rotation.z + (z - n.rotation.z) * g.k);
+      }
+      for (const [name, [x, y, z]] of Object.entries(g.add)) {
+        const n = b(name);
+        if (n) { n.rotation.x += x * g.k; n.rotation.y += y * g.k; n.rotation.z += z * g.k; }
+      }
+    }
+
     const em = this.vrm.expressionManager;
     if (em) {
       for (const e of EMOTIONS) em.setValue(e, w[e] * (e === 'surprised' ? 0.8 : 1));
-      em.setValue('aa', Math.min(1, this.mouth * 1.2));
-      em.setValue('blink', w.happy > 0.5 ? 0 : blink);
+      em.setValue('aa', Math.min(1, Math.max(this.mouth * 1.2, g ? g.mouth * g.k : 0)));
+      em.setValue('blink', w.happy > 0.5 ? 0 : Math.max(blink, g ? g.eyes * g.k : 0));
     }
     this.vrm.update(dt);
   }
@@ -532,6 +646,9 @@ export class Character {
         a.rotation.z += (2.6 + Math.sin(t * 12) * 0.35 - a.rotation.z) * this.waveAmt;
         a.rotation.x *= 1 - this.waveAmt;
       }
+      const g = this.gesture, up = g && (sd === 1 ? g.ph.armR : g.ph.armL);
+      if (up != null) a.rotation.z += (sd * up - a.rotation.z) * g.k;
+      if (g) a.rotation.x += g.ph.armX * g.k;
     }
     // twin tails swing a little, more when she moves
     for (const tl of tails) {
@@ -542,6 +659,11 @@ export class Character {
     headG.rotation.z = Math.sin(t * 0.7) * 0.05 + w.happy * 0.12;
     headG.rotation.x = this.mouth * 0.08 * Math.sin(t * 7) + w.sad * 0.25 + this.look.pitch * 0.8;
     headG.rotation.y = Math.sin(t * 25) * 0.06 * w.angry + this.look.yaw * 0.8;
+    const g = this.gesture;
+    if (g) {
+      headG.rotation.x += g.ph.head[0] * g.k; headG.rotation.y += g.ph.head[1] * g.k; headG.rotation.z += g.ph.head[2] * g.k;
+      blink = Math.max(blink, g.eyes * g.k);
+    }
     const eyeOpen = Math.max(0.08, 1 - blink - w.happy * 0.7);
     eyes.forEach(e => e.scale.set(1, eyeOpen * (1 + w.surprised * 0.4), 0.4));
     brows.forEach((br, i) => {
@@ -549,7 +671,7 @@ export class Character {
       br.rotation.z = s * (-w.angry * 0.5 + w.sad * 0.4);
       br.position.y = 0.075 + w.surprised * 0.03;
     });
-    mouth.scale.set(1 + w.happy * 0.5, 0.2 + this.mouth * 1.6 + w.surprised * 0.6, 0.3);
+    mouth.scale.set(1 + w.happy * 0.5, 0.2 + Math.max(this.mouth, g ? g.mouth * g.k : 0) * 1.6 + w.surprised * 0.6, 0.3);
     for (const b of this.ph.blushes) {
       b.material.opacity = 0.6 + this.blush * 0.35;
       b.material.color.set(this.blush > 0.3 ? '#ff6f9a' : '#ff9fb8');
