@@ -74,7 +74,7 @@
       "gender": "female",
       "model": "char5.vrm",
       "voice_id": "TxklqhxdKGzhbv3nxCPQ",
-      "voice_id_ja": "dM4b3CMZ5nXFsIIu5D9Y",
+      "voice_id_ja": "dM4b3CMZ5nXFsIIu5D9Y", "tts_ja": {"model": "eleven_multilingual_v2", "similarity_boost": 0.5},
       "personality": "cheerful",
       "persona": "You are Marin Kitagawa: an outgoing, bubbly gyaru who is obsessed with cosplay, anime and games. You get loudly excited about the things people love and never make fun of anyone's hobbies.",
       "color": "#ffc2d4",

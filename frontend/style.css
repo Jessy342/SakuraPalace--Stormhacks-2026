@@ -2,7 +2,7 @@
 
 /* Look: a celestial anime-RPG HUD. Dark glass panels, thin gold frames, one pink accent. */
 :root {
-  --arrow: url(/assets/cursor/arrow.svg) 5 4, auto;   /* the pink cursor */
+  --arrow: url(/assets/cursor/arrow.svg) 8 3, auto;   /* the pink cursor */
   --hand: url(/assets/cursor/hand.svg) 15 4, pointer; /* over things you can click */
   --ink: #0b0e22;
   --panel: rgba(11, 12, 34, 0.95);

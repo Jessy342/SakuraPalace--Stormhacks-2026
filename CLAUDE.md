@@ -63,6 +63,7 @@ tools/make_portraits.mjs dev tool: re-render portraits after adding/changing a m
 - Gemini model default `gemini-3.5-flash` (google-genai SDK). Replies are JSON: `{emotion, reply, reply_ja, add_tasks}`.
 - ElevenLabs: TTS `eleven_flash_v2_5` (fast) and `eleven_v3` for expressive lines with audio tags like `[angry]`, `[shouting]`, `[laughs]`; STT `scribe_v2`; sound effects via `/v1/sound-generation` (cached to `frontend/assets/sfx/`).
 - Voice modes: "dub" = English voice; "sub" = Japanese voice + English subtitles. Each character in characters.json has `voice_id` (English) and `voice_id_ja` (Japanese); `/api/tts` takes `lang` ("en"/"ja") to pick between them.
+- A character can tune one of its voices with `tts_en` / `tts_ja` in characters.json (`{"model": ..., "similarity_boost": ...}`): Marin's Japanese voice uses `eleven_multilingual_v2` at 0.5 because the fast model made it clip and crackle.
 - In sub mode EVERY spoken line must be Japanese: `say()` in app.js asks `/api/ja` for a translation of any line that has none (remembered in `backend/data/ja_cache.json`). Don't call `voice.speak` with English text directly for character lines.
 - Only one voice line plays at a time (`speakParts` in voice.js); long lines are split into sentences and spoken one by one. `/api/tts` also takes `prev`/`next` (neighbouring sentences) to keep the tone steady.
 - `/api/chat` may return `lesson` ({title, markdown, images}) for bigger questions; the Log opens and shows it with Wikipedia pictures.
