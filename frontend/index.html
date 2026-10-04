@@ -23,15 +23,15 @@
   <!-- Icon shapes used by the menus -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
-      <symbol id="i-quest" viewBox="0 0 24 24"><path d="M7 4h10v17H7z M9.5 12.5l2 2 3.5-4.5 M10 4V2.5h4V4"/></symbol>
-      <symbol id="i-focus" viewBox="0 0 24 24"><path d="M7 3h10 M7 21h10 M8 3c0 5 8 5 8 9s-8 4-8 9 M16 3c0 5-8 5-8 9s8 4 8 9"/></symbol>
-      <symbol id="i-convene" viewBox="0 0 24 24"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></symbol>
-      <symbol id="i-chars" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></symbol>
-      <symbol id="i-dress" viewBox="0 0 24 24"><path d="M12 7.5a2 2 0 1 0-2-2 M12 7.5v2l8.6 6.2a1 1 0 0 1-.6 1.8H4a1 1 0 0 1-.6-1.8L12 9.5"/></symbol>
+      <symbol id="i-quest" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v3h3M9 11.500l2 2 4-4.500M9 17h6"/></symbol>
+      <symbol id="i-focus" viewBox="0 0 24 24"><circle cx="12" cy="13.500" r="7.500"/><path d="M12 9.500v4l2.500 2M9.500 2.500h5M12 2.500V6"/></symbol>
+      <symbol id="i-convene" viewBox="0 0 24 24"><path d="M11 2.500l2.300 6.200L19.500 11l-6.200 2.300L11 19.500l-2.300-6.200L2.500 11l6.200-2.300z"/><path d="M19 15.500l.800 2.200 2.200.800-2.200.800-.800 2.200-.800-2.200-2.200-.800 2.200-.800z"/></symbol>
+      <symbol id="i-chars" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.500"/><path d="M2.500 20.500c0-3.600 2.900-6 6.500-6s6.500 2.400 6.500 6z"/><path d="M15.500 4.700a3.500 3.500 0 0 1 0 6.600M17.500 14.800c2.400.800 4 2.900 4 5.700"/></symbol>
+      <symbol id="i-dress" viewBox="0 0 24 24"><path d="M8 3l4 2.500L16 3l5 4-2.500 3.500-1.500-1V21H7V9.500l-1.500 1L3 7z"/></symbol>
       <symbol id="i-shop" viewBox="0 0 24 24"><path d="M5 8h14l-1 13H6z M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
       <symbol id="i-teacher" viewBox="0 0 24 24"><path d="M12 5v15 M12 5c-2-1.5-5-2-8-1.500v14c3-.5 6 0 8 1.500 M12 5c2-1.500 5-2 8-1.500v14c-3-.5-6 0-8 1.500"/></symbol>
-      <symbol id="i-log" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z M8 9h8 M8 12h5"/></symbol>
-      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.500"/><path d="M12 2v3.500 M12 18.500V22 M2 12h3.500 M18.500 12H22 M4.900 4.900l2.500 2.500 M16.600 16.600l2.500 2.500 M4.900 19.100l2.500-2.500 M16.600 7.400l2.500-2.500"/></symbol>
+      <symbol id="i-log" viewBox="0 0 24 24"><path d="M3 4h13v10H9l-4 3.500V14H3z"/><path d="M19 9h2v9h-2v3l-3.500-3H11"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.200"/><circle cx="9" cy="17" r="2.200"/></symbol>
       <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M5.500 11.500a6.500 6.500 0 0 0 13 0 M12 18v3"/></symbol>
       <symbol id="i-close" viewBox="0 0 24 24"><path d="M5 5l14 14 M19 5L5 19"/></symbol>
       <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6 M12 7.500v.500"/></symbol>
@@ -40,6 +40,14 @@
       <symbol id="i-room" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z M10 20v-6h4v6"/></symbol>
       <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></symbol>
       <symbol id="i-turn" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 1 2.6 5.7 M4 19v-5h5"/></symbol>
+      <!-- the points symbol: a lotus -->
+      <symbol id="i-lotus" viewBox="0 0 24 24">
+        <path d="M2.200 11c3 .200 5.300 1.500 6.800 3.600.900 1.300 1.500 2.800 1.600 4.400-3 .300-5.400-.700-6.900-2.900-1-1.500-1.500-3.200-1.500-5.100z" fill="#ff9ac4" stroke="#b3246b" stroke-width=".9" stroke-linejoin="round"/>
+        <path d="M2.200 11c3 .200 5.300 1.500 6.800 3.600.900 1.300 1.500 2.800 1.600 4.400-3 .300-5.400-.700-6.900-2.900-1-1.500-1.500-3.200-1.500-5.100z" fill="#ff9ac4" stroke="#b3246b" stroke-width=".9" stroke-linejoin="round" transform="translate(24 0) scale(-1 1)"/>
+        <path d="M6.300 5.800c2.400 1.300 4 3.400 4.700 6.100.500 2.200.400 4.400-.200 6.400-2.300-1.100-3.800-2.900-4.600-5.300-.700-2.400-.700-4.800.100-7.200z" fill="#ff6fae" stroke="#b3246b" stroke-width=".9" stroke-linejoin="round"/>
+        <path d="M6.300 5.800c2.400 1.300 4 3.400 4.700 6.100.500 2.200.400 4.400-.200 6.400-2.300-1.100-3.800-2.900-4.600-5.300-.700-2.400-.700-4.800.100-7.200z" fill="#ff6fae" stroke="#b3246b" stroke-width=".9" stroke-linejoin="round" transform="translate(24 0) scale(-1 1)"/>
+        <path d="M12 2.600c2.300 2.900 3.400 6.100 3.400 9.400 0 3.100-1.200 5.500-3.400 7.100-2.200-1.600-3.400-4-3.400-7.100 0-3.300 1.100-6.500 3.400-9.400z" fill="#ffd9ea" stroke="#b3246b" stroke-width=".9" stroke-linejoin="round"/>
+      </symbol>
     </defs>
   </svg>
 
@@ -66,7 +74,7 @@
     <div class="hud-right">
       <div id="hud-focus" class="pill focus-pill off">Focus off</div>
       <div id="hud-streak" class="pill streak-pill" title="Daily streak">0</div>
-      <div class="pill hud-points" title="Points: earn them from quests and focus, spend them on Convene and the shop"><span class="gem">◆</span><b id="hud-points">0</b></div>
+      <div class="pill hud-points" title="Points: earn them from quests and focus, spend them on Convene and the shop"><svg class="lotus"><use href="#i-lotus"/></svg><b id="hud-points">0</b></div>
     </div>
   </header>
 
@@ -224,41 +232,6 @@
       </details>
     </section>
 
-    <!-- DRESSING ROOM: wardrobe and shop in one. Locked items can be tried on, then bought right here. -->
-    <section id="tab-dress" class="tab" data-title="Dressing Room">
-      <div id="dress-cats" class="dress-cats">
-        <button data-cat="head"><svg><use href="#i-crown"/></svg>Headwear</button>
-        <button data-cat="face"><svg><use href="#i-glasses"/></svg>Eyewear</button>
-        <button data-cat="room"><svg><use href="#i-room"/></svg>Rooms</button>
-        <button data-cat="persona"><svg><use href="#i-heart"/></svg>Persona</button>
-        <button data-cat="voice"><svg><use href="#i-mic"/></svg>Voice</button>
-      </div>
-      <div id="dress-grid" class="dress-grid"></div>
-      <div id="dress-persona" class="dress-pane hidden">
-        <h3>Personality</h3>
-        <select id="personality">
-          <option value="tsundere">Tsundere</option>
-          <option value="cheerful">Cheerful &amp; supportive</option>
-          <option value="sensei">Strict sensei</option>
-          <option value="chill">Chill &amp; deadpan</option>
-          <option value="rival">Hot-blooded rival</option>
-          <option value="custom">Custom…</option>
-        </select>
-        <textarea id="personality-custom" rows="3" class="hidden" placeholder="Describe the personality you want…"></textarea>
-        <button id="save-personality" class="primary">Save personality</button>
-      </div>
-      <div id="dress-voice" class="dress-pane hidden">
-        <h3>Voice</h3>
-        <label class="check"><input type="radio" name="vmode" value="dub" /> Dub (English voice)</label>
-        <label class="check"><input type="radio" name="vmode" value="sub" /> Sub (Japanese voice + English subtitles)</label>
-        <div class="row">
-          <button data-preview="en">▶ Hear English voice</button>
-          <button data-preview="ja">▶ Hear Japanese voice</button>
-        </div>
-      </div>
-      <div id="dress-action" class="dress-action"></div>
-    </section>
-
     <!-- LOG (chat history) -->
     <section id="tab-chat" class="tab" data-title="Log">
       <div id="chat-log"></div>
@@ -282,13 +255,57 @@
     </section>
   </aside>
 
+  <!-- ===================== DRESSING ROOM (wardrobe + shop in one) =====================
+       Left: categories and the item you picked, with the button to wear / buy it. Right: the list of items. -->
+  <section id="tab-dress" class="tab dressroom">
+    <aside class="dress-left frame">
+      <div class="drawer-head">
+        <div class="drawer-title">Dressing Room</div>
+        <button class="icon-btn" data-close title="Close (Esc)"><svg><use href="#i-close"/></svg></button>
+      </div>
+      <div id="dress-cats" class="dress-cats">
+        <button data-cat="head"><svg><use href="#i-crown"/></svg>Headwear</button>
+        <button data-cat="face"><svg><use href="#i-glasses"/></svg>Eyewear</button>
+        <button data-cat="room"><svg><use href="#i-room"/></svg>Rooms</button>
+        <button data-cat="persona"><svg><use href="#i-heart"/></svg>Personality</button>
+        <button data-cat="voice"><svg><use href="#i-mic"/></svg>Voice</button>
+      </div>
+      <div id="dress-action" class="dress-action"></div>
+    </aside>
+    <aside class="dress-right frame">
+      <div class="dress-right-head">
+        <span id="dress-cat-title">Headwear</span>
+        <div class="pill hud-points"><svg class="lotus"><use href="#i-lotus"/></svg><b id="dress-points">0</b></div>
+      </div>
+      <div id="dress-grid" class="dress-grid"></div>
+      <div id="dress-persona" class="dress-pane hidden">
+        <select id="personality">
+          <option value="tsundere">Tsundere</option>
+          <option value="cheerful">Cheerful &amp; supportive</option>
+          <option value="sensei">Strict sensei</option>
+          <option value="chill">Chill &amp; deadpan</option>
+          <option value="rival">Hot-blooded rival</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <textarea id="personality-custom" rows="3" class="hidden" placeholder="Describe the personality you want…"></textarea>
+        <button id="save-personality" class="primary">Save personality</button>
+      </div>
+      <div id="dress-voice" class="dress-pane hidden">
+        <label class="check"><input type="radio" name="vmode" value="dub" /> Dub (English voice)</label>
+        <label class="check"><input type="radio" name="vmode" value="sub" /> Sub (Japanese voice + English subtitles)</label>
+        <button data-preview="en">▶ Hear English voice</button>
+        <button data-preview="ja">▶ Hear Japanese voice</button>
+      </div>
+    </aside>
+  </section>
+
   <!-- ===================== CONVENE (gacha) ===================== -->
   <section id="tab-gacha" class="tab full">
     <div class="full-bg"><div class="glyph" id="banner-glyph"></div></div>
     <div class="full-top">
       <div class="full-title"><svg><use href="#i-convene"/></svg>Convene</div>
       <div class="full-right">
-        <div class="pill hud-points"><span class="gem">◆</span><b id="gacha-points">0</b></div>
+        <div class="pill hud-points"><svg class="lotus"><use href="#i-lotus"/></svg><b id="gacha-points">0</b></div>
         <button class="icon-btn star" data-close title="Close (Esc)"><svg><use href="#i-close"/></svg></button>
       </div>
     </div>

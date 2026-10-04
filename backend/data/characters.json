@@ -1,5 +1,5 @@
 {
-  "_help": "Edit this file to change the gacha roster. 'model' is a file in the models/ folder. 'voice_id' is the English (dub) ElevenLabs voice, 'voice_id_ja' the Japanese (sub) voice; leave both empty to use the default male/female voice. 'scene' is the room (an id from shop.json) shown behind the character when they are summoned. 'personality' is one of tsundere, cheerful, sensei, chill, rival; 'persona' is extra flavour for chat. Rarities: Common, Rare, Epic, Legendary, Mythic, Unbound. 'banners' are the gacha banners: 'featured' characters are more likely when their rarity is rolled.",
+  "_help": "Edit this file to change the gacha roster. 'model' is a file in the models/ folder. 'voice_id' is the English (dub) ElevenLabs voice, 'voice_id_ja' the Japanese (sub) voice; leave both empty to use the default male/female voice. 'scene' is the room (an id from shop.json) shown behind the character when they are summoned. 'personality' is one of tsundere, cheerful, sensei, chill, rival; 'persona' is extra flavour for chat. Rarities: Common, Rare, Epic, Legendary, Mythic, Unbound. 'banners' are the gacha banners ('scene' is the room shown behind the banner): 'featured' characters are more likely when their rarity is rolled.",
   "starter": "nino",
   "characters": [
     {
@@ -153,8 +153,8 @@
     {"id": "stardust_l", "name": "Stardust Chest", "rarity": "Rare", "points": 80}
   ],
   "banners": [
-    {"id": "limitless", "kind": "Limited Character Convene", "name": "Limitless Sky", "tag": "EVENT", "featured": ["gojo", "reze", "marin"]},
-    {"id": "afterschool", "kind": "Limited Character Convene", "name": "After-School Promise", "tag": "EVENT", "featured": ["levi", "lloyd", "itsuki"]},
-    {"id": "standard", "kind": "Standard Character Convene", "name": "Starfall Chorus", "tag": "", "featured": ["waguri", "nino", "miyamura"]}
+    {"id": "limitless", "scene": "galaxy", "kind": "Limited Character Convene", "name": "Limitless Sky", "tag": "EVENT", "featured": ["gojo", "reze", "marin"]},
+    {"id": "afterschool", "scene": "rooftop", "kind": "Limited Character Convene", "name": "After-School Promise", "tag": "EVENT", "featured": ["levi", "lloyd", "itsuki"]},
+    {"id": "standard", "scene": "courtyard", "kind": "Standard Character Convene", "name": "Starfall Chorus", "tag": "", "featured": ["waguri", "nino", "miyamura"]}
   ]
 }

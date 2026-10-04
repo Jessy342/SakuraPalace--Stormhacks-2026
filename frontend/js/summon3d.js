@@ -92,6 +92,9 @@ export class SummonStage {
 
   frame() {
     if (!this.running) return;
+    const now = performance.now(); // fast screens ask for 120+ frames a second; 60 looks the same for half the work
+    if (now - (this.lastFrame || 0) < 15) return;
+    this.lastFrame = now;
     const dt = Math.min(this.clock.getDelta(), 0.1);
     const t = this.clock.elapsedTime;
     const vrm = this.model, H = this.height;

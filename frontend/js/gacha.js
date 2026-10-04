@@ -16,6 +16,8 @@ export const RARITY_COLORS = {
 const ORDER = ['Common', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Unbound'];
 export const STARS = { Common: 2, Rare: 3, Epic: 4, Legendary: 5, Mythic: 6, Unbound: 7 };
 export const stars = rarity => '★'.repeat(STARS[rarity] || 1);
+/** The points symbol (a lotus), as inline HTML. */
+export const LOTUS = '<svg class="lotus" viewBox="0 0 24 24"><use href="#i-lotus"/></svg>';
 /** Picture of a character rendered from their VRoid model (full body, or head-and-shoulders). */
 export const portrait = (id, bust = false) => `assets/portraits/${id}${bust ? '_bust' : ''}.webp`;
 /** <img> that removes itself if the picture doesn't exist, so the letter behind it shows instead. */
@@ -177,17 +179,16 @@ function card(r) {
   c.className = 'pull-card ' + rarityClass(r) + (r.type === 'character' ? ' char' : '') + (rank(r.rarity) >= 3 ? ' shiny' : '');
   c.innerHTML = `
     ${r.new ? '<span class="new">NEW</span>' : ''}
-    <div class="big-initial ${r.rarity === 'Unbound' ? 'rainbow-text' : ''}">${r.type === 'character' ? r.name[0] : '◆'}</div>
+    <div class="big-initial ${r.rarity === 'Unbound' ? 'rainbow-text' : ''}">${r.type === 'character' ? r.name[0] : LOTUS}</div>
     ${r.type === 'character' ? portraitImg(r.id, true) : ''}
     <div><b>${r.name}</b></div>
     <div class="stars">${stars(r.rarity)}</div>
-    <small>${r.refund ? '+' + r.refund + ' ◆' : ''}${r.bond ? ' · Bond ' + r.bond : ''}&nbsp;</small>`;
+    <small>${r.refund ? '+' + r.refund + ' ' + LOTUS : ''}${r.bond ? ' · Bond ' + r.bond : ''}&nbsp;</small>`;
   return c;
 }
 
 // little pictures for the reward chips
-const GEM = '<svg viewBox="0 0 24 24"><defs><linearGradient id="gemfill" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9fbff"/><stop offset=".5" stop-color="#6fd3ff"/><stop offset="1" stop-color="#5a6bff"/></linearGradient></defs>'
-  + '<path d="M12 2l7 7-7 13L5 9z" fill="url(#gemfill)" stroke="#fff" stroke-width=".8"/><path d="M5 9h14M12 2L9 9l3 13 3-13z" fill="none" stroke="rgba(255,255,255,.7)" stroke-width=".7"/></svg>';
+const GEM = LOTUS;
 const HEART = '<svg viewBox="0 0 24 24"><path d="M12 20.500s-7.500-4.700-7.500-10.300A4.200 4.200 0 0 1 12 7.600a4.200 4.200 0 0 1 7.500 2.600c0 5.600-7.500 10.300-7.500 10.300z" fill="#ff7eb6" stroke="#fff" stroke-width=".8"/></svg>';
 
 /** The cinematic reveal shot. d = { icon, color, backdrop, ... } from app.js; live = the 3D model will be shown instead of the picture. */
@@ -208,11 +209,11 @@ function reveal(r, d, live) {
     <div class="rv-grade"></div>
     <div class="rv-embers">${embers}</div>
     <canvas class="rv-fx"></canvas>
-    ${!isChar ? '<div class="rv-gem">◆</div>' : live ? '<div class="rv-stage"></div>' : `<div class="rv-figure"><div class="initial">${r.name[0]}</div>${portraitImg(r.id)}</div>`}
+    ${!isChar ? `<div class="rv-gem">${LOTUS}</div>` : live ? '<div class="rv-stage"></div>' : `<div class="rv-figure"><div class="initial">${r.name[0]}</div>${portraitImg(r.id)}</div>`}
     <div class="rv-flash"></div>
     <div class="rv-info">
       <div class="rv-head">
-        <div class="rv-icon"><i></i><i></i><span>${d.icon || '◆'}</span></div>
+        <div class="rv-icon"><i></i><i></i><span>${d.icon || LOTUS}</span></div>
         <div class="rv-name">${r.new ? '<em>New</em>' : ''}<b class="${r.rarity === 'Unbound' ? 'rainbow-text' : ''}">${r.name}</b>${r.title ? `<small>${r.title}</small>` : ''}</div>
       </div>
       <div class="rv-stars">${starRow}</div>

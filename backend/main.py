@@ -92,6 +92,20 @@ def set_window_icon():
         time.sleep(0.25)
 
 
+def log_graphics(window):
+    """Writes which graphics chip the window uses and how smoothly it runs to the log (helps when the app feels slow)."""
+    probe = ("(() => { const c = document.createElement('canvas').getContext('webgl'); const e = c && c.getExtension('WEBGL_debug_renderer_info');"
+             " return (e ? c.getParameter(e.UNMASKED_RENDERER_WEBGL) : 'unknown') + ' | window ' + innerWidth + 'x' + innerHeight + ' @' + devicePixelRatio"
+             " + ' | fps ' + (window.__fps || '?') + ' | performance mode ' + (localStorage.getItem('perfMode') || 'off'); })()")
+    for wait in (25, 60):
+        time.sleep(wait)
+        try:
+            print("Graphics:", window.evaluate_js(probe))
+        except Exception as e:
+            print("Graphics check failed:", e)
+            return
+
+
 def run_app():
     """Runs the server in the background and shows the app in its own desktop window. Closing the window quits."""
     import webview  # pywebview: a native window that uses the Edge engine built into Windows
@@ -106,7 +120,8 @@ def run_app():
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("SakuraPalace.AnimeAssistant")
         threading.Thread(target=set_window_icon, daemon=True).start()
-    webview.create_window(TITLE, URL, width=1400, height=820, min_size=(1000, 640), maximized=True, background_color="#0b0e22")
+    window = webview.create_window(TITLE, URL, width=1400, height=820, min_size=(1000, 640), maximized=True, background_color="#0b0e22")
+    threading.Thread(target=log_graphics, args=(window,), daemon=True).start()
     webview.start()
 
 

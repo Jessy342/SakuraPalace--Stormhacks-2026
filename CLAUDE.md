@@ -66,6 +66,9 @@ tools/make_portraits.mjs dev tool: re-render portraits after adding/changing a m
 - VRM expressions used: happy, angry, sad, surprised, relaxed, aa (mouth), blink. Normalized bones are posed in `poseVRM()`.
 - Demo mode (Focus tab checkbox) = 5s grace / 5s drain / 20s force-close, and lets you force the first gacha pull's rarity.
 - `window.character` is exposed for debugging in DevTools.
+- Performance: never raycast against the VRM mesh on mouse move (it takes ~150ms and made the whole app stutter); `hitTest()` in character.js uses a head ball + body box instead. Avoid CSS `filter`/`backdrop-filter` on full-screen animated layers. The app logs its graphics chip and frame rate to `backend/data/app.log` 25s and 85s after start (`window.__fps`).
+- The points symbol is a lotus (`#i-lotus` in index.html, `LOTUS` in gacha.js). Write points as ◆ in message text; `rich()` in app.js turns it into the lotus.
+- Portraits in `frontend/assets/portraits/` show each character in their signature pose; re-run tools/make_portraits.mjs after changing a model or a pose.
 
 ## Ideas backlog (only after the core demo is solid)
 - Mixamo animations retargeted to VRM (three-vrm has a `loadMixamoAnimation` example).

@@ -461,15 +461,24 @@ export class Character {
 
   /** Returns 'head', 'body' or null for a point on screen (normalized device coords). */
   hitTest(ndc) {
-    if (!this.root) return null;
+    // Checked on every mouse move, so it has to be cheap: test the cursor against a ball around the head and a box
+    // around the body. (Testing against the real 3D mesh took ~150ms per mouse move and made the whole app stutter.)
+    if (!this.root || !this.head) return null;
     this.raycaster.setFromCamera(ndc, this.camera);
-    const hit = this.raycaster.intersectObject(this.root, true).find(h => h.object.visible);
-    if (!hit) return null;
-    const headPos = new THREE.Vector3();
-    if (this.head) this.head.getWorldPosition(headPos);
-    // VRM head bones sit at the base of the skull; the chibi anchor sits in the middle of its big head
-    const headStart = this.vrm ? headPos.y - 0.02 : headPos.y - 0.32;
-    return hit.point.y >= headStart ? 'head' : 'body';
+    const ray = this.raycaster.ray;
+    const head = this._hitHead || (this._hitHead = new THREE.Vector3());
+    this.head.getWorldPosition(head);
+    const ball = this._hitBall || (this._hitBall = new THREE.Sphere());
+    const body = this._hitBody || (this._hitBody = new THREE.Box3());
+    if (this.vrm) { // the head bone sits at the base of the skull
+      ball.center.set(head.x, head.y + 0.09, head.z); ball.radius = 0.17;
+      body.min.set(head.x - 0.27, 0, head.z - 0.2); body.max.set(head.x + 0.27, head.y, head.z + 0.2);
+    } else {        // the placeholder chibi has a big head, and its anchor is in the middle of it
+      ball.center.copy(head); ball.radius = 0.34;
+      body.min.set(head.x - 0.26, 0, head.z - 0.2); body.max.set(head.x + 0.26, head.y - 0.3, head.z + 0.2);
+    }
+    if (ray.intersectsSphere(ball)) return 'head';
+    return ray.intersectsBox(body) ? 'body' : null;
   }
 
   /** Waves hello with her right arm for a few seconds. */

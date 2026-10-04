@@ -428,6 +428,23 @@ const SCENES = {
       g.fillStyle = '#2f7a5a'; for (let i = 0; i < 7; i++) { g.save(); g.translate(w * 0.16, h * 0.28); g.rotate(-2.6 + i * 0.75); g.beginPath(); g.ellipse(w * 0.06, 0, w * 0.07, h * 0.022, 0, 0, TAU); g.fill(); g.restore(); }
     },
   },
+  // Dressing room: a soft, glowing backdrop in the character's own colour
+  soft: {
+    name: 'Soft Light', fx: ['twinkle', 'motes'],
+    paint(g, w, h, R, tint) {
+      const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+      const mix = (a, b, t) => { const x = rgb(a), y = rgb(b); return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',')})`; };
+      const c = /^#[0-9a-f]{6}$/i.test(tint || '') ? tint : '#ff9ac4';
+      g.fillStyle = vgrad(g, 0, h, [mix(c, '#141034', 0.78), mix(c, '#2c2166', 0.5), mix(c, '#ffffff', 0.3)]); g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 16; i++) glow(g, R() * w, R() * h * 0.85, h * (0.08 + R() * 0.2), mix(c, '#ffffff', 0.45), 0.22); // soft blobs of light
+      stars(g, R, w, h, 90, 0.7);
+      glow(g, w * 0.5, h * 0.45, h * 0.75, mix(c, '#ffffff', 0.6), 0.35);                                               // glow behind the character
+      const y = h * FLOOR;
+      g.fillStyle = vgrad(g, y, h, ['rgba(255,255,255,.22)', 'rgba(255,255,255,0)']); g.fillRect(0, y, w, h - y);          // a glossy floor
+      g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(0, y, w, 1.5);
+      g.fillStyle = mix(c, '#ffffff', 0.7); g.globalAlpha = 0.5; g.beginPath(); g.ellipse(w * 0.5, h * 0.9, w * 0.18, h * 0.05, 0, 0, TAU); g.fill(); g.globalAlpha = 1;
+    },
+  },
   galaxy: {
     name: 'Galaxy Dream', fx: ['twinkle', 'shooting'],
     paint(g, w, h, R) {
@@ -465,10 +482,12 @@ export class Environment {
     requestAnimationFrame(loop);
   }
 
-  set(scene) {
+  /** tint: a colour for scenes that take one (the soft dressing-room backdrop uses the character's colour). */
+  set(scene, tint = null) {
     if (!SCENES[scene]) scene = 'sakura';
-    if (scene === this.scene) return;
+    if (scene === this.scene && tint === this.tint) return;
     this.scene = scene;
+    this.tint = tint;
     this.build();
   }
 
@@ -492,7 +511,7 @@ export class Environment {
     const w = this.w = this.canvas.width = this.buf.width = Math.round(innerWidth * scale);
     const h = this.h = this.canvas.height = this.buf.height = Math.round(innerHeight * scale);
     const sc = SCENES[this.scene];
-    sc.paint(this.buf.getContext('2d'), w, h, rng(7));
+    sc.paint(this.buf.getContext('2d'), w, h, rng(7), this.tint);
     const many = (n, f) => Array.from({ length: this.low ? Math.ceil(n / 3) : n }, f);
     const r = Math.random;
     const fx = this.fx = {};

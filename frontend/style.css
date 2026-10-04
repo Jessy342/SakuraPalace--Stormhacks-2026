@@ -3,17 +3,17 @@
 /* Look: a celestial anime-RPG HUD. Dark glass panels, thin gold frames, one pink accent. */
 :root {
   --ink: #0b0e22;
-  --panel: rgba(13, 16, 38, 0.93);
+  --panel: rgba(11, 12, 34, 0.95);
   --panel-solid: #12162f;
-  --line: rgba(232, 201, 138, 0.38);
+  --line: rgba(255, 214, 130, 0.62);
   --line-soft: rgba(255, 255, 255, 0.10);
-  --gold: #e8c98a;
+  --gold: #ffd27a;
   --gold-hi: #fff1c9;
   --text: #eef0ff;
-  --muted: #9aa3c7;
-  --accent: #ff6fae;
+  --muted: #bcc4ec;
+  --accent: #ff4f9e;
   --accent2: #8b7bff;
-  --cyan: #6fd3ff;
+  --cyan: #4fdcff;
   --good: #58d9a0;
   --bad: #ff5470;
   --dock-w: 76px;
@@ -108,7 +108,7 @@ body[data-view="full"] #stage, body[data-view="full"] #floor, body[data-view="fu
   background: radial-gradient(ellipse at center, rgba(10,5,30,.42) 0%, rgba(10,5,30,.18) 40%, transparent 70%);
   pointer-events: none; transition: left .45s cubic-bezier(.2,.8,.2,1);
 }
-#vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(6,6,24,.55) 100%); }
+#vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 62%, rgba(6,6,24,.34) 100%); }
 #model-hint {
   position: fixed; left: calc(var(--dock-w) + 40px); bottom: 14px; max-width: 420px; font-size: .75rem; color: var(--muted);
   background: var(--panel); padding: 6px 10px; border-radius: 8px;
@@ -473,7 +473,7 @@ body[data-view="full"] #hud, body[data-view="full"] .dock, body[data-view="full"
 .pull-hint { position: absolute; bottom: 6vh; left: 0; right: 0; text-align: center; }
 /* ----- the cinematic reveal: a full-screen scene, the character large on the right, a slim info block on the left ----- */
 .reveal { position: absolute; inset: 0; overflow: hidden; background: #05030f; text-shadow: 0 2px 10px rgba(0,0,0,.8); }
-.rv-bg { position: absolute; inset: -4%; background-size: cover; background-position: center 60%; filter: brightness(.6) saturate(1.2) blur(2px);
+.rv-bg { position: absolute; inset: -4%; background-size: cover; background-position: center 60%;
   animation: rvzoom 14s ease-out both; }
 @keyframes rvzoom { from { transform: scale(1.18); } to { transform: scale(1.02); } }
 /* colour grade: the character's colour blooms behind them, the left side falls into shadow for the text */
@@ -481,7 +481,7 @@ body[data-view="full"] #hud, body[data-view="full"] .dock, body[data-view="full"
   linear-gradient(90deg, rgba(4,4,14,.94) 0%, rgba(4,4,14,.72) 24%, rgba(4,4,14,.15) 52%, transparent 70%),
   radial-gradient(ellipse 46% 70% at 66% 46%, color-mix(in srgb, var(--cc) 62%, transparent) 0%, transparent 70%),
   linear-gradient(180deg, rgba(4,4,14,.35) 0%, transparent 25%, transparent 70%, rgba(4,4,14,.75) 100%),
-  color-mix(in srgb, var(--cc) 16%, transparent); }
+  color-mix(in srgb, var(--cc) 16%, rgba(4,4,14,.4)); }
 .rv-embers i { position: absolute; bottom: -12px; width: var(--s); height: var(--s); border-radius: 50%; background: color-mix(in srgb, var(--cc) 50%, #fff);
   box-shadow: 0 0 8px var(--cc); opacity: 0; animation: ember var(--d) linear infinite; }
 @keyframes ember { 0% { transform: translate(0, 0); opacity: 0; } 12% { opacity: .9; } 100% { transform: translate(6vw, -105vh); opacity: 0; } }
@@ -507,7 +507,7 @@ body[data-view="full"] #hud, body[data-view="full"] .dock, body[data-view="full"
 @keyframes rvpulse { 50% { box-shadow: 0 0 40px var(--cc), inset 0 0 20px color-mix(in srgb, var(--cc) 70%, transparent); } }
 @keyframes rvturn { from { transform: rotate(45deg); } to { transform: rotate(405deg); } }
 .rv-fx, .rv-stage, .rv-3d { position: absolute; inset: 0; width: 100%; height: 100%; }
-.rv-3d { animation: reveal 1.300s ease-out both; } /* the 3D model also starts as a dark silhouette and flashes into colour */
+.rv-3d { animation: reveal 1.300s ease-out backwards; } /* (no filter stays on once the flash is over) */ /* the 3D model also starts as a dark silhouette and flashes into colour */
 .rv-name { position: relative; padding: 0 60px 8px 0; }
 .rv-name b { display: block; font-size: clamp(1.7rem, 2.5vw, 2.3rem); font-weight: 500; letter-spacing: .02em; }
 .rv-name small { display: block; color: rgba(255,255,255,.72); font-size: .95rem; }
@@ -576,3 +576,79 @@ body[data-tab="dress"] #dialogue { bottom: 84px; } /* keep the speech box above 
 /* class emblems (used in the character list, the banner name plates and the summon reveal) */
 svg.emblem { width: 1.25em; height: 1.25em; vertical-align: -0.22em; stroke-width: 1.7; }
 .plate i svg.emblem, .c-filters i svg.emblem { width: 22px; height: 22px; }
+
+/* ---------- points symbol (lotus) ---------- */
+.lotus { width: 1.25em; height: 1.25em; vertical-align: -0.24em; stroke: none; flex: none; filter: drop-shadow(0 0 4px rgba(255,111,174,.7)); }
+.rv-gem .lotus { width: 34vh; height: 34vh; }
+.pull-card .big-initial .lotus { width: 1em; height: 1em; }
+.rv-chip .lotus { width: 40px; height: 40px; }
+
+/* ---------- more colour: every menu button has its own hue, headings and bars are brighter ---------- */
+.dock button { --h: var(--gold); color: var(--h); border-color: color-mix(in srgb, var(--h) 65%, transparent);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--h) 34%, #0b0e22), #0b0e22 78%);
+  box-shadow: 0 4px 14px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.06);
+  transition: transform .2s cubic-bezier(.2,1.7,.4,1), box-shadow .2s, background .2s, color .2s; }
+.dock button svg { fill: color-mix(in srgb, var(--h) 32%, transparent); transition: transform .22s cubic-bezier(.2,1.7,.4,1); }
+.dock button:nth-child(1) { --h: #ffd15c; } .dock button:nth-child(2) { --h: #4fdcff; } .dock button:nth-child(3) { --h: #ff5fae; }
+.dock button:nth-child(4) { --h: #b693ff; } .dock button:nth-child(5) { --h: #5fe6ad; } .dock button:nth-child(6) { --h: #ff9d6b; } .dock button:nth-child(7) { --h: #9db6ff; }
+/* hover: the button pops out to the right and grows, the icon tilts, the label slides in */
+.dock button:hover, .dock button:focus-visible { transform: translateX(12px) scale(1.2); color: #fff; z-index: 2;
+  background: linear-gradient(160deg, var(--h), color-mix(in srgb, var(--h) 45%, #0b0e22));
+  border-color: #fff; box-shadow: 0 0 26px color-mix(in srgb, var(--h) 80%, transparent), 0 6px 18px rgba(0,0,0,.5); }
+.dock button:hover svg, .dock button:focus-visible svg { transform: scale(1.15) rotate(-8deg); fill: rgba(255,255,255,.3); }
+.dock button:active { transform: translateX(8px) scale(1.08); }
+.dock button span { color: #fff; border-color: var(--h); background: color-mix(in srgb, var(--h) 30%, #0b0e22); }
+.dock button.active { background: linear-gradient(160deg, #fff, var(--h)); color: #1a1030; border-color: #fff; box-shadow: 0 0 22px var(--h); }
+.dock button.active svg { fill: rgba(26,16,48,.2); }
+.drawer-title { background: linear-gradient(90deg, #fff3cf, #ffd27a 45%, #ff8fc4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.drawer-title::before { color: var(--accent); -webkit-text-fill-color: var(--accent); }
+h3 { color: var(--cyan); }
+h3::after { background: linear-gradient(90deg, var(--cyan), transparent); }
+#hud-xp { background: linear-gradient(90deg, #7a6bff, #ff4f9e, #ffd27a); box-shadow: 0 0 10px #ff4f9e; }
+.player-card { border-color: var(--gold); box-shadow: 0 6px 22px rgba(0,0,0,.45); }
+.pill { background: rgba(8,10,28,.9); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.hud-points { border-color: #ff8fc4; }
+.streak-pill { border-color: #ff9d6b; }
+button.primary { background: linear-gradient(180deg, #fff3cf, #ffc24f); box-shadow: 0 3px 12px rgba(255,194,79,.35); }
+.list li { border-left-width: 4px; }
+.list li:has(.diff.easy) { border-left-color: var(--good); } .list li:has(.diff.medium) { border-left-color: #ffb84a; } .list li:has(.diff.hard) { border-left-color: var(--bad); }
+#bubble { border-color: var(--gold); box-shadow: 0 10px 40px rgba(5,5,25,.55), 0 0 0 1px rgba(255,79,158,.25), inset 0 0 0 3px rgba(255,255,255,.03); }
+.nameplate { background: linear-gradient(90deg, #ffd27a, #ff8fc4); }
+.frame-title, .frame-title span::before { color: var(--gold); }
+
+/* ---------- Convene: the banner's own room shows through, darker only where the text sits ---------- */
+#tab-gacha::before { background: linear-gradient(90deg, rgba(9,11,32,.92) 0%, rgba(9,11,32,.62) 34%, rgba(9,11,32,.12) 66%, rgba(9,11,32,.3) 100%),
+  linear-gradient(0deg, rgba(9,11,32,.7) 0%, transparent 38%); }
+.art { filter: drop-shadow(0 12px 28px rgba(0,0,0,.6)); }
+
+/* ---------- Dressing room: categories + picked item on the left, list of items on the right ---------- */
+.tab.dressroom.active { display: block; }
+body[data-view="dress"] .dock, body[data-view="dress"] #tracker, body[data-view="dress"] .player-card { opacity: 0; pointer-events: none; }
+.player-card { transition: opacity .3s; }
+.dress-left { position: fixed; left: 16px; top: 16px; bottom: 16px; width: 290px; z-index: 10; display: flex; flex-direction: column; overflow: hidden; animation: fromleft .4s cubic-bezier(.2,.8,.2,1); }
+.dress-right { position: fixed; right: 16px; top: 74px; bottom: 16px; width: 330px; z-index: 10; display: flex; flex-direction: column; overflow: hidden; animation: fromright .4s cubic-bezier(.2,.8,.2,1); }
+@keyframes fromleft { from { transform: translateX(-110%); } }
+@keyframes fromright { from { transform: translateX(110%); } }
+.dress-right-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 10px 18px; border-bottom: 1px solid var(--line-soft);
+  font: 700 1rem var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+.dress-right-head .pill { font: 700 .95rem "M PLUS Rounded 1c", sans-serif; letter-spacing: 0; padding: 4px 12px; }
+.dress-cats { flex-direction: column; gap: 6px; padding: 14px 12px; border-bottom: 1px solid var(--line-soft); }
+.dress-cats button { --h: var(--gold); flex: none; flex-direction: row; justify-content: flex-start; gap: 14px; padding: 10px 14px; font-size: .95rem; font-weight: 700; color: var(--text);
+  border: 1px solid transparent; border-radius: 12px; transition: transform .2s cubic-bezier(.2,1.7,.4,1), background .2s, box-shadow .2s; }
+.dress-cats button svg { width: 26px; height: 26px; color: var(--h); fill: color-mix(in srgb, var(--h) 30%, transparent); transition: transform .22s cubic-bezier(.2,1.7,.4,1); }
+.dress-cats button:nth-child(1) { --h: #ffd15c; } .dress-cats button:nth-child(2) { --h: #4fdcff; } .dress-cats button:nth-child(3) { --h: #5fe6ad; }
+.dress-cats button:nth-child(4) { --h: #ff5fae; } .dress-cats button:nth-child(5) { --h: #b693ff; }
+.dress-cats button:hover { transform: translateX(10px) scale(1.05); background: color-mix(in srgb, var(--h) 22%, transparent); border-color: color-mix(in srgb, var(--h) 60%, transparent); }
+.dress-cats button:hover svg { transform: scale(1.3) rotate(-8deg); }
+.dress-cats button.active { color: #1a1030; background: linear-gradient(90deg, #fff, var(--h)); box-shadow: 0 0 18px color-mix(in srgb, var(--h) 70%, transparent); }
+.dress-cats button.active svg { color: #1a1030; fill: rgba(26,16,48,.2); }
+.dress-grid { grid-template-columns: repeat(2, 1fr); }
+.dress-pane { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+.dress-action { flex: 1; flex-direction: column; align-items: stretch; justify-content: flex-end; gap: 10px; border-top: 0; background: none; padding: 14px; }
+.dress-action img { width: 100%; height: 150px; object-fit: cover; border-radius: 12px; border: 2px solid var(--gold); background: radial-gradient(circle at 50% 35%, #454b9a, #1b1f45); }
+.dress-action img.acc { object-fit: contain; padding: 14px; }
+.dress-action .what small { display: block; color: var(--cyan); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; font-size: .7rem; }
+.dress-action .what { flex: none; line-height: 1.5; }
+.tile { transition: transform .15s, border-color .15s, box-shadow .15s; }
+.tile:hover { transform: translateY(-3px) scale(1.03); }
+.dress-left .drawer-title { font-size: 1rem; letter-spacing: .1em; white-space: nowrap; }

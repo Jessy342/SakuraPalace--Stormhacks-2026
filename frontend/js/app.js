@@ -4,9 +4,11 @@ import { Character } from './character.js';
 import { accessoryThumbs } from './accessories.js';
 import { Environment } from './environment.js';
 import * as voice from './voice.js';
-import { playCutscene, stars, portrait, portraitImg } from './gacha.js';
+import { playCutscene, stars, portrait, portraitImg, LOTUS } from './gacha.js';
 
 const $ = id => document.getElementById(id);
+/** Escapes text for HTML and draws the points symbol (written ◆ in messages) as the lotus. */
+const rich = text => esc(text).replaceAll('◆', LOTUS);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 let S = null;            // full game state from the backend
@@ -149,7 +151,7 @@ character.onPoke = async zone => {
 function floater(text, cls = '') {
   const f = document.createElement('div');
   f.className = 'floater ' + cls;
-  f.textContent = text;
+  f.innerHTML = rich(text);
   f.style.left = (Math.random() * 80 - 40) + 'px';
   $('floaters').appendChild(f);
   setTimeout(() => f.remove(), 1900);
@@ -159,7 +161,7 @@ function floater(text, cls = '') {
 function toast(text) {
   const t = document.createElement('div');
   t.className = 'toast';
-  t.textContent = text;
+  t.innerHTML = rich(text);
   $('toasts').appendChild(t);
   while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
   setTimeout(() => t.remove(), 4600);
@@ -169,7 +171,7 @@ function toast(text) {
 function addMsg(role, text) {
   const m = document.createElement('div');
   m.className = 'msg ' + role;
-  m.textContent = text;
+  m.innerHTML = rich(text);
   $('chat-log').appendChild(m);
   $('chat-log').scrollTop = 1e9;
   if (role === 'sys') toast(text);
@@ -189,14 +191,21 @@ function wipe() {
 }
 
 function applyShift() {
-  const px = document.body.dataset.view === 'drawer' ? $('drawer').offsetWidth + 16 : 0;
+  const px = document.body.dataset.view === 'drawer' ? $('drawer').offsetWidth + 16 : 0; // (the dressing room keeps the character centred)
   document.body.style.setProperty('--shift', px + 'px');
   character.setShift(px);
 }
 
-/** The room you picked is the backdrop everywhere; in the dressing room a room you are previewing shows instead. */
+/** Picks the backdrop: your room in the lobby and menus, each banner's themed room on Convene, and in the
+ *  dressing room a soft glow in the character's colour (or the room you are looking at in the Rooms list). */
 function applyEnv() {
-  environment.set(trying?.kind === 'background' ? trying.id : S.background);
+  if (currentTab === 'gacha') {
+    const banners = S.catalog.banners || [];
+    environment.set((banners.find(b => b.id === bannerId) || banners[0])?.scene || S.background);
+  } else if (currentTab === 'dress') {
+    if (dressCat === 'room') environment.set(picked?.kind === 'background' ? picked.id : S.background);
+    else environment.set('soft', activeChar().color);
+  } else environment.set(S.background);
 }
 
 function openTab(name) {
@@ -206,11 +215,11 @@ function openTab(name) {
   currentTab = name;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + name));
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  document.body.dataset.view = !name ? 'lobby' : isFull ? 'full' : 'drawer';
+  document.body.dataset.view = !name ? 'lobby' : isFull ? 'full' : name === 'dress' ? 'dress' : 'drawer';
   document.body.dataset.tab = name || '';
   character.paused = isFull;
-  if (name !== 'dress' && trying) { trying = null; applyTry(); renderDress(); } // stop trying things on when leaving
-  if (name && !isFull) $('drawer-title').textContent = $('tab-' + name).dataset.title;
+  if (picked) { picked = null; applyTry(); } // stop previewing things when leaving or re-entering
+  if (name && !isFull && name !== 'dress') $('drawer-title').textContent = $('tab-' + name).dataset.title;
   $('rates-pop').classList.add('hidden');
   applyShift();
   character.setDressing(name === 'dress');
@@ -763,8 +772,8 @@ function renderGacha() {
   const g = S.gacha;
   const banners = S.catalog.banners || [];
   const b = banners.find(x => x.id === bannerId) || banners[0];
-  $('pull1').innerHTML = `<span class="gem">◆</span>×${g.pull_cost}&nbsp;&nbsp; Convene ×1`;
-  $('pull10').innerHTML = `<span class="gem">◆</span>×${g.ten_pull_cost}&nbsp;&nbsp; Convene ×10`;
+  $('pull1').innerHTML = `${LOTUS}×${g.pull_cost}&nbsp;&nbsp; Convene ×1`;
+  $('pull10').innerHTML = `${LOTUS}×${g.ten_pull_cost}&nbsp;&nbsp; Convene ×10`;
   $('pull1').disabled = S.points < g.pull_cost;
   $('pull10').disabled = S.points < g.ten_pull_cost;
   $('pity-limit').textContent = g.pity_limit;
@@ -774,6 +783,7 @@ function renderGacha() {
     `<tr class="r-${r.rarity}"><td class="rarity-label">${r.rarity}</td><td>${(r.chance * 100).toFixed(1)}%</td></tr>`).join('');
   if (!b || shownBanner === b.id) return; // only redraw the art when the banner changes (it animates in)
   shownBanner = bannerId = b.id;
+  applyEnv(); // each banner has its own themed backdrop
   $('banner-list').innerHTML = banners.map(x => `
     <button class="bthumb ${x.id === b.id ? 'active' : ''}" data-banner="${x.id}" title="${esc(x.name)}">
       ${x.tag ? `<span class="tag">${esc(x.tag)}</span>` : ''}${x.featured.map(id => portraitImg(id, true)).join('')}</button>`).join('');
@@ -866,52 +876,59 @@ function previewVoice(id, lang) {
 }
 
 // ======================= Dressing Room (wardrobe + shop in one) =======================
-// Like a dress-up game: pick a category, click a tile to wear it. Locked items show their price;
-// clicking one tries it on the character (or previews the room) and a Buy button appears.
+// Laid out like a character screen in a game: categories and the picked item on the left, the list of items
+// on the right, the character in the middle on a soft backdrop of their own colour.
+// Clicking an item in the list previews it on the character; the button on the left wears, takes off or buys it.
 let dressCat = 'head';   // head | face | room | persona | voice
-let trying = null;       // { kind: 'accessory' | 'background', id } being previewed but not owned yet
+let picked = null;       // { kind: 'accessory' | 'background', id }: the item selected in the list
 let accThumbs = null;    // little pictures of the accessories, made the first time the dressing room opens
+const CAT_NAMES = { head: 'Headwear', face: 'Eyewear', room: 'Rooms', persona: 'Personality', voice: 'Voice' };
 
 const ownsItem = (kind, id) => (kind === 'accessory' ? S.owned_accessories : S.owned_backgrounds).includes(id);
 const findItem = (kind, id) => (kind === 'accessory' ? S.catalog.accessories : S.catalog.backgrounds).find(x => x.id === id);
+const isOn = (kind, id) => (kind === 'accessory' ? S.equipped_accessories.includes(id) : S.background === id);
+const thumbOf = (kind, id) => (kind === 'accessory'
+  ? (accThumbs ||= accessoryThumbs(S.catalog.accessories.map(a => a.id)))[id] : environment.thumb(id));
 
-/** Shows what is equipped, plus the item being tried on. */
+/** Shows what is equipped, plus the picked item as a preview. */
 function applyTry() {
-  character.setAccessories(trying?.kind === 'accessory' ? [...S.equipped_accessories, trying.id] : S.equipped_accessories);
+  const preview = picked?.kind === 'accessory' && !S.equipped_accessories.includes(picked.id) ? [picked.id] : [];
+  character.setAccessories([...S.equipped_accessories, ...preview]);
   applyEnv();
 }
 
-function tile(kind, it, img) {
-  const owned = ownsItem(kind, it.id);
-  const on = kind === 'accessory' ? S.equipped_accessories.includes(it.id) : S.background === it.id;
-  const badge = on ? (kind === 'accessory' ? '✓ Wearing' : '✓ In use') : owned ? 'Owned' : `◆ ${it.price}`;
-  return `<button class="tile ${kind === 'accessory' ? 'acc' : ''} ${on ? 'worn' : ''} ${owned ? '' : 'locked'} ${trying?.id === it.id ? 'trying' : ''}"
-    data-item="${kind}:${it.id}" title="${esc(it.name)}"><img src="${img}" alt="" draggable="false">
+function tile(kind, it) {
+  const owned = ownsItem(kind, it.id), on = isOn(kind, it.id);
+  const badge = on ? (kind === 'accessory' ? '✓ Wearing' : '✓ In use') : owned ? 'Owned' : `${LOTUS} ${it.price}`;
+  return `<button class="tile ${kind === 'accessory' ? 'acc' : ''} ${on ? 'worn' : ''} ${owned ? '' : 'locked'} ${picked?.id === it.id ? 'trying' : ''}"
+    data-item="${kind}:${it.id}" title="${esc(it.name)}"><img src="${thumbOf(kind, it.id)}" alt="" draggable="false">
     <span class="badge">${badge}</span><span class="tname">${esc(it.name)}</span></button>`;
 }
 
 function renderDress() {
   document.querySelectorAll('#dress-cats button').forEach(b => b.classList.toggle('active', b.dataset.cat === dressCat));
+  $('dress-cat-title').textContent = CAT_NAMES[dressCat];
+  $('dress-points').textContent = S.points;
   const items = ['head', 'face', 'room'].includes(dressCat);
   $('dress-grid').classList.toggle('hidden', !items);
   $('dress-action').classList.toggle('hidden', !items);
   $('dress-persona').classList.toggle('hidden', dressCat !== 'persona');
   $('dress-voice').classList.toggle('hidden', dressCat !== 'voice');
   if (currentTab === 'dress' && items) { // (skip the picture work while the dressing room is closed)
-    if (dressCat === 'room') {
-      $('dress-grid').innerHTML = S.catalog.backgrounds.map(b => tile('background', b, environment.thumb(b.id))).join('');
+    const kind = dressCat === 'room' ? 'background' : 'accessory';
+    const list = kind === 'background' ? S.catalog.backgrounds : S.catalog.accessories.filter(a => (a.slot || 'head') === dressCat);
+    $('dress-grid').innerHTML = list.map(it => tile(kind, it)).join('');
+    const it = picked && findItem(picked.kind, picked.id);
+    if (it) {
+      const owned = ownsItem(picked.kind, it.id), on = isOn(picked.kind, it.id), short = it.price - S.points;
+      const label = !owned ? (short > 0 ? `Need ${short} more ${LOTUS}` : `Buy · ${LOTUS} ${it.price}`)
+        : picked.kind === 'accessory' ? (on ? 'Take off' : 'Wear') : (on ? 'In use' : 'Use this room');
+      $('dress-action').innerHTML = `<img class="${picked.kind === 'accessory' ? 'acc' : ''}" src="${thumbOf(picked.kind, it.id)}" alt="">
+        <div class="what"><small>${on ? (picked.kind === 'accessory' ? 'Wearing' : 'In use') : owned ? 'Owned' : 'Previewing · not owned'}</small><b>${esc(it.name)}</b></div>
+        <button class="primary big" data-apply ${(!owned && short > 0) || (owned && on && picked.kind === 'background') ? 'disabled' : ''}>${label}</button>`;
     } else {
-      accThumbs ||= accessoryThumbs(S.catalog.accessories.map(a => a.id));
-      $('dress-grid').innerHTML = S.catalog.accessories.filter(a => (a.slot || 'head') === dressCat)
-        .map(a => tile('accessory', a, accThumbs[a.id])).join('');
+      $('dress-action').innerHTML = `<div class="what">Pick an item on the right to see it on ${esc(activeChar().name)}.<br>Items with a price can be previewed first, then bought here.</div>`;
     }
-    const it = trying && findItem(trying.kind, trying.id);
-    const short = it ? it.price - S.points : 0;
-    $('dress-action').innerHTML = it
-      ? `<div class="what">${trying.kind === 'accessory' ? 'Trying on' : 'Previewing'}<b>${esc(it.name)}</b></div>
-         <button class="primary big" data-buyitem ${short > 0 ? 'disabled' : ''}>${short > 0 ? `Need ${short} more ◆` : `Buy · ◆ ${it.price}`}</button>`
-      : `<div class="what">Click an item to ${dressCat === 'room' ? 'use' : 'wear'} it. Items with a price can be tried first, then bought right here.</div>
-         <div class="pill hud-points"><span class="gem">◆</span><b>${S.points}</b></div>`;
   }
   const char = activeChar();
   const p = S.personality_overrides[char.id] || char.personality;
@@ -924,30 +941,28 @@ function renderDress() {
   document.querySelectorAll('input[name=vmode]').forEach(r => { r.checked = r.value === S.settings.voice_mode; });
 }
 
-async function clickItem(kind, id) {
-  if (ownsItem(kind, id)) {
-    trying = null;
-    if (kind === 'accessory') {
-      const on = !S.equipped_accessories.includes(id);
-      await setState(await post('/equip', { kind, id, on }));
-      if (on) character.setEmotion('happy', 3);
-    } else {
-      await setState(await post('/equip', { kind, id }));
-    }
-  } else { // not owned: try it on (click again to take it off)
-    trying = trying?.id === id ? null : { kind, id };
-    applyTry();
-    renderDress();
-  }
+/** Clicking an item in the list selects it and previews it. */
+function clickItem(kind, id) {
+  picked = { kind, id };
+  applyTry();
+  renderDress();
 }
 
-async function buyTrying() {
-  const { kind, id } = trying;
-  await setState(await post('/shop/buy', { kind, id }));
-  trying = null;
-  voice.sfx('task_done');
-  await setState(await post('/equip', { kind, id, on: true })); // wear / use it right away
-  say('Ooh, thank you! I love it!', { emotion: 'happy' });
+/** The button under the picked item: buy it if it isn't owned, otherwise wear / take off / use it. */
+async function applyPicked() {
+  const { kind, id } = picked;
+  if (!ownsItem(kind, id)) {
+    await setState(await post('/shop/buy', { kind, id }));
+    voice.sfx('task_done');
+    await setState(await post('/equip', { kind, id, on: true })); // wear / use it right away
+    say('Ooh, thank you! I love it!', { emotion: 'happy' });
+  } else if (kind === 'accessory') {
+    const on = !isOn(kind, id);
+    await setState(await post('/equip', { kind, id, on }));
+    if (on) character.setEmotion('happy', 3);
+  } else {
+    await setState(await post('/equip', { kind, id }));
+  }
 }
 
 function setFrame(view) {
@@ -976,7 +991,7 @@ document.querySelectorAll('input[name=vmode]').forEach(r => r.addEventListener('
 
 // ======================= One click handler for all the generated buttons =======================
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-item],[data-buyitem],[data-cat],[data-turn],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del],[data-delevent],[data-delnote],[data-sub]');
+  const t = e.target.closest('[data-item],[data-apply],[data-cat],[data-turn],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del],[data-delevent],[data-delnote],[data-sub]');
   if (!t || t.disabled) return;
   const d = t.dataset;
   try {
@@ -992,12 +1007,12 @@ document.addEventListener('click', async e => {
       await setState(await api(`/tasks/${d.del}`, { method: 'DELETE' }));
     } else if (d.item) {
       const [kind, id] = d.item.split(':');
-      await clickItem(kind, id);
-    } else if ('buyitem' in d) {
-      await buyTrying();
+      clickItem(kind, id);
+    } else if ('apply' in d) {
+      await applyPicked();
     } else if (d.cat) {
       dressCat = d.cat;
-      trying = null;
+      picked = null;
       applyTry();
       renderDress();
     } else if (d.turn) {
@@ -1047,6 +1062,17 @@ function setPerfMode(on) {
 }
 $('perf-mode').addEventListener('change', () => setPerfMode($('perf-mode').checked));
 if (perfMode) setPerfMode(true);
+
+// A running frames-per-second count (window.__fps), so slowness can be checked from the log
+(function countFrames() {
+  let frames = 0, since = performance.now();
+  const tick = now => {
+    frames++;
+    if (now - since >= 2000) { window.__fps = Math.round(frames * 1000 / (now - since)); frames = 0; since = now; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+})();
 
 /** Counts frames for a few seconds; if the app is running slowly, turns performance mode on by itself. */
 function watchFrameRate() {
