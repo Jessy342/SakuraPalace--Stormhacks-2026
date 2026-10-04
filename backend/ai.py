@@ -102,6 +102,7 @@ def base_system(state, char):
     upcoming = sorted((e for e in state["events"] if e["start"] >= now.strftime("%Y-%m-%dT%H:%M")), key=lambda e: e["start"])[:12]
     event_lines = "\n".join(f"- {e['start'].replace('T', ' ')} {e['title']} ({e['minutes']} min)" for e in upcoming) or "- (nothing scheduled)"
     note_lines = "\n".join(f"- {n['text']}" for n in state["notes"][-15:]) or "- (none)"
+    profile_lines = "\n".join(f"- {p}" for p in state["profile"][-30:]) or "- (nothing yet)"
     return f"""You are {char['name']} ("{char.get('title', '')}"), the user's personal anime assistant inside a productivity app.
 Personality: {personality_for(state, char)}
 Stay fully in character. You help the user stay focused, manage their schedule, and feel motivated.
@@ -114,6 +115,8 @@ Their schedule:
 {event_lines}
 Their notes:
 {note_lines}
+What you have learned about them so far:
+{profile_lines}
 
 Rules:
 - Your reply is SPOKEN aloud, so keep it short: 1-3 sentences, no markdown, no emojis, no lists.
@@ -123,7 +126,12 @@ Rules:
   If they give a day but no time, ask what time instead of guessing. If that time has already passed today, point it out and ask which day they mean.
   Don't also add it as a task.
 - Something to write down or remember with no time ("jot down that...", "note that...", "remember my locker code is 4412") goes in "add_notes" as short plain text.
-- Use empty lists when there is nothing to add. Say out loud what you added, in character.
+- "suggest_quests": you also hand out quests on your own. When the conversation reveals something they should do (a goal, a deadline,
+  a habit they want, a problem to fix) and they did NOT ask you to add it, suggest ONE fitting quest, sized to what you know about them.
+  Never suggest one during small talk, and never repeat a quest that is already pending. Most replies have none.
+- "learned": up to two short NEW facts about the user worth remembering (their name, school, courses, goals, habits, likes, schedule).
+  Only facts they actually told you, and nothing already listed above.
+- Use empty lists when there is nothing to add. Say out loud what you added or suggested, in character.
 - {"Also give a natural Japanese version of your reply in reply_ja (the voice speaks Japanese, the English is shown as subtitles)." if sub else "Set reply_ja to an empty string."}
 - If the user asks you to explain, teach, compare or work through something (anything that needs more than three sentences),
   keep "reply" as a short spoken lead-in and put the full explanation in "lesson". For normal chat set "lesson" to null.
@@ -134,6 +142,7 @@ Rules:
 Respond ONLY with JSON in this exact shape:
 {{"emotion": "happy|angry|sad|surprised|relaxed|neutral", "reply": "...", "reply_ja": "...", "add_tasks": [{{"title": "...", "difficulty": "medium", "due": null}}],
 "add_events": [{{"title": "...", "start": "YYYY-MM-DDTHH:MM", "minutes": 60}}], "add_notes": ["..."],
+"suggest_quests": [{{"title": "...", "difficulty": "medium", "due": null}}], "learned": ["..."],
 "lesson": null or {{"title": "...", "markdown": "...", "images": ["..."]}}}}"""
 
 
@@ -270,6 +279,19 @@ def chat(body: ChatIn):
 
     added, added_events, added_notes = [], [], []
     tasks, events, notes = (data.get(k) if isinstance(data.get(k), list) else [] for k in ("add_tasks", "add_events", "add_notes"))
+    suggested = data.get("suggest_quests") if isinstance(data.get("suggest_quests"), list) else []
+    learned = [x.strip()[:160] for x in (data.get("learned") or []) if isinstance(x, str) and x.strip()] if isinstance(data.get("learned"), list) else []
+    if client():  # (every real chat counts toward the gap between suggested quests, and may teach the companion something)
+        with Transaction() as st:
+            st["profile"] = (st["profile"] + [f for f in learned[:2] if f not in st["profile"]])[-40:]
+            pending = {t["title"].lower() for t in st["tasks"] if not t["done"]}
+            fresh = [q for q in suggested if isinstance(q, dict) and q.get("title") and q["title"].strip().lower() not in pending]
+            if fresh and st["ai"]["chats_since_quest"] >= 2 and not tasks:  # at most one, and not in back-to-back replies
+                q = fresh[0]
+                added.append(create_task(st, q["title"], q.get("difficulty", "medium"), q.get("due"), source="ai"))
+                st["ai"]["chats_since_quest"] = 0
+            else:
+                st["ai"]["chats_since_quest"] += 1
     if tasks or events or notes:
         with Transaction() as st:
             for t in tasks[:10]:

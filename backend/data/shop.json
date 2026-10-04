@@ -1,5 +1,5 @@
 {
-  "_help": "Everything here is sold and worn in the Dressing Room. Accessories are simple 3D shapes attached to the character's head (see frontend/js/accessories.js); 'slot' is head or face. Rooms are drawn by frontend/js/environment.js (the id must match a scene there). Price 0 = owned from the start.",
+  "_help": "Everything here is sold and worn in the Dressing Room. Accessories are simple 3D shapes attached to the character's head (see frontend/js/accessories.js); 'slot' is head or face. Rooms are painted pictures in frontend/assets/backgrounds/<id>.webp (made by tools/make_backgrounds.py), with effects added by frontend/js/environment.js. Price 0 = owned from the start.",
   "accessories": [
     {"id": "cat_ears", "name": "Cat Ears", "price": 150, "slot": "head"},
     {"id": "bow", "name": "Big Ribbon Bow", "price": 200, "slot": "head"},
@@ -13,7 +13,8 @@
     {"id": "sakura", "name": "Sakura Horizon", "price": 0},
     {"id": "classroom", "name": "After-School Classroom", "price": 150},
     {"id": "rooftop", "name": "Rooftop at Sunset", "price": 200},
-    {"id": "night_city", "name": "Neon Night", "price": 200},
+    {"id": "night_city", "name": "Cyberpunk City", "price": 200},
+    {"id": "forest", "name": "Enchanted Forest", "price": 250},
     {"id": "courtyard", "name": "Cherry Blossom Courtyard", "price": 250},
     {"id": "beach", "name": "Sunset Beach", "price": 250},
     {"id": "cafe", "name": "Rainy Day Cafe", "price": 300},
@@ -21,7 +22,9 @@
     {"id": "bedroom_study", "name": "Study Room", "price": 300},
     {"id": "bedroom_gamer", "name": "Gamer Room", "price": 350},
     {"id": "balcony", "name": "Moonlit Balcony", "price": 400},
-    {"id": "galaxy", "name": "Galaxy Dream", "price": 400},
+    {"id": "galaxy", "name": "Starlit Night View", "price": 400},
+    {"id": "underwater", "name": "Coral Kingdom", "price": 450},
+    {"id": "cave", "name": "Crystal Cave", "price": 450},
     {"id": "library", "name": "Celestial Library", "price": 500},
     {"id": "festival", "name": "Festival Night", "price": 500},
     {"id": "stage", "name": "Idol Stage", "price": 600},

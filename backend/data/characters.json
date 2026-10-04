@@ -1,5 +1,5 @@
 {
-  "_help": "Edit this file to change the gacha roster. 'model' is a file in the models/ folder. 'voice_id' is the English (dub) ElevenLabs voice, 'voice_id_ja' the Japanese (sub) voice; leave both empty to use the default male/female voice. 'scene' is the room (an id from shop.json) shown behind the character when they are summoned. 'personality' is one of tsundere, cheerful, sensei, chill, rival; 'persona' is extra flavour for chat. Rarities: Common, Rare, Epic, Legendary, Mythic, Unbound. 'banners' are the gacha banners ('scene' is the room shown behind the banner): 'featured' characters are more likely when their rarity is rolled.",
+  "_help": "Edit this file to change the gacha roster. 'model' is a file in the models/ folder. 'voice_id' is the English (dub) ElevenLabs voice, 'voice_id_ja' the Japanese (sub) voice; leave both empty to use the default male/female voice. 'scene' is the room (an id from shop.json) shown behind the character when they are summoned. 'personality' is one of tsundere, cheerful, sensei, chill, rival; 'persona' is extra flavour for chat. Rarities: Common, Rare, Epic, Legendary, Mythic, Unbound. 'banners' are the summon banners ('scene' is the room shown behind the banner; two of the 'rotating' ones are on offer at a time and change every hour): 'featured' characters are more likely when their rarity is rolled.",
   "starter": "nino",
   "characters": [
     {
@@ -153,8 +153,12 @@
     {"id": "stardust_l", "name": "Stardust Chest", "rarity": "Rare", "points": 80}
   ],
   "banners": [
-    {"id": "limitless", "scene": "galaxy", "kind": "Limited Character Convene", "name": "Limitless Sky", "tag": "EVENT", "featured": ["gojo", "reze", "marin"]},
-    {"id": "afterschool", "scene": "rooftop", "kind": "Limited Character Convene", "name": "After-School Promise", "tag": "EVENT", "featured": ["levi", "lloyd", "itsuki"]},
-    {"id": "standard", "scene": "courtyard", "kind": "Standard Character Convene", "name": "Starfall Chorus", "tag": "", "featured": ["waguri", "nino", "miyamura"]}
+    {"id": "limitless", "rotating": true, "scene": "galaxy", "kind": "Limited Character Summon", "name": "Limitless Sky", "tag": "EVENT", "featured": ["gojo", "levi", "reze"]},
+    {"id": "afterschool", "rotating": true, "scene": "classroom", "kind": "Limited Character Summon", "name": "After-School Promise", "tag": "EVENT", "featured": ["nino", "itsuki", "miyamura"]},
+    {"id": "sweets", "rotating": true, "scene": "cafe", "kind": "Limited Character Summon", "name": "Sweet Rendezvous", "tag": "EVENT", "featured": ["waguri", "reze", "marin"]},
+    {"id": "midnight", "rotating": true, "scene": "night_city", "kind": "Limited Character Summon", "name": "Midnight Operation", "tag": "EVENT", "featured": ["lloyd", "levi", "gojo"]},
+    {"id": "festival", "rotating": true, "scene": "festival", "kind": "Limited Character Summon", "name": "Festival Fireworks", "tag": "EVENT", "featured": ["marin", "nino", "reze"]},
+    {"id": "studyhall", "rotating": true, "scene": "library", "kind": "Limited Character Summon", "name": "Starlit Study Hall", "tag": "EVENT", "featured": ["itsuki", "lloyd", "waguri"]},
+    {"id": "standard", "rotating": false, "scene": "courtyard", "kind": "Standard Character Summon", "name": "Cherry Blossom Days", "tag": "", "featured": ["waguri", "nino", "miyamura"]}
   ]
 }

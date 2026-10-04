@@ -10,7 +10,7 @@ const BASE = 'http://127.0.0.1:8765';
 const HTML = `<!doctype html><html><head><script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js","three/addons/":"/vendor/three/","@pixiv/three-vrm":"/vendor/three-vrm.module.min.js"}}</script></head><body>
 <script type="module">
 import * as THREE from 'three';
-import { DEFAULT, SIGNATURE, blend, writePose } from '/js/poses.js';
+import { DEFAULT, REST, blend, writePose } from '/js/poses.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 window.renderPortraits = async (url, personality) => {
@@ -21,7 +21,7 @@ window.renderPortraits = async (url, personality) => {
   scene.add(new THREE.AmbientLight(0xffffff, 0.9));
   const key = new THREE.DirectionalLight(0xffffff, 2.3); key.position.set(1, 2, 3); scene.add(key);
   const root = new THREE.Group(); root.add(vrm.scene); scene.add(root);
-  writePose(vrm, blend(DEFAULT, SIGNATURE[personality] || DEFAULT, 1)); // the pose they strike when summoned
+  writePose(vrm, blend(DEFAULT, REST[personality] || DEFAULT, 1)); // their natural way of standing (the summon poses looked stiff as still pictures)
   if (vrm.expressionManager) vrm.expressionManager.setValue(personality === 'cheerful' || personality === 'rival' ? 'happy' : 'relaxed', 0.55);
   for (let i = 0; i < 90; i++) vrm.update(1 / 60);
   const hp = new THREE.Vector3(); vrm.humanoid.getRawBoneNode('head').getWorldPosition(hp);
@@ -35,7 +35,7 @@ window.renderPortraits = async (url, personality) => {
     r.render(scene, cam);
     const data = r.domElement.toDataURL('image/webp', 0.9); r.dispose(); return data;
   };
-  const yaw = personality === 'rival' ? 0 : -0.22; // (the rival points straight at you)
+  const yaw = -0.2;
   return { full: shot(800, 1280, yaw, H * 0.53, H * 1.16), bust: shot(560, 700, yaw * 0.5, hp.y - 0.02, 0.66) };
 };
 window.ready = true;

@@ -5,6 +5,7 @@ import { accessoryThumbs } from './accessories.js';
 import { Environment } from './environment.js';
 import * as voice from './voice.js';
 import { playCutscene, stars, portrait, portraitImg, LOTUS } from './gacha.js';
+import * as vfx from './vfx.js';
 
 const $ = id => document.getElementById(id);
 /** Escapes text for HTML and draws the points symbol (written ◆ in messages) as the lotus. */
@@ -19,7 +20,7 @@ let lastEventId = 0;
 let lastYellAt = 0;
 let elevenOn = false;
 const character = new Character($('stage'), voice.mouthLevel);
-const environment = new Environment($('env'));
+const environment = new Environment($('env'), $('envfx'));
 window.character = character; // handy for debugging in DevTools (F12)
 window.environment = environment;
 
@@ -127,6 +128,9 @@ $('ui-sounds').addEventListener('change', () => {
   try { localStorage.setItem('uiSounds', uiSounds ? 'on' : 'off'); } catch { /* storage blocked */ }
 });
 
+// a little sparkle wherever you click
+document.addEventListener('pointerdown', e => { if (!e.target.closest?.('#cutscene')) vfx.clickSpark(e.clientX, e.clientY); }, true);
+
 // ======================= Poking =======================
 let pokeTimes = [];
 let lastPokeLine = 0;
@@ -158,23 +162,23 @@ function floater(text, cls = '') {
 }
 
 /** Small notice at the top of the screen. */
-function toast(text) {
+function toast(text, html = null) {
   const t = document.createElement('div');
-  t.className = 'toast';
-  t.innerHTML = rich(text);
+  t.className = 'toast' + (html ? ' card' : '');
+  t.innerHTML = html || rich(text);
   $('toasts').appendChild(t);
   while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
   setTimeout(() => t.remove(), 4600);
 }
 
 /** Adds a line to the Log. System lines also pop up as a notice. */
-function addMsg(role, text) {
+function addMsg(role, text, quiet = false) {
   const m = document.createElement('div');
   m.className = 'msg ' + role;
   m.innerHTML = rich(text);
   $('chat-log').appendChild(m);
   $('chat-log').scrollTop = 1e9;
-  if (role === 'sys') toast(text);
+  if (role === 'sys' && !quiet) toast(text);
 }
 
 function toastError(e) { addMsg('sys', '⚠ ' + (e.message || e)); }
@@ -210,6 +214,7 @@ function applyEnv() {
 
 function openTab(name) {
   if (name === currentTab) name = null; // pressing the same button again closes the menu
+  if (name === 'dress') dressReturn = currentTab && currentTab !== 'dress' ? currentTab : null;
   const isFull = FULL.includes(name);
   if (isFull || FULL.includes(currentTab)) wipe();
   currentTab = name;
@@ -229,7 +234,12 @@ function openTab(name) {
   if (name === 'dress') renderDress();
   applyEnv();
 }
-const closeTab = () => openTab(null);
+let dressReturn = null; // the menu the dressing room was opened from
+const closeTab = () => {
+  const back = currentTab === 'dress' ? dressReturn : null;
+  dressReturn = null;
+  openTab(back);
+};
 
 document.querySelectorAll('#tabs button').forEach(btn => btn.addEventListener('click', () => openTab(btn.dataset.tab)));
 addEventListener('resize', applyShift);
@@ -339,7 +349,7 @@ async function sendChat(text) {
     const res = await post('/chat', { message: text, history: chatHistory });
     chatHistory.push({ role: 'user', text }, { role: 'model', text: res.lesson ? `${res.reply}\n\n${res.lesson.markdown}` : res.reply });
     addMsg('bot', res.reply);
-    for (const t of res.added_tasks) addMsg('sys', `📝 New quest: ${t.title}${t.due ? ' (due ' + t.due + ')' : ''}`);
+    for (const t of res.added_tasks) addMsg('sys', t.source === 'ai' ? `✦ ${activeChar().name} gave you a quest: ${t.title}` : `📝 New quest: ${t.title}${t.due ? ' (due ' + t.due + ')' : ''}`);
     if (res.added_tasks.length) voice.sfx('task_done');
     await setState(res.state);
     for (const ev of res.added_events || []) addMsg('sys', `🗓 Scheduled: ${ev.title} · ${whenLabel(ev.start)}`);
@@ -467,7 +477,7 @@ function renderWeek() {
 }
 
 const questRow = (t, withDelete) => `
-  <li><span class="diff ${t.difficulty}">${t.difficulty}</span>
+  <li><span class="diff ${t.difficulty}">${t.difficulty}</span>${t.source === 'ai' ? '<span class="ai-tag" title="Suggested by your companion">✦</span>' : ''}
     <span class="t">${esc(t.title)}${t.due ? `<span class="due ${dueInfo(t.due).cls}">${esc(dueInfo(t.due).label)}</span>` : ''}</span>
     <button data-done="${t.id}" title="Complete">✓</button>${withDelete ? `<button class="ghost" data-del="${t.id}" title="Delete">✕</button>` : ''}</li>`;
 
@@ -541,6 +551,17 @@ $('note-form').addEventListener('submit', async e => {
   } catch (err) { toastError(err); }
 });
 
+// Every so often the companion reminds you about quests that are overdue or due today / tomorrow
+let lastReminder = Date.now();
+setInterval(() => {
+  if (!S || chatBusy || voice.isSpeaking() || currentTab || focusActive || Date.now() - lastReminder < 30 * 60000) return;
+  const line = reminderLine();
+  if (!line) return;
+  lastReminder = Date.now();
+  addMsg('sys', '⏰ ' + line);
+  say(line, { emotion: line.includes('overdue') ? 'angry' : 'surprised' });
+}, 60000);
+
 /** When a scheduled session starts, the companion says so (once). Sessions missed while the app was closed are just marked. */
 async function checkEvents() {
   if (!S) return;
@@ -560,13 +581,17 @@ async function checkEvents() {
 }
 setInterval(checkEvents, 20000);
 
-async function completeTask(id) {
+async function completeTask(id, from) {
   const res = await post(`/tasks/${id}/complete`);
   voice.sfx('task_done');
   floater(`+${res.xp_gained} XP  +${res.points_gained} ◆`);
+  const [x, y] = vfx.at(from); // the reward bursts out of the button you pressed and flies to your points
+  vfx.burst(x, y, '#ffd27a', 36);
+  vfx.flyTo(x, y, $('hud-points').parentElement, LOTUS, 7);
   await setState(res.state);
   if (res.levels_gained) {
     voice.sfx('level_up');
+    vfx.levelUp(res.state.level);
     floater(`LEVEL UP! +${res.level_bonus} ◆`, 'big');
     yell('levelup', '', 'surprised');
   } else {
@@ -591,14 +616,15 @@ $('plan-btn').addEventListener('click', async () => {
 
 // ======================= Focus =======================
 let focusActive = false;
+let focusSynced = false; // true once the first status check has caught up with past events
 let pomoChoice = 25; // 0 = free session, 25 / 50 = pomodoro minutes
 try { const saved = localStorage.getItem('pomoChoice'); if (saved !== null) pomoChoice = +saved; } catch { /* storage blocked */ }
 const BREAK_FOR = { 25: 5, 50: 10 };
 const fmt = sec => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 
 function pomoHint(m) {
-  return m ? `${m} min work, then a ${BREAK_FOR[m]} min break. The timer pauses while you're distracted. Earn 2 points + 1 XP per focused minute, plus a bonus for every finished round.`
-    : 'Free session: counts up until you end it. Earn 2 points + 1 XP per focused minute.';
+  return m ? `${m} min work, then a ${BREAK_FOR[m]} min break. The timer pauses while you're distracted. Earn 5 points + 2 XP per focused minute, plus a bonus for every finished round.`
+    : 'Free session: counts up until you end it. Earn 5 points + 2 XP per focused minute.';
 }
 
 function renderPomoPicker() {
@@ -662,13 +688,20 @@ $('focus-toggle').addEventListener('click', async () => {
       floater(`+${res.points_gained} ◆  +${res.xp_gained} XP`);
       const rounds = res.pomodoros ? ` Finished ${res.pomodoros} pomodoro${res.pomodoros > 1 ? 's' : ''} (+${res.pomodoro_bonus} bonus).` : '';
       addMsg('sys', `Focus session done: ${res.minutes} min focused, earned ${res.points_gained} points, lost ${res.points_lost}.${rounds}`);
-      if (res.levels_gained) { voice.sfx('level_up'); yell('levelup', '', 'surprised'); }
+      if (res.levels_gained) { voice.sfx('level_up'); vfx.levelUp(res.state.level); yell('levelup', '', 'surprised'); }
     }
   } catch (err) { toastError(err); }
 });
 
-$('sim-on').addEventListener('click', () => post('/focus/simulate', { name: 'YouTube', on: true }));
-$('sim-app').addEventListener('click', () => post('/focus/simulate', { name: 'discord.exe', kind: 'app', on: true }));
+// Distractions only count during a focus session, so simulating one starts a (free) session if none is running
+async function simulate(body) {
+  try {
+    const res = await post('/focus/simulate', body);
+    if (res.started_session) addMsg('sys', 'Started a focus session to show the distraction. The warning appears in a second.');
+  } catch (err) { toastError(err); }
+}
+$('sim-on').addEventListener('click', () => simulate({ name: 'YouTube', on: true }));
+$('sim-app').addEventListener('click', () => simulate({ name: 'discord.exe', kind: 'app', on: true }));
 $('open-taskmgr').addEventListener('click', async () => {
   try {
     const res = await post('/focus/taskmanager');
@@ -731,8 +764,9 @@ async function pollFocus() {
 
     for (const ev of st.events) {
       lastEventId = Math.max(lastEventId, ev.id);
-      handleFocusEvent(ev);
+      if (focusSynced) handleFocusEvent(ev); // (the first check only catches up: old warnings must not replay when the app opens)
     }
+    focusSynced = true;
   } catch { /* backend restarting */ }
   setTimeout(pollFocus, 1000);
 }
@@ -772,12 +806,13 @@ function renderGacha() {
   const g = S.gacha;
   const banners = S.catalog.banners || [];
   const b = banners.find(x => x.id === bannerId) || banners[0];
-  $('pull1').innerHTML = `${LOTUS}×${g.pull_cost}&nbsp;&nbsp; Convene ×1`;
-  $('pull10').innerHTML = `${LOTUS}×${g.ten_pull_cost}&nbsp;&nbsp; Convene ×10`;
+  $('pull1').innerHTML = `${LOTUS}×${g.pull_cost}&nbsp;&nbsp; Summon ×1`;
+  $('pull10').innerHTML = `${LOTUS}×${g.ten_pull_cost}&nbsp;&nbsp; Summon ×10`;
   $('pull1').disabled = S.points < g.pull_cost;
   $('pull10').disabled = S.points < g.ten_pull_cost;
   $('pity-limit').textContent = g.pity_limit;
   $('pity-text').textContent = `Pity: ${S.pity.since_legendary} / ${g.pity_limit}`;
+  if (bannerId && !banners.some(x => x.id === bannerId)) { bannerId = null; shownBanner = null; } // that banner rotated out
   $('force-row').classList.toggle('hidden', !isDemo());
   $('rates').innerHTML = g.rates.slice().reverse().map(r =>
     `<tr class="r-${r.rarity}"><td class="rarity-label">${r.rarity}</td><td>${(r.chance * 100).toFixed(1)}%</td></tr>`).join('');
@@ -795,6 +830,18 @@ function renderGacha() {
     return `<div class="art a${i} r-${c.rarity}"><div class="initial">${esc(c.name[0])}</div>${portraitImg(id)}
       <div class="plate"><i>${classOf(c)[1]}</i><div><b>${esc(c.name)}</b><div class="stars">${stars(c.rarity)}</div></div></div></div>`;
   }).join('');
+}
+
+/** After a summon: one tidy card with the new companions' faces and what the rest turned into. */
+function summonSummary(results) {
+  const news = results.filter(r => r.new);
+  const best = results.filter(r => r.type === 'character' && !r.new);
+  const gained = results.reduce((sum, r) => sum + (r.refund || 0), 0);
+  addMsg('sys', `✨ Summoned: ${results.map(r => `${r.name} (${r.rarity})`).join(', ')}`, true); // the full list goes in the Log only
+  toast('', `<div class="st-title">✦ Summon complete</div>
+    ${news.length ? `<div class="st-row">${news.map(n => `<span class="st-char r-${n.rarity}">${portraitImg(n.id, true)}<b>${esc(n.name)}</b><small>NEW</small></span>`).join('')}</div>` : ''}
+    <div class="st-sub">${[news.length ? 'Meet them in Characters (C)' : '', best.length ? `${best.length} bond up` : '', gained ? `+${gained} ${LOTUS}` : ''].filter(Boolean).join(' · ') || 'Better luck next time'}</div>`);
+  if (news.length) { vfx.confetti(90); vfx.burst(innerWidth / 2, innerHeight * 0.3, '#ff8fc4', 50); }
 }
 
 async function doPull(count) {
@@ -816,10 +863,17 @@ async function doPull(count) {
     }).finally(() => { environment.paused = false; character.paused = FULL.includes(currentTab); });
     await setState(res.state);
     const news = res.results.filter(r => r.new);
-    addMsg('sys', `✨ Pulled: ${res.results.map(r => `${r.name} (${r.rarity})`).join(', ')}`);
-    if (news.length) addMsg('sys', `New character! Meet ${news.map(n => n.name).join(' and ')} in Characters (C).`);
+    summonSummary(res.results);
   } catch (err) { toastError(err); }
 }
+// The limited banners change every hour: show the countdown, and fetch the new ones when it runs out
+setInterval(async () => {
+  if (!S) return;
+  const left = Math.round(S.gacha.rotates_at - Date.now() / 1000);
+  if (left <= 0) { try { shownBanner = null; await setState(await api('/state')); } catch { /* try again next second */ } return; }
+  if (currentTab === 'gacha') $('banner-rotate').textContent = `New banners in ${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`;
+}, 1000);
+
 $('pull1').addEventListener('click', () => doPull(1));
 $('pull10').addEventListener('click', () => doPull(10));
 
@@ -860,9 +914,9 @@ function renderCharDetail() {
     <div class="d-meta"><span>${classOf(c)[1]} ${classOf(c)[0]}</span>${own ? `<span>Bond ${own.bond}/6</span>` : ''}<span>Voice: ${voices}</span></div>
     ${own ? `<p class="d-line">“${esc(c.intro_line)}”</p>
       <div class="row"><button data-preview="en" data-id="${c.id}">▶ English</button><button data-preview="ja" data-id="${c.id}">▶ Japanese</button></div>`
-      : '<p class="d-line">You have not met this character yet. Convene to bring them to your room.</p>'}
+      : '<p class="d-line">You have not met this character yet. Summon to bring them to your room.</p>'}
     <div class="spacer"></div>
-    ${!own ? '<button class="primary big" data-open="gacha">Go to Convene</button>'
+    ${!own ? '<button class="primary big" data-open="gacha">Go to Summon</button>'
       : isActive ? '<button class="big" disabled>Current companion</button><button class="primary big" data-open="dress">Customize</button>'
       : `<button class="primary big" data-char="${c.id}">Set as companion</button>`}`;
 }
@@ -941,6 +995,8 @@ function renderDress() {
   document.querySelectorAll('input[name=vmode]').forEach(r => { r.checked = r.value === S.settings.voice_mode; });
 }
 
+environment.onPicture = () => { if (currentTab === 'dress' && dressCat === 'room') renderDress(); };
+
 /** Clicking an item in the list selects it and previews it. */
 function clickItem(kind, id) {
   picked = { kind, id };
@@ -954,6 +1010,7 @@ async function applyPicked() {
   if (!ownsItem(kind, id)) {
     await setState(await post('/shop/buy', { kind, id }));
     voice.sfx('task_done');
+    vfx.burst(innerWidth / 2, innerHeight * 0.4, '#ff8fc4', 60);
     await setState(await post('/equip', { kind, id, on: true })); // wear / use it right away
     say('Ooh, thank you! I love it!', { emotion: 'happy' });
   } else if (kind === 'accessory') {
@@ -996,7 +1053,7 @@ document.addEventListener('click', async e => {
   const d = t.dataset;
   try {
     if (d.done) {
-      await completeTask(d.done);
+      await completeTask(d.done, t);
     } else if (d.delevent) {
       await setState(await api(`/events/${d.delevent}`, { method: 'DELETE' }));
     } else if (d.delnote) {
@@ -1020,8 +1077,8 @@ document.addEventListener('click', async e => {
     } else if (d.char) {
       await setState(await post('/equip', { kind: 'character', id: d.char }));
       const c = activeChar();
-      closeTab();
-      character.wave(2.5);
+      openTab(null);
+      vfx.burst(innerWidth / 2, innerHeight * 0.45, c.color, 70);
       say(c.intro_line, { emotion: 'happy', ja: c.intro_line_ja });
     } else if (d.pick) {
       charPick = d.pick;
@@ -1114,6 +1171,7 @@ async function boot() {
   }
   renderPomoPicker();
   pollFocus();
+  setTimeout(() => environment.preload(S.catalog.backgrounds.map(b => b.id)), 2500); // room pictures, for the dressing room and summons
   if (elevenOn) voice.preloadSfx(['task_done', 'level_up', 'warning', 'gacha_charge', 'gacha_meteor',
     'reveal_common', 'reveal_epic', 'reveal_gold', 'reveal_unbound']);
   // Daily login gift (once per calendar day)
@@ -1136,7 +1194,6 @@ async function boot() {
     if (greeted) return;
     greeted = true;
     if (Date.now() - lastPokeLine < 500) await new Promise(r => setTimeout(r, 3500)); // let the poke reaction finish
-    character.wave(2.5);
     const h = new Date().getHours();
     const stage = h >= 5 && h < 11 ? 'greet_morning' : h < 17 && h >= 11 ? 'greet_afternoon' : h >= 17 && h < 22 ? 'greet_evening' : 'greet_night';
     try {
@@ -1146,6 +1203,7 @@ async function boot() {
     if (daily?.claimed) {
       voice.sfx('task_done');
       floater(`🎁 +${daily.gift} ◆`, 'big');
+      vfx.flyTo(innerWidth / 2, innerHeight * 0.4, $('hud-points').parentElement, LOTUS, 10);
       await say(`Here's your daily gift: ${daily.gift} points! ${daily.streak > 1 ? `That's a ${daily.streak} day streak!` : 'Come back tomorrow for more!'}`, { emotion: 'happy' });
     }
     if (reminder) await say(reminder, { emotion: reminder.includes('overdue') ? 'angry' : 'surprised' });

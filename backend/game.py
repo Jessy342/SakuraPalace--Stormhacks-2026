@@ -14,11 +14,11 @@ router = APIRouter(prefix="/api")
 
 # ---------------- Tuning (change numbers here) ----------------
 TASK_REWARDS = {  # difficulty -> (xp, points)
-    "easy": (15, 10),
-    "medium": (30, 25),
-    "hard": (60, 50),
+    "easy": (30, 50),
+    "medium": (60, 100),
+    "hard": (120, 200),
 }
-LEVEL_UP_BONUS = 160  # = one free gacha pull
+LEVEL_UP_BONUS = 320  # = two free summons
 
 PULL_COST = 160
 TEN_PULL_COST = 1440  # 10% discount
@@ -54,8 +54,8 @@ def add_xp(state, amount):
     return gained
 
 
-DAILY_GIFT_BASE = 50      # points on day 1 of a streak
-DAILY_GIFT_PER_DAY = 10   # extra points for each streak day, up to day 7
+DAILY_GIFT_BASE = 150     # points on day 1 of a streak
+DAILY_GIFT_PER_DAY = 30   # extra points for each streak day, up to day 7
 DAILY_GIFT_MAX_DAYS = 7
 
 
@@ -78,6 +78,21 @@ def week_summary(state):
     }
 
 
+ROTATION_SECONDS = 3600  # the limited banners change every hour
+
+
+def active_banners(now=None):
+    """The banners on offer right now: two limited ones that rotate every hour, plus the permanent standard banner."""
+    banners = CHARACTERS.get("banners", [])
+    rotating = [b for b in banners if b.get("rotating")]
+    fixed = [b for b in banners if not b.get("rotating")]
+    if len(rotating) <= 2:
+        return rotating + fixed
+    turn = int((now or time.time()) // ROTATION_SECONDS)
+    first = (turn * 2) % len(rotating)
+    return [rotating[first], rotating[(first + 1) % len(rotating)]] + fixed
+
+
 def public_state(state):
     return {
         **state,
@@ -87,12 +102,13 @@ def public_state(state):
             "characters": CHARACTERS["characters"],
             "accessories": SHOP["accessories"],
             "backgrounds": SHOP["backgrounds"],
-            "banners": CHARACTERS.get("banners", []),
+            "banners": active_banners(),
         },
         "gacha": {
             "pull_cost": PULL_COST,
             "ten_pull_cost": TEN_PULL_COST,
             "pity_limit": PITY_LIMIT,
+            "rotates_at": (int(time.time() // ROTATION_SECONDS) + 1) * ROTATION_SECONDS,  # when the limited banners change (unix seconds)
             "rates": [{"rarity": r, "chance": c} for r, c in RATES],
         },
     }
@@ -116,7 +132,7 @@ class TaskIn(BaseModel):
     due: str | None = None  # ISO date/time string, optional
 
 
-def create_task(state, title, difficulty="medium", due=None):
+def create_task(state, title, difficulty="medium", due=None, source="user"):
     if difficulty not in TASK_REWARDS:
         difficulty = "medium"
     task = {
@@ -126,6 +142,7 @@ def create_task(state, title, difficulty="medium", due=None):
         "due": due,
         "done": False,
         "created": time.time(),
+        "source": source,  # "user" = you added it, "ai" = your companion suggested it
     }
     state["tasks"].append(task)
     return task

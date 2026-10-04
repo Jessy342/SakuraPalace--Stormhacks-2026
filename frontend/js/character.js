@@ -84,6 +84,7 @@ export class Character {
     this.personality = 'cheerful';
     this.gesture = null;      // { pose, start, seconds } while one is playing
     this.nextGesture = 9;
+    this.talk = 0;            // 0..1, eases in while she is speaking
     canvas.addEventListener('pointerdown', e => {
       const r = canvas.getBoundingClientRect();
       const ndc = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
@@ -441,8 +442,8 @@ export class Character {
     this.updateLook(dt, t);
     const w = this.weights;
     if (this.root) {
-      // whole-body motion: happy bounce, surprised hop, angry shake
-      this.root.position.y = Math.abs(Math.sin(t * 6)) * 0.04 * w.happy + Math.max(0, Math.sin(t * 9)) * 0.03 * w.surprised;
+      // whole-body motion: only an angry shake (the happy bounce and surprised hop looked jumpy while she talks)
+      this.root.position.y = 0;
       this.root.position.x = Math.sin(t * 40) * 0.01 * w.angry;
       this.root.rotation.y = Math.sin(t * 0.5) * 0.06 + this.spin;
       // squish when poked: quick squash and stretch that settles in ~0.6s
@@ -525,12 +526,12 @@ export class Character {
     const elbow = 0.25 + w.angry * 0.9 + w.happy * 0.3;
 
     // Base stance: the personality's idle pose. Strong emotions and talking take over with the plain arms-down pose.
-    const emotional = Math.min(1, w.angry + w.happy + w.sad + w.surprised);
+    const emotional = Math.min(1, w.angry + w.sad); // being happy or surprised keeps her usual stance
     const react = { leftUpperArm: [0, 0, -armDown], rightUpperArm: [0, 0, armDown], leftLowerArm: [0, -elbow, 0], rightLowerArm: [0, elbow, 0], fingers: { left: 0.25 + w.angry * 0.7, right: 0.25 + w.angry * 0.7 } };
     let pose = blend(REST[this.personality] || DEFAULT, react, emotional);
 
     // Now and then, a little idle gesture (only while calm and quiet)
-    const busy = emotional > 0.15 || this.mouth > 0.05 || this.waveAmt > 0.05 || this.dragRotate;
+    const busy = emotional > 0.15 || this.talk > 0.05 || this.waveAmt > 0.05 || this.dragRotate;
     if (!this.gesture && t > this.nextGesture && !busy) {
       const [gPose, seconds] = GESTURES[Math.floor(Math.random() * GESTURES.length)];
       this.gesture = { pose: gPose, start: t, seconds };
@@ -547,6 +548,10 @@ export class Character {
     const { yaw, pitch } = this.look; // split the turn between neck (40%) and head (60%) so it looks natural
     const add = (bone, x, y, z) => { pose[bone][0] += x; pose[bone][1] += y; pose[bone][2] += z; };
     add('leftUpperArm', 0, 0, breathe * 0.02); add('rightUpperArm', 0, 0, -breathe * 0.02);
+    // talking: the hands move a little with the words, nothing more
+    this.talk += ((this.mouth > 0.03 ? 1 : 0) - this.talk) * Math.min(1, dt * 4);
+    add('rightLowerArm', 0, this.talk * (0.22 + 0.1 * Math.sin(t * 3.4)), 0);
+    add('leftLowerArm', 0, -this.talk * (0.12 + 0.07 * Math.sin(t * 2.7 + 1)), 0);
     add('hips', 0, sway * 0.05, sway * 0.02);
     add('spine', 0.02 * breathe + w.angry * 0.08 + w.sad * 0.1, -sway * 0.03, -sway * 0.02);
     add('chest', 0.015 * breathe, 0, 0);

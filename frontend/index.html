@@ -55,13 +55,14 @@
   <canvas id="env"></canvas>
   <div id="floor"></div>
   <canvas id="stage"></canvas>
+  <canvas id="envfx"></canvas> <!-- soft out-of-focus things drifting in front of the character (depth) -->
   <div id="vignette"></div>
   <div id="model-hint" class="hidden"></div>
 
   <!-- ===================== LOBBY HUD ===================== -->
   <header id="hud">
     <div class="player-card">
-      <div class="avatar"><img id="hud-avatar" alt="" /><span id="hud-avatar-fallback"></span></div>
+      <button class="avatar" data-open="dress" title="Open the dressing room"><img id="hud-avatar" alt="" /><span id="hud-avatar-fallback"></span><em>View<br>character</em></button>
       <div class="player-info">
         <div class="player-name"><span id="hud-char">…</span><small id="hud-title"></small></div>
         <div class="player-level">
@@ -74,7 +75,7 @@
     <div class="hud-right">
       <div id="hud-focus" class="pill focus-pill off">Focus off</div>
       <div id="hud-streak" class="pill streak-pill" title="Daily streak">0</div>
-      <div class="pill hud-points" title="Points: earn them from quests and focus, spend them on Convene and the shop"><svg class="lotus"><use href="#i-lotus"/></svg><b id="hud-points">0</b></div>
+      <div class="pill hud-points" title="Points: earn them from quests and focus, spend them on Summons and in the dressing room"><svg class="lotus"><use href="#i-lotus"/></svg><b id="hud-points">0</b></div>
     </div>
   </header>
 
@@ -82,7 +83,7 @@
   <nav id="tabs" class="dock">
     <button data-tab="tasks" data-key="q"><svg><use href="#i-quest"/></svg><span>Quests</span><kbd>Q</kbd></button>
     <button data-tab="focus" data-key="f"><svg><use href="#i-focus"/></svg><span>Focus</span><kbd>F</kbd></button>
-    <button data-tab="gacha" data-key="g"><svg><use href="#i-convene"/></svg><span>Convene</span><kbd>G</kbd></button>
+    <button data-tab="gacha" data-key="g"><svg><use href="#i-convene"/></svg><span>Summon</span><kbd>G</kbd></button>
     <button data-tab="chars" data-key="c"><svg><use href="#i-chars"/></svg><span>Characters</span><kbd>C</kbd></button>
     <button data-tab="dress" data-key="d"><svg><use href="#i-dress"/></svg><span>Dressing Room &amp; Shop</span><kbd>D</kbd></button>
     <button data-tab="chat" data-key="l"><svg><use href="#i-log"/></svg><span>Log</span><kbd>L</kbd></button>
@@ -152,9 +153,9 @@
       <form id="task-form" class="row">
         <input id="task-title" placeholder="New quest…" required />
         <select id="task-diff">
-          <option value="easy">Easy (+15 XP)</option>
-          <option value="medium" selected>Medium (+30 XP)</option>
-          <option value="hard">Hard (+60 XP)</option>
+          <option value="easy">Easy (+30 XP)</option>
+          <option value="medium" selected>Medium (+60 XP)</option>
+          <option value="hard">Hard (+120 XP)</option>
         </select>
         <input id="task-due" type="date" />
         <button type="submit" class="primary">Add</button>
@@ -246,7 +247,7 @@
       <h3>Keyboard</h3>
       <div class="keys">
         <span><kbd>Enter</kbd> talk</span><span><kbd>Esc</kbd> close menu</span><span><kbd>Q</kbd> quests</span><span><kbd>F</kbd> focus</span>
-        <span><kbd>G</kbd> convene</span><span><kbd>C</kbd> characters</span><span><kbd>D</kbd> dressing room</span>
+        <span><kbd>G</kbd> summon</span><span><kbd>C</kbd> characters</span><span><kbd>D</kbd> dressing room</span>
         <span><kbd>L</kbd> log</span><span><kbd>O</kbd> options</span>
       </div>
       <h3>System</h3>
@@ -303,7 +304,7 @@
   <section id="tab-gacha" class="tab full">
     <div class="full-bg"><div class="glyph" id="banner-glyph"></div></div>
     <div class="full-top">
-      <div class="full-title"><svg><use href="#i-convene"/></svg>Convene</div>
+      <div class="full-title"><svg><use href="#i-convene"/></svg>Summon</div>
       <div class="full-right">
         <div class="pill hud-points"><svg class="lotus"><use href="#i-lotus"/></svg><b id="gacha-points">0</b></div>
         <button class="icon-btn star" data-close title="Close (Esc)"><svg><use href="#i-close"/></svg></button>
@@ -314,8 +315,9 @@
     <div id="banner" class="g-info">
       <div class="banner-kind" id="banner-kind"></div>
       <div class="banner-title" id="banner-title"></div>
-      <div class="banner-sub">Every <b>10</b> Convenes guarantees an <b>Epic</b> or above.<br>A <b>Legendary</b> or above is guaranteed within <b id="pity-limit">50</b> Convenes.<br>Featured characters have a higher drop chance.</div>
+      <div class="banner-sub">Every <b>10</b> Summons guarantees an <b>Epic</b> or above.<br>A <b>Legendary</b> or above is guaranteed within <b id="pity-limit">50</b> Summons.<br>Featured characters have a higher drop chance.</div>
       <div id="pity-text"></div>
+      <div id="banner-rotate" class="banner-rotate"></div>
       <div id="force-row" class="hidden">
         <label>Demo: force rarity of first pull
           <select id="force-rarity">
@@ -357,6 +359,10 @@
 
   <!-- Menu transition wipe + gacha cutscene -->
   <div id="wipe"></div>
+  <!-- Effects over everything: click sparkles, reward bursts, confetti, the level-up celebration -->
+  <canvas id="fx"></canvas>
+  <div id="levelup" class="hidden"><div class="lu-rays"></div><div class="lu-text">LEVEL UP</div><div class="lu-num">Lv 2</div></div>
+
   <div id="cutscene" class="hidden">
     <canvas id="cut-canvas"></canvas>
     <div id="cut-content"></div>

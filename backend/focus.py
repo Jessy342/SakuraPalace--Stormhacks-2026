@@ -198,7 +198,7 @@ def tick():
 
 def _finish_pomodoro():
     """A work block is done: give a bonus and start the break."""
-    bonus = FOCUS["pomodoro"] * 2 // 5  # 25 min -> 10 points, 50 min -> 20 points
+    bonus = FOCUS["pomodoro"] * 2  # 25 min -> 50 points, 50 min -> 100 points
     FOCUS["rounds"] += 1
     FOCUS["pomodoro_bonus"] += bonus
     with Transaction() as st:
@@ -249,7 +249,7 @@ def stop():
     with _lock:
         minutes = FOCUS["focused_seconds"] // 60
         FOCUS.update(active=False, stage="ok", offender=None, simulated=None, phase="work")
-        reward_pts, reward_xp = minutes * 2, minutes * 1
+        reward_pts, reward_xp = minutes * 5, minutes * 2
         with Transaction() as st:
             st["points"] += reward_pts
             st["stats"]["focus_seconds"] += FOCUS["focused_seconds"]
@@ -304,7 +304,12 @@ class SimIn(BaseModel):
 
 @router.post("/simulate")
 def simulate(body: SimIn):
-    """Pretend a distraction is open (for testing, or for a safe live demo)."""
+    """Pretend a distraction is open (for testing, or for a safe live demo).
+    Distractions only count during a focus session, so this starts a free session if none is running."""
+    started = False
+    if body.on and not FOCUS["active"]:
+        start(StartIn())
+        started = True
     with _lock:
         FOCUS["simulated"] = {"name": body.name, "kind": "app" if body.kind == "app" else "site", "pid": None, "simulated": True} if body.on else None
-    return {"ok": True}
+    return {"ok": True, "started_session": started}

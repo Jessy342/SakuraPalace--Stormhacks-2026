@@ -22,7 +22,9 @@ DEFAULT_STATE = {
     "level": 1,
     "tasks": [],
     "events": [],  # scheduled sessions: {id, title, start "YYYY-MM-DDTHH:MM" (local time), minutes, notified}
-    "notes": [],   # jotted notes and reminders: {id, text, created}
+    "notes": [],
+    "profile": [],  # short facts the companion has learned about you from chat (used to suggest quests that fit you)
+    "ai": {"chats_since_quest": 9},  # so the companion only suggests a quest now and then, not in every reply   # jotted notes and reminders: {id, text, created}
     "owned_characters": {CHARACTERS["starter"]: {"bond": 0}},
     "active_character": CHARACTERS["starter"],
     "personality_overrides": {},  # character id -> personality preset chosen by the user

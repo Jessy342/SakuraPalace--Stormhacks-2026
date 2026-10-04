@@ -28,8 +28,9 @@ backend/                 Python 3.12, FastAPI. One file per system.
 frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. three.js + three-vrm are vendored in frontend/vendor/.
   index.html, style.css  game-style HUD: lobby (dock, quest tracker, dialogue box), side drawer menus, full-screen Convene + Characters
   js/app.js              all UI wiring (menus + keyboard shortcuts, chat, quests, focus polling, convene, characters, dressing room, shop, teacher)
-  js/environment.js      rooms behind the character, drawn with canvas shapes: each scene is painted once, then only small effects animate at 30fps (keep it that way: full-screen redraws and CSS backdrop-filter made the app lag on integrated graphics). One scene per background id in shop.json, plus 'dressing', 'convene' and 'archive' for the menus
+  js/environment.js      rooms behind the character: a painted picture per room (assets/backgrounds/<id>.webp, made by tools/make_backgrounds.py with Gemini's image model) prepared once, plus small effects behind the character and soft out-of-focus bits in front of it (#envfx) at 30fps. Falls back to simple drawn scenes if a picture is missing. Also tints the UI panels with the room's colour (--panel). Keep full-screen redraws and CSS backdrop-filter out: they made the app lag on integrated graphics
   (Dressing Room = wardrobe + shop in one: locked items are tried on, then bought there. Teacher mode is hidden from the UI for now; its /api/teacher endpoints still exist.)
+  js/vfx.js              effects over the whole UI: click sparkles, reward bursts, confetti, lotuses flying to the points counter, level-up celebration
   js/character.js        3D scene, VRM loading, procedural idle/emotion animation, blink, lip sync, placeholder chibi
   js/poses.js            poses for the VRM models as bone rotations: how each personality stands while idle (REST), the pose they strike when summoned (SIGNATURE), and little idle gestures (GESTURES). Check any new pose with a screenshot; signs differ for hanging vs raised arms
   js/summon3d.js         the summon reveal in 3D: loads the pulled character's model, entrance (spin, drop, landing), signature pose, idle and camera move, plus the themed effects layer behind them
@@ -62,7 +63,8 @@ tools/make_portraits.mjs dev tool: re-render portraits after adding/changing a m
 - Only one voice line plays at a time (`speakParts` in voice.js); long lines are split into sentences and spoken one by one. `/api/tts` also takes `prev`/`next` (neighbouring sentences) to keep the tone steady.
 - `/api/chat` may return `lesson` ({title, markdown, images}) for bigger questions; the Log opens and shows it with Wikipedia pictures.
 - Chat can also schedule and take notes: `/api/chat` returns `added_events` and `added_notes` next to `added_tasks`. Sessions (`/api/events`: title, start `YYYY-MM-DDTHH:MM` local time, minutes) and notes (`/api/notes`) live in the save file and show under Quests → Schedule / Notes; app.js announces a session out loud when it starts.
-- Gacha banners live in characters.json (`banners`); `/api/gacha/pull` takes `banner`, and that banner's `featured` characters get a 50% rate-up within their rarity.
+- The gacha is called **Summon** in the UI. Banners live in characters.json (`banners`); two `rotating` ones are on offer at a time and change every hour (`active_banners()` in game.py, `state.gacha.rotates_at`). `/api/gacha/pull` takes `banner`, and that banner's `featured` characters get a 50% rate-up within their rarity.
+- Quests: the companion also hands out quests on its own (`suggest_quests` in the chat reply, at most one, with a gap of two chats; tasks carry `source: "ai"`) and remembers facts about the user in `state.profile`. Rewards: easy 30 XP/50, medium 60/100, hard 120/200; focus 5 points + 2 XP per minute.
 - VRM expressions used: happy, angry, sad, surprised, relaxed, aa (mouth), blink. Normalized bones are posed in `poseVRM()`.
 - Demo mode (Focus tab checkbox) = 5s grace / 5s drain / 20s force-close, and lets you force the first gacha pull's rarity.
 - `window.character` is exposed for debugging in DevTools.
