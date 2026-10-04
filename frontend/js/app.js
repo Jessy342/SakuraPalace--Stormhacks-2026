@@ -787,7 +787,14 @@ async function doPull(count) {
     voice.stopSpeaking();
     const res = await post('/gacha/pull', { count, force_rarity: $('force-rarity').value || null, banner: bannerId });
     environment.paused = true;
-    await playCutscene(res.results, res.best_rarity, { japanese: S.settings.voice_mode === 'sub' }).finally(() => { environment.paused = false; });
+    await playCutscene(res.results, res.best_rarity, {
+      japanese: S.settings.voice_mode === 'sub',
+      // each character is revealed in front of their own signature scene, tinted with their colour
+      details: r => {
+        const c = r.type === 'character' ? charById(r.id) : null;
+        return { icon: c ? classOf(c)[1] : '◆', color: c?.color || '#9aa5b1', backdrop: environment.thumb(c?.scene || S.background, 1280, 720) };
+      },
+    }).finally(() => { environment.paused = false; });
     await setState(res.state);
     const news = res.results.filter(r => r.new);
     addMsg('sys', `✨ Pulled: ${res.results.map(r => `${r.name} (${r.rarity})`).join(', ')}`);

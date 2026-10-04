@@ -3,7 +3,8 @@
 //   2. TEASE     the gate climbs through the rarity colours, stopping at the best thing you pulled
 //   3. STARFALL  one shooting star per pull crashes into the gate, each in its own rarity colour
 //   4. ERUPTION  flash, shockwaves, screen shake and a pillar of light
-//   5. REVEAL    each notable character rises as a dark silhouette, then bursts into colour with name, stars and voice
+//   5. REVEAL    a cinematic shot of each notable character in front of their own scene: the character fills the
+//                right of the screen, with a slim name / stars / reward block on the left
 //   6. SUMMARY   every pull as a card
 import { sfx, speak, stopSpeaking, riser, impact, chime } from './voice.js';
 
@@ -26,7 +27,7 @@ const colorOf = (rarity, now = performance.now()) => RARITY_COLORS[rarity] === '
 
 let skipping = false;
 
-export async function playCutscene(results, bestRarity, { japanese = false } = {}) {
+export async function playCutscene(results, bestRarity, { japanese = false, details = () => ({}) } = {}) {
   const overlay = el('cutscene');
   const content = el('cut-content');
   overlay.classList.remove('hidden');
@@ -83,19 +84,19 @@ export async function playCutscene(results, bestRarity, { japanese = false } = {
       await wait(1000);
       content.innerHTML = '';
     }
-    content.appendChild(splash(r));
+    content.appendChild(reveal(r, details(r)));
     show.erupt(0.6);
     if (r.type === 'character') {
       const n = STARS[r.rarity];
       setTimeout(() => { if (!skipping && content.isConnected) { impact(0.35 + rank(r.rarity) * 0.1); shake(); } }, 780);        // silhouette bursts into colour
-      for (let i = 0; i < n; i++) setTimeout(() => { if (!skipping) chime(i * 0.5, 0.06); }, 1150 + i * 120);                    // stars pop in
+      for (let i = 0; i < n; i++) setTimeout(() => { if (!skipping) chime(i * 0.5, 0.06); }, 1500 + i * 130);                    // stars pop in
       if (r.new && r.intro_line) setTimeout(() => {
         if (skipping || !content.isConnected) return;
         const ja = japanese && r.intro_line_ja;
         speak(ja ? r.intro_line_ja : r.intro_line, { characterId: r.id, lang: ja ? 'ja' : 'en' });
-      }, 1500);
+      }, 2300);
     }
-    await clickToContinue(overlay, 1500);
+    await clickToContinue(overlay, 1800);
     stopSpeaking();
   }
 
@@ -159,31 +160,35 @@ function card(r) {
   return c;
 }
 
-function splash(r) {
+/** The cinematic reveal shot. d = { icon, color, backdrop } from app.js. */
+function reveal(r, d) {
   const s = document.createElement('div');
-  s.className = 'splash ' + rarityClass(r) + (r.type === 'item' ? ' item' : '');
-  const rb = r.rarity === 'Unbound' ? 'rainbow-text' : '';
-  const starRow = [...stars(r.rarity)].map((x, i) => `<span style="animation-delay:${1.15 + i * 0.12}s">${x}</span>`).join('');
-  if (r.type === 'item') {
-    s.innerHTML = `<div class="rays"></div><div class="info"><div class="rarity">${r.rarity.toUpperCase()}</div><div class="name ${rb}">${r.name}</div>
-      <div class="title">+${r.refund} ◆ points</div><div class="hint" style="margin-top:30px">Click to continue</div></div>`;
-  } else {
-    // the name flies in one letter at a time
-    let n = 0;
-    const letters = r.name.split(' ').map(word => `<span class="word">${[...word].map(ch => `<span style="animation-delay:${0.95 + n++ * 0.035}s">${ch}</span>`).join('')}</span>`).join(' ');
-    s.innerHTML = `<div class="rays"></div>
-      <div class="ribbon"><span>${(r.rarity.toUpperCase() + ' ✦ ').repeat(14)}</span></div>
-      <div class="figure"><div class="initial">${r.name[0]}</div>${portraitImg(r.id)}<div class="shine" style="-webkit-mask-image:url(${portrait(r.id)});mask-image:url(${portrait(r.id)})"></div></div>
-      <div class="info">
-        ${r.new ? '<div class="newtag">NEW</div>' : ''}
-        <div class="rarity ${rb}">${r.rarity.toUpperCase()}</div>
-        <div class="name letters ${rb}">${letters}</div>
-        <div class="title">${r.title || ''}</div>
-        <div class="stars">${starRow}</div>
-        <div class="line">${r.new ? `“${r.intro_line || ''}”` : `Already with you. Bond ${r.bond} · +${r.refund} ◆ points`}</div>
-        <div class="hint">Click to continue</div>
-      </div>`;
-  }
+  const isChar = r.type === 'character';
+  s.className = 'reveal ' + rarityClass(r) + (isChar ? '' : ' item');
+  s.style.setProperty('--cc', d.color || '#9aa5b1');
+  const starRow = [...'✦'.repeat(STARS[r.rarity] || 1)].map((x, i) => `<span style="animation-delay:${1.5 + i * 0.13}s">${x}</span>`).join('');
+  const embers = Array.from({ length: 26 }, () =>
+    `<i style="left:${(Math.random() * 100).toFixed(1)}%;--s:${(2 + Math.random() * 4).toFixed(1)}px;--d:${(5 + Math.random() * 7).toFixed(1)}s;animation-delay:-${(Math.random() * 10).toFixed(1)}s"></i>`).join('');
+  const chips = [
+    r.refund ? `<div class="rv-chip" title="Points"><span class="gem">◆</span><small>+${r.refund}</small></div>` : '',
+    isChar ? `<div class="rv-chip" title="Bond"><span>♥</span><small>${r.new ? 'New' : 'Bond ' + r.bond}</small></div>` : '',
+  ].join('');
+  s.innerHTML = `
+    <div class="rv-bg" style="background-image:url(${d.backdrop || ''})"></div>
+    <div class="rv-grade"></div>
+    <div class="rv-embers">${embers}</div>
+    ${isChar ? `<div class="rv-figure"><div class="initial">${r.name[0]}</div>${portraitImg(r.id)}</div>` : '<div class="rv-gem">◆</div>'}
+    <div class="rv-flash"></div>
+    <div class="rv-info">
+      <div class="rv-head">
+        <div class="rv-icon"><span>${d.icon || '◆'}</span></div>
+        <div class="rv-name">${r.new ? '<em>New</em>' : ''}<b class="${r.rarity === 'Unbound' ? 'rainbow-text' : ''}">${r.name}</b>${r.title ? `<small>${r.title}</small>` : ''}</div>
+      </div>
+      <div class="rv-stars">${starRow}</div>
+      <div class="rv-chips">${chips}</div>
+    </div>
+    ${isChar && r.new && r.intro_line ? `<div class="rv-sub">“${r.intro_line}”</div>` : ''}
+    <div class="hint">Click to continue</div>`;
   return s;
 }
 

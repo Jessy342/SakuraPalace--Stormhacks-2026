@@ -474,15 +474,16 @@ export class Environment {
 
   setQuality(low) { this.low = low; this.build(); }
 
-  /** Small picture of a room, for the dressing room tiles. */
+  /** Picture of a room at any size: small for the dressing room tiles, large as the backdrop of a summon reveal. */
   thumb(id, w = 240, h = 150) {
     if (!SCENES[id]) return '';
-    if (!this.thumbs[id]) {
+    const key = `${id}@${w}x${h}`;
+    if (!this.thumbs[key]) {
       const c = document.createElement('canvas'); c.width = w; c.height = h;
       SCENES[id].paint(c.getContext('2d'), w, h, rng(7));
-      this.thumbs[id] = c.toDataURL('image/jpeg', 0.8);
+      this.thumbs[key] = c.toDataURL('image/jpeg', 0.85);
     }
-    return this.thumbs[id];
+    return this.thumbs[key];
   }
 
   /** Paints the current room into the hidden picture and prepares its moving effects. */

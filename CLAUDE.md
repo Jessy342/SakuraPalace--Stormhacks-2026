@@ -33,7 +33,7 @@ frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. th
   js/character.js        3D scene, VRM loading, procedural idle/emotion animation, blink, lip sync, placeholder chibi
   js/accessories.js      accessories built from three.js shapes, attached to the head bone
   js/voice.js            speak() with lip-sync analyser, mic recording -> /api/stt, sound effects w/ beep fallback
-  js/gacha.js            summon cutscene (canvas meteor, flash, silhouette reveal with portrait, summary cards)
+  js/gacha.js            summon cutscene (gate, rarity tease, starfall, eruption, then a cinematic reveal: the character large on the right in front of their own `scene` from characters.json, slim info block on the left; summary cards)
   assets/portraits/      <id>.webp + <id>_bust.webp, rendered from the VRM models by tools/make_portraits.mjs
 models/                  char1.vrm ... char9.vrm (from VRoid Studio), served at /models/
 tools/make_portraits.mjs dev tool: re-render portraits after adding/changing a model (see the comment at the top of the file)

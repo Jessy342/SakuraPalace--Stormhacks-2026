@@ -469,49 +469,61 @@ body[data-view="full"] #hud, body[data-view="full"] .dock, body[data-view="full"
 @keyframes cardin { from { opacity: 0; transform: translateY(30px) rotateY(90deg); } to { opacity: 1; transform: none; } }
 .pull-card.shiny::before { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
   background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.6) 50%, transparent 60%); background-size: 300% 100%; animation: sweep 2.2s .6s ease-in-out infinite; }
-.pull-hint, .splash .hint { opacity: .6; font-size: .9rem; }
+.pull-hint { opacity: .6; font-size: .9rem; }
 .pull-hint { position: absolute; bottom: 6vh; left: 0; right: 0; text-align: center; }
-.splash { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(ellipse at 72% 50%, rgba(5,3,15,.88) 0%, rgba(5,3,15,.5) 60%, rgba(5,3,15,.25) 100%); text-shadow: 0 2px 12px #000; }
-.splash .rays { position: absolute; left: 50%; top: 50%; width: 220vmax; height: 220vmax; margin: -110vmax;
-  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--rc) 35%, transparent) 0deg 6deg, transparent 6deg 18deg);
-  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 60%); mask-image: radial-gradient(circle, #000 0%, transparent 60%);
-  animation: spin 40s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.splash .figure { position: absolute; left: 30%; bottom: -8vh; height: 108vh; transform: translateX(-50%); animation: figin 1.5s cubic-bezier(.2,.8,.2,1) both; }
-.splash .figure img { height: 100%; animation: reveal 1.5s ease-out both; }
-/* a band of light that sweeps across the character after the reveal */
-.splash .figure .shine { position: absolute; inset: 0; -webkit-mask-size: auto 100%; mask-size: auto 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
-  background: linear-gradient(110deg, transparent 40%, rgba(255,255,255,.85) 50%, transparent 60%); background-size: 300% 100%; background-position: 130% 0;
-  animation: sweep 2.6s 1.3s ease-in-out infinite; mix-blend-mode: screen; }
+/* ----- the cinematic reveal: a full-screen scene, the character large on the right, a slim info block on the left ----- */
+.reveal { position: absolute; inset: 0; overflow: hidden; background: #05030f; text-shadow: 0 2px 10px rgba(0,0,0,.8); }
+.rv-bg { position: absolute; inset: -4%; background-size: cover; background-position: center 60%; filter: brightness(.6) saturate(1.2) blur(2px);
+  animation: rvzoom 14s ease-out both; }
+@keyframes rvzoom { from { transform: scale(1.18); } to { transform: scale(1.02); } }
+/* colour grade: the character's colour blooms behind them, the left side falls into shadow for the text */
+.rv-grade { position: absolute; inset: 0; background:
+  linear-gradient(90deg, rgba(4,4,14,.94) 0%, rgba(4,4,14,.72) 24%, rgba(4,4,14,.15) 52%, transparent 70%),
+  radial-gradient(ellipse 46% 70% at 66% 46%, color-mix(in srgb, var(--cc) 62%, transparent) 0%, transparent 70%),
+  linear-gradient(180deg, rgba(4,4,14,.35) 0%, transparent 25%, transparent 70%, rgba(4,4,14,.75) 100%),
+  color-mix(in srgb, var(--cc) 16%, transparent); }
+.rv-embers i { position: absolute; bottom: -12px; width: var(--s); height: var(--s); border-radius: 50%; background: color-mix(in srgb, var(--cc) 50%, #fff);
+  box-shadow: 0 0 8px var(--cc); opacity: 0; animation: ember var(--d) linear infinite; }
+@keyframes ember { 0% { transform: translate(0, 0); opacity: 0; } 12% { opacity: .9; } 100% { transform: translate(6vw, -105vh); opacity: 0; } }
+.rv-figure { position: absolute; right: 3vw; top: 3vh; height: 172vh; animation: rvin 2.2s cubic-bezier(.16,.84,.3,1) both; }
+.rv-figure img { height: 100%; display: block; animation: reveal 1.5s ease-out both; }
+.rv-figure .initial { width: 90vh; height: 60%; place-items: center; font: 900 50vh var(--display); color: var(--cc); }
+@keyframes rvin { from { transform: translateX(7vw) scale(1.1); } }
+@keyframes reveal { 0%, 40% { filter: brightness(0) drop-shadow(0 0 30px var(--cc)); } 55% { filter: brightness(3) drop-shadow(0 0 60px #fff); }
+  100% { filter: drop-shadow(0 0 26px color-mix(in srgb, var(--cc) 70%, transparent)); } }
+.rv-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; animation: rvflash 1s .55s ease-out both; }
+@keyframes rvflash { 0% { opacity: 0; } 12% { opacity: .75; } 100% { opacity: 0; } }
+.rv-gem { position: absolute; left: 62%; top: 50%; transform: translate(-50%, -50%); font-size: 34vh; color: var(--rc); text-shadow: 0 0 80px var(--rc); animation: rvin 1.6s ease-out both; }
+.rv-info { position: absolute; left: 4vw; top: 42%; }
+.rv-head { display: flex; align-items: center; gap: 22px; animation: rvfade .7s 1s both; }
+.rv-icon { width: 58px; height: 58px; flex: none; transform: rotate(45deg); display: grid; place-items: center;
+  background: rgba(10,10,24,.75); border: 1px solid rgba(255,255,255,.3); box-shadow: 0 0 0 4px rgba(10,10,24,.45), 0 0 22px color-mix(in srgb, var(--cc) 60%, transparent); }
+.rv-icon span { transform: rotate(-45deg); font-size: 1.5rem; color: var(--cc); text-shadow: 0 0 10px var(--cc); }
+.rv-name { position: relative; padding: 0 60px 8px 0; }
+.rv-name b { display: block; font-size: clamp(1.8rem, 2.8vw, 2.6rem); font-weight: 700; letter-spacing: .02em; }
+.rv-name small { display: block; color: rgba(255,255,255,.72); font-size: .95rem; }
+.rv-name em { position: absolute; right: 0; top: -14px; padding: 1px 9px; border-radius: 4px; font: 700 .78rem/1.5 "M PLUS Rounded 1c", sans-serif; font-style: normal;
+  color: #3a2a05; background: linear-gradient(180deg, #fff1c9, #e3b565); text-shadow: none; }
+.rv-name::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; transform-origin: left;
+  background: linear-gradient(90deg, rgba(255,255,255,.85), rgba(255,255,255,.1)); animation: rvline .8s 1.15s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes rvline { from { transform: scaleX(0); } }
+@keyframes rvfade { from { opacity: 0; transform: translateX(-24px); } }
+.rv-stars { margin: 14px 0 0 80px; font-size: 2rem; letter-spacing: 8px; color: #ffe08a; text-shadow: 0 0 12px rgba(255,200,90,.95), 0 0 2px #fff; }
+.rv-stars span { display: inline-block; animation: starpop .4s backwards; }
+@keyframes starpop { from { opacity: 0; transform: scale(3.2) rotate(90deg); } }
+.rv-chips { display: flex; gap: 10px; margin: 18px 0 0 80px; animation: rvfade .6s 2.2s both; }
+.rv-chip { width: 58px; height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; font-size: 1.35rem; text-shadow: none;
+  color: #fff; background: linear-gradient(160deg, color-mix(in srgb, var(--rc) 55%, #1a1630), #15122a); border: 1px solid var(--gold); box-shadow: 0 4px 14px rgba(0,0,0,.5); }
+.rv-chip small { color: #fff; font-size: .62rem; font-weight: 700; line-height: 1.2; }
+.rv-sub { position: absolute; left: 4vw; bottom: 11vh; max-width: 34vw; font-size: 1.15rem; line-height: 1.5; font-style: italic; padding-left: 14px;
+  border-left: 2px solid var(--cc); animation: rvsub .8s 2.3s both; } /* kept on the left so it never covers the character */
+@keyframes rvsub { from { opacity: 0; transform: translateY(12px); } }
+.reveal .hint { position: absolute; right: 3vw; bottom: 3vh; opacity: .55; font-size: .85rem; }
 @keyframes sweep { 0% { background-position: 130% 0; } 45%, 100% { background-position: -30% 0; } }
-/* the rarity written on a tilted ribbon racing across the screen */
-.splash .ribbon { position: absolute; left: -10%; right: -10%; top: 12%; transform: rotate(-6deg); overflow: hidden; white-space: nowrap; padding: 6px 0;
-  background: color-mix(in srgb, var(--rc) 80%, #000); color: rgba(255,255,255,.92); font: 900 1.1rem var(--display); letter-spacing: .3em;
-  box-shadow: 0 0 30px var(--rc); animation: ribbonin .5s .7s cubic-bezier(.2,.8,.2,1) both; }
-.splash .ribbon span { display: inline-block; animation: ribbonrun 18s linear infinite; }
-@keyframes ribbonin { from { transform: rotate(-6deg) scaleY(0); opacity: 0; } }
-@keyframes ribbonrun { to { transform: translateX(-50%); } }
-.splash .name.letters .word { display: inline-block; white-space: nowrap; }
-.splash .name.letters .word span { display: inline-block; animation: letterin .5s cubic-bezier(.2,1.4,.4,1) backwards; }
-@keyframes letterin { from { opacity: 0; transform: translateY(40px) scale(2.4) rotate(12deg); filter: blur(6px); } }
 /* MYTHIC / UNBOUND slammed across the screen before the rarest characters appear */
 .slam { font: 900 clamp(3rem, 11vw, 11rem)/1 var(--display); letter-spacing: .04em; color: var(--rc); text-shadow: 0 0 60px var(--rc), 0 0 8px #fff;
   animation: slam .9s cubic-bezier(.2,.8,.2,1) both; }
 @keyframes slam { 0% { opacity: 0; transform: scale(5); filter: blur(20px); } 22% { opacity: 1; transform: scale(1); filter: none; } 80% { opacity: 1; transform: scale(1.06); } 100% { opacity: 0; transform: scale(1.5); } }
-.splash .figure .initial { width: 60vh; height: 100%; place-items: center; font: 900 40vh var(--display); color: var(--rc); }
-@keyframes figin { from { transform: translateX(-50%) scale(1.25); } }
-@keyframes reveal { 0%, 45% { filter: brightness(0) drop-shadow(0 0 30px var(--rc)); } 60% { filter: brightness(3) drop-shadow(0 0 60px #fff); } 100% { filter: drop-shadow(0 0 30px color-mix(in srgb, var(--rc) 60%, transparent)); } }
-.splash .info { position: absolute; left: 54%; right: 6%; top: 50%; transform: translateY(-50%); animation: infoin .6s .9s ease-out both; }
-.splash.item .info { left: 0; right: 0; text-align: center; }
-@keyframes infoin { from { opacity: 0; transform: translate(40px, -50%); } }
-.splash .rarity { font: 700 1.1rem var(--display); letter-spacing: .5em; color: var(--rc); }
-.splash .name { font: 900 clamp(2.6rem, 6vw, 5.500rem)/1.05 var(--display); text-shadow: 0 0 40px var(--rc); margin: 6px 0; }
-.splash .title { font-size: 1.3rem; opacity: .85; }
-.splash .stars { font-size: 2rem; margin: 14px 0; letter-spacing: 6px; }
-.splash .stars span { display: inline-block; animation: starpop .35s backwards; }
-@keyframes starpop { from { opacity: 0; transform: scale(3) rotate(90deg); } }
-.splash .line { margin: 20px 0 26px; font-size: 1.15rem; max-width: 560px; font-style: italic; opacity: .95; border-left: 3px solid var(--rc); padding-left: 14px; }
-.splash .newtag { display: inline-block; padding: 2px 12px; margin-bottom: 10px; font-weight: 800; background: var(--accent); border-radius: 4px; }
 
 @media (max-width: 1200px) {
   #tracker { width: 250px; }
