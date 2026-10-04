@@ -235,7 +235,10 @@ function openTab(name) {
   character.setDressing(name === 'dress');
   if (name !== 'dress') setFrame('full');
   if (name === 'chat') $('chat-log').scrollTop = 1e9;
-  if (name === 'chars') { charPick = S.active_character; renderChars(); }
+  if (name === 'chars') { // the cards pop in only when the screen opens, not on every update
+    charPick = S.active_character; renderChars();
+    $('collection').classList.add('intro'); setTimeout(() => $('collection').classList.remove('intro'), 900);
+  }
   if (name === 'dress') renderDress();
   applyEnv();
 }
@@ -623,30 +626,44 @@ let focusActive = false;
 let focusSynced = false; // true once the first status check has caught up with past events
 let pomoChoice = 25; // 0 = free session, 25 / 50 = pomodoro minutes
 try { const saved = localStorage.getItem('pomoChoice'); if (saved !== null) pomoChoice = +saved; } catch { /* storage blocked */ }
-const BREAK_FOR = { 25: 5, 50: 10 };
+const breakFor = m => ({ 25: 5, 50: 10 }[m] || Math.max(1, Math.round(m / 5)));
+let pomoCustom = false; // true when the Custom length is selected
+try { pomoCustom = localStorage.getItem('pomoCustom') === '1'; } catch { /* storage blocked */ }
 const fmt = sec => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 
 function pomoHint(m) {
-  return m ? `${m} min work, then a ${BREAK_FOR[m]} min break. The timer pauses while you're distracted. Earn 5 points + 2 XP per focused minute, plus a bonus for every finished round.`
+  return m ? `${m} min work, then a ${breakFor(m)} min break. The timer pauses while you're distracted. Earn 5 points + 2 XP per focused minute, plus a bonus for every finished round.`
     : 'Free session: counts up until you end it. Earn 5 points + 2 XP per focused minute.';
 }
 
 function renderPomoPicker() {
   document.querySelectorAll('#pomo-picker button').forEach(b => {
-    b.classList.toggle('active', +b.dataset.pomo === pomoChoice);
+    b.classList.toggle('active', b.dataset.pomo === 'custom' ? pomoCustom : !pomoCustom && +b.dataset.pomo === pomoChoice);
     b.disabled = focusActive;
   });
   $('pomo-picker').classList.toggle('locked', focusActive);
+  $('pomo-custom').classList.toggle('hidden', !pomoCustom);
+  $('pomo-minutes').disabled = focusActive;
+  if (pomoCustom && document.activeElement !== $('pomo-minutes')) $('pomo-minutes').value = pomoChoice || 15;
   $('focus-hint').textContent = pomoHint(pomoChoice);
 }
 
 $('pomo-picker').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b || focusActive) return;
-  pomoChoice = +b.dataset.pomo;
-  try { localStorage.setItem('pomoChoice', pomoChoice); } catch { /* storage blocked */ }
+  pomoCustom = b.dataset.pomo === 'custom';
+  pomoChoice = pomoCustom ? Math.max(1, Math.min(180, +$('pomo-minutes').value || 15)) : +b.dataset.pomo;
+  try { localStorage.setItem('pomoChoice', pomoChoice); localStorage.setItem('pomoCustom', pomoCustom ? '1' : '0'); } catch { /* storage blocked */ }
   renderPomoPicker();
   $('focus-timer').textContent = pomoChoice ? fmt(isDemo() ? 30 : pomoChoice * 60) : '00:00';
+});
+
+$('pomo-minutes').addEventListener('input', () => {
+  if (!pomoCustom || focusActive) return;
+  pomoChoice = Math.max(1, Math.min(180, Math.round(+$('pomo-minutes').value) || 1));
+  try { localStorage.setItem('pomoChoice', pomoChoice); } catch { /* storage blocked */ }
+  $('focus-hint').textContent = pomoHint(pomoChoice);
+  $('focus-timer').textContent = fmt(isDemo() ? 30 : pomoChoice * 60);
 });
 
 function renderFocusSettings() {
@@ -942,7 +959,7 @@ function previewVoice(id, lang) {
 let dressCat = 'outfit'; // outfit | head | face | room | persona | voice
 let picked = null;       // { kind: 'accessory' | 'background', id }: the item selected in the list
 let accThumbs = null;    // little pictures of the accessories, made the first time the dressing room opens
-const CAT_NAMES = { outfit: 'Outfits', head: 'Headwear', face: 'Eyewear', room: 'Rooms', persona: 'Personality', voice: 'Voice' };
+const CAT_NAMES = { outfit: 'Outfits', head: 'Headwear', face: 'Eyewear', room: 'Backgrounds', persona: 'Personality', voice: 'Voice' };
 
 const OWNED = { accessory: 'owned_accessories', background: 'owned_backgrounds', outfit: 'owned_outfits' };
 const CATALOG = { accessory: 'accessories', background: 'backgrounds', outfit: 'outfits' };
@@ -980,15 +997,17 @@ function renderDress() {
   $('dress-voice').classList.toggle('hidden', dressCat !== 'voice');
   if (currentTab === 'dress' && items) { // (skip the picture work while the dressing room is closed)
     const kind = dressCat === 'room' ? 'background' : dressCat === 'outfit' ? 'outfit' : 'accessory';
-    const list = kind === 'accessory' ? S.catalog.accessories.filter(a => (a.slot || 'head') === dressCat)
+    const all = kind === 'accessory' ? S.catalog.accessories.filter(a => (a.slot || 'head') === dressCat)
       : kind === 'outfit' ? S.catalog.outfits.filter(o => o.for === activeChar().gender) : S.catalog[CATALOG[kind]];
+    const groups = [...new Set(all.map(it => it.group))];
+    const list = all.map((it, i) => ({ it, i })).sort((x, y) => groups.indexOf(x.it.group) - groups.indexOf(y.it.group) || x.it.price - y.it.price || x.i - y.i).map(x => x.it);
     // outfits are listed under headings (Casual, School, Formal, Dress-up)
     $('dress-grid').innerHTML = list.map((it, i) => (it.group && it.group !== list[i - 1]?.group ? `<div class="grid-head">${esc(it.group)}</div>` : '') + tile(kind, it)).join('');
     const it = picked && findItem(picked.kind, picked.id);
     if (it) {
       const owned = ownsItem(picked.kind, it.id), on = isOn(picked.kind, it.id), short = it.price - S.points;
       const label = !owned ? (short > 0 ? `Need ${short} more ${LOTUS}` : `Buy · ${LOTUS} ${it.price}`)
-        : picked.kind !== 'background' ? (on ? 'Take off' : 'Wear') : (on ? 'In use' : 'Use this room');
+        : picked.kind !== 'background' ? (on ? 'Take off' : 'Wear') : (on ? 'In use' : 'Use this background');
       $('dress-action').innerHTML = `<img class="${picked.kind !== 'background' ? 'acc' : ''} ${picked.kind === 'outfit' ? 'fit' : ''}" src="${thumbOf(picked.kind, it.id)}" alt=""${picked.kind === 'outfit' ? ` style="filter:${tintFilter(it)}"` : ''}>
         <div class="what"><small>${on ? (picked.kind !== 'background' ? 'Wearing' : 'In use') : owned ? 'Owned' : 'Previewing · not owned'}</small><b>${esc(it.name)}</b></div>
         <button class="primary big" data-apply ${(!owned && short > 0) || (owned && on && picked.kind === 'background') ? 'disabled' : ''}>${label}</button>`;
@@ -1094,7 +1113,9 @@ document.addEventListener('click', async e => {
       say(c.intro_line, { emotion: 'happy', ja: c.intro_line_ja });
     } else if (d.pick) {
       charPick = d.pick;
-      renderChars();
+      document.querySelectorAll('#collection .ccard').forEach(c => c.classList.toggle('selected', c.dataset.pick === d.pick));
+      renderCharDetail();
+      $('char-detail').animate([{ opacity: 0.35, transform: 'translateX(10px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'ease-out' });
     } else if (d.filter) {
       charFilter = d.filter;
       renderChars();

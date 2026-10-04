@@ -11,7 +11,7 @@ import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 const matName = mesh => (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material)?.name || '';
 const isBodyPart = mesh => /_SKIN|_CLOTH/.test(matName(mesh)) && !/Face_/.test(matName(mesh)); // body skin, clothes, shoes (not face, not hair)
 
-/** tint: optional { hue (degrees), saturate, brightness } to recolour the clothes. Resolves to { remove() }. */
+/** tint: optional { hue (degrees), saturate, brightness, contrast } to recolour the clothes. Resolves to { remove() }. */
 export async function wearModelOutfit(vrm, url, tint = null) {
   const loader = new GLTFLoader();
   loader.register(parser => new VRMLoaderPlugin(parser));
@@ -60,7 +60,7 @@ export async function wearModelOutfit(vrm, url, tint = null) {
 }
 
 /** Repaints a mesh's textures with a colour shift, to make colour variants of the same clothes. */
-function recolour(mesh, { hue = 0, saturate = 1, brightness = 1 }, done) {
+function recolour(mesh, { hue = 0, saturate = 1, brightness = 1, contrast = 1 }, done) {
   for (const m of [].concat(mesh.material)) {
     for (const key of ['map', 'shadeMultiplyTexture']) {
       const tex = m[key];
@@ -71,7 +71,7 @@ function recolour(mesh, { hue = 0, saturate = 1, brightness = 1 }, done) {
       if (!source) {
         const c = document.createElement('canvas'); c.width = tex.image.width; c.height = tex.image.height;
         const g = c.getContext('2d');
-        g.filter = `hue-rotate(${hue}deg) saturate(${saturate}) brightness(${brightness})`;
+        g.filter = `hue-rotate(${hue}deg) saturate(${saturate}) brightness(${brightness}) contrast(${contrast})`;
         g.drawImage(tex.image, 0, 0);
         source = new THREE.Source(c);
         done.set(tex.source, source);
@@ -85,5 +85,5 @@ function recolour(mesh, { hue = 0, saturate = 1, brightness = 1 }, done) {
 }
 
 /** The same colour shift as a CSS filter, for the outfit's picture in the dressing room. */
-export const tintFilter = o => (o.hue || o.saturate != null || o.brightness != null
-  ? `hue-rotate(${o.hue || 0}deg) saturate(${o.saturate ?? 1}) brightness(${o.brightness ?? 1})` : 'none');
+export const tintFilter = o => (o.hue || o.saturate != null || o.brightness != null || o.contrast != null
+  ? `hue-rotate(${o.hue || 0}deg) saturate(${o.saturate ?? 1}) brightness(${o.brightness ?? 1}) contrast(${o.contrast ?? 1})` : 'none');

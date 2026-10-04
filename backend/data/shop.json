@@ -1,5 +1,5 @@
 {
-  "_help": "Everything here is sold and worn in the Dressing Room. Outfits are the real clothes of a VRoid model: 'model' is a file in models/, 'portrait' is the character id whose picture shows it, 'for' is who it fits (female or male: clothes only fit a body of the same build), 'group' is its heading in the list, and hue / saturate / brightness (optional) recolour it. To add an outfit, make a VRoid model wearing it, put the .vrm in models/ and add a line here. Accessories are simple 3D shapes attached to the character's head (see frontend/js/accessories.js); 'slot' is head or face. Rooms are painted pictures in frontend/assets/backgrounds/<id>.webp (made by tools/make_backgrounds.py), with effects added by frontend/js/environment.js. Price 0 = owned from the start.",
+  "_help": "Everything here is sold and worn in the Dressing Room. Outfits are the real clothes of a VRoid model: 'model' is a file in models/, 'portrait' is the character id whose picture shows it, 'for' is who it fits (female or male: clothes only fit a body of the same build), 'group' is its heading in the list, and hue / saturate / brightness / contrast (optional) recolour it. To add an outfit, make a VRoid model wearing it, put the .vrm in models/ and add a line here. Accessories are simple 3D shapes attached to the character's head (see frontend/js/accessories.js); 'slot' is head or face. Rooms are painted pictures in frontend/assets/backgrounds/<id>.webp (made by tools/make_backgrounds.py), with effects added by frontend/js/environment.js. Price 0 = owned from the start.",
   "outfits": [
     {"id": "tracksuit", "name": "Track Suit (Red)", "price": 300, "model": "char7.vrm", "portrait": "itsuki", "for": "female", "group": "Casual"},
     {"id": "tracksuit_blue", "name": "Track Suit (Blue)", "price": 300, "model": "char7.vrm", "portrait": "itsuki", "for": "female", "group": "Casual", "hue": 220},
@@ -10,6 +10,7 @@
     {"id": "maid", "name": "Maid Dress (Pink)", "price": 500, "model": "char3.vrm", "portrait": "waguri", "for": "female", "group": "Dress-up"},
     {"id": "maid_blue", "name": "Maid Dress (Blue)", "price": 500, "model": "char3.vrm", "portrait": "waguri", "for": "female", "group": "Dress-up", "hue": 240},
     {"id": "maid_mint", "name": "Maid Dress (Mint)", "price": 500, "model": "char3.vrm", "portrait": "waguri", "for": "female", "group": "Dress-up", "hue": 140},
+    {"id": "captain", "name": "Captain's Dress", "price": 550, "model": "char1.vrm", "portrait": "nino", "for": "female", "group": "Dress-up", "saturate": 0, "brightness": 4.2, "contrast": 1.6},
     {"id": "party", "name": "Rose Party Dress", "price": 600, "model": "char1.vrm", "portrait": "nino", "for": "female", "group": "Dress-up"},
     {"id": "party_violet", "name": "Party Dress (Violet)", "price": 600, "model": "char1.vrm", "portrait": "nino", "for": "female", "group": "Dress-up", "hue": 285},
     {"id": "party_teal", "name": "Party Dress (Emerald)", "price": 600, "model": "char1.vrm", "portrait": "nino", "for": "female", "group": "Dress-up", "hue": 180},
@@ -32,7 +33,7 @@
     {"id": "headphones", "name": "Headphones", "price": 180, "slot": "head"},
     {"id": "butterfly_clips", "name": "Butterfly Hair Clips", "price": 200, "slot": "head"},
     {"id": "bunny_ears", "name": "Bunny Ears", "price": 220, "slot": "head"},
-    {"id": "captain_hat", "name": "Sailor Captain Hat", "price": 350, "slot": "head"},
+    {"id": "captain_hat", "name": "Sailor Captain Hat", "price": 500, "slot": "head"},
     {"id": "mahoraga", "name": "Mahoraga Wheel", "price": 900, "slot": "head"},
     {"id": "glasses", "name": "Study Glasses", "price": 120, "slot": "face"},
     {"id": "round_glasses", "name": "Round Glasses", "price": 150, "slot": "face"},
@@ -41,7 +42,10 @@
     {"id": "monocle", "name": "Monocle", "price": 250, "slot": "face"},
     {"id": "eyepatch", "name": "Eyepatch", "price": 250, "slot": "face"},
     {"id": "blindfold", "name": "Sorcerer's Blindfold", "price": 400, "slot": "face"},
-    {"id": "pointed_shades", "name": "Pointed Shades", "price": 450, "slot": "face"}
+    {"id": "pointed_shades", "name": "Pointed Shades", "price": 450, "slot": "face"},
+    {"id": "face_mask", "name": "Face Mask", "price": 150, "slot": "face"},
+    {"id": "masquerade", "name": "Masquerade Mask", "price": 350, "slot": "face"},
+    {"id": "fox_mask", "name": "Fox Mask", "price": 400, "slot": "face"}
   ],
   "backgrounds": [
     {"id": "bedroom", "name": "Cozy Bedroom", "price": 0},

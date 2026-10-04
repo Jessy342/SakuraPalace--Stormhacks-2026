@@ -202,6 +202,8 @@
           <button data-pomo="0">Free</button>
           <button data-pomo="25" class="active">25 min</button>
           <button data-pomo="50">50 min</button>
+          <button data-pomo="custom">Custom</button>
+          <label id="pomo-custom" class="pomo-custom hidden"><input id="pomo-minutes" type="number" min="1" max="180" value="15" /> min</label>
         </div>
         <div id="focus-phase" class="focus-phase"></div>
         <div id="focus-timer">25:00</div>
@@ -268,7 +270,7 @@
         <button data-cat="outfit"><svg><use href="#i-dress"/></svg>Outfits</button>
         <button data-cat="head"><svg><use href="#i-crown"/></svg>Headwear</button>
         <button data-cat="face"><svg><use href="#i-glasses"/></svg>Eyewear</button>
-        <button data-cat="room"><svg><use href="#i-room"/></svg>Rooms</button>
+        <button data-cat="room"><svg><use href="#i-room"/></svg>Backgrounds</button>
         <button data-cat="persona"><svg><use href="#i-heart"/></svg>Personality</button>
         <button data-cat="voice"><svg><use href="#i-mic"/></svg>Voice</button>
       </div>
@@ -347,7 +349,7 @@
   <!-- ===================== CHARACTERS (data bank) ===================== -->
   <section id="tab-chars" class="tab full">
     <div class="full-top">
-      <div class="full-title"><svg><use href="#i-chars"/></svg><div><small>Data Bank</small>Characters</div></div>
+      <div class="full-title"><svg><use href="#i-chars"/></svg><div><small>Collection</small>Characters</div></div>
       <div class="full-right">
         <div class="indexed">Collected <b id="chars-count">0/0</b></div>
         <button class="icon-btn star" data-close title="Close (Esc)"><svg><use href="#i-close"/></svg></button>

@@ -26,6 +26,12 @@ DEMO_TIMINGS = {"grace_seconds": 5, "drain_every_seconds": 5, "drain_amount": 10
 
 # Pomodoro: work minutes -> break minutes. 0 = free session (counts up, no breaks).
 POMODORO_BREAKS = {25: 5, 50: 10}
+
+
+def break_minutes(work):
+    """Break length for a work block: 5 for 25, 10 for 50, otherwise a fifth of the work time."""
+    return POMODORO_BREAKS.get(work) or max(1, round(work / 5))
+
 DEMO_POMODORO = (30, 10)  # demo mode: 30s work, 10s break, so judges see a full cycle
 
 _lock = threading.RLock()
@@ -225,16 +231,16 @@ def start_watcher():
 
 # ---------------- API ----------------
 class StartIn(BaseModel):
-    pomodoro: int = 0  # 0 = free session, 25 or 50 = pomodoro work length in minutes
+    pomodoro: int = 0  # 0 = free session, otherwise the work length in minutes (25, 50 or a custom 1-180)
 
 
 @router.post("/start")
 def start(body: StartIn | None = None):
-    minutes = body.pomodoro if body and body.pomodoro in POMODORO_BREAKS else 0
+    minutes = max(0, min(int(body.pomodoro), 180)) if body else 0
     if minutes and storage.load()["settings"].get("demo_mode"):
         work, brk = DEMO_POMODORO
     else:
-        work, brk = minutes * 60, POMODORO_BREAKS.get(minutes, 0) * 60
+        work, brk = minutes * 60, break_minutes(minutes) * 60
     with _lock:
         FOCUS.update(active=True, started_at=time.time(), focused_seconds=0, stage="ok", offender=None,
                      distracted_since=None, last_drain=None, points_lost=0, simulated=None,

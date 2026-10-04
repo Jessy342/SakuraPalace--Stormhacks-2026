@@ -185,7 +185,7 @@ export class Character {
     if (this.worn) { this.worn.remove(); this.worn = null; }
     const vrm = this.vrm, o = this.outfit;
     if (!vrm || !o) return;
-    const tint = o.hue || o.saturate != null || o.brightness != null ? o : null;
+    const tint = o.hue || o.saturate != null || o.brightness != null || o.contrast != null ? o : null;
     try {
       const worn = await wearModelOutfit(vrm, `/models/${o.model}`, tint);
       if (turn !== this.outfitTurn || vrm !== this.vrm) worn.remove();
@@ -260,19 +260,36 @@ export class Character {
       return p.applyQuaternion(this.accBasis.clone().invert());
     };
     const a = toAcc(l), b = toAcc(r);
-    // The eye bones give the height of the eyes, but they sit close to the middle of the head and deep inside it,
-    // so the spacing is a fixed value and the face surface is found by pointing a ray at the face from the front.
-    const eyeX = 0.031, eyeY = (a.y + b.y) / 2;
-    let frontZ = Math.max(a.z, b.z) + 0.07;
+    // Where the eyes really are: the eye bones sit near the middle of the head and deep inside it, so the
+    // irises of the face mesh are measured instead (their centre and size), and the depth of the face is found
+    // by pointing a ray at the bridge of the nose.
     vrm.scene.updateMatrixWorld(true);
+    const undo = this.accBasis.clone().invert();
+    let eyeX = 0.031, eyeY = (a.y + b.y) / 2, lens = 0.026;
+    let iris = null;
+    vrm.scene.traverse(o => { if (o.isMesh && /EyeIris/.test([].concat(o.material)[0]?.name || '')) iris = o; });
+    if (iris) {
+      const pos = iris.geometry.attributes.position, box = new THREE.Box3(), p = new THREE.Vector3();
+      for (let k = 0; k < pos.count; k++) {
+        p.fromBufferAttribute(pos, k).applyMatrix4(iris.matrixWorld);
+        this.head.worldToLocal(p).applyQuaternion(undo);
+        if (p.x > 0.005) box.expandByPoint(p); // one eye is enough: the face is symmetrical
+      }
+      if (!box.isEmpty()) {
+        eyeX = (box.min.x + box.max.x) / 2;
+        eyeY = (box.min.y + box.max.y) / 2;
+        lens = Math.max(box.max.x - box.min.x, box.max.y - box.min.y) * 0.5 * 1.45; // a lens a bit bigger than the iris
+      }
+    }
+    let frontZ = Math.max(a.z, b.z) + 0.07;
     const toWorld = p => this.head.localToWorld(p.applyQuaternion(this.accBasis));
-    const from = toWorld(new THREE.Vector3(eyeX, eyeY, 0.4)), to = toWorld(new THREE.Vector3(eyeX, eyeY, 0));
+    const from = toWorld(new THREE.Vector3(0, eyeY, 0.4)), to = toWorld(new THREE.Vector3(0, eyeY, 0));
     const ray = new THREE.Raycaster(from, to.sub(from).normalize(), 0, 1);
     const faces = [];
     vrm.scene.traverse(o => { if (o.isMesh && /^Face/.test(o.name)) faces.push(o); });
     const hit = ray.intersectObjects(faces, false)[0];
-    if (hit) frontZ = this.head.worldToLocal(hit.point.clone()).applyQuaternion(this.accBasis.clone().invert()).z + 0.012;
-    return { eyeX, eyeY, frontZ };
+    if (hit) frontZ = this.head.worldToLocal(hit.point.clone()).applyQuaternion(undo).z + 0.004;
+    return { eyeX, eyeY, frontZ, r: lens };
   }
 
   /** Chibi anime schoolgirl built from simple shapes, shown until a real VRoid .vrm model is added. */
