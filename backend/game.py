@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 import storage
+from config import DEV_PASSWORD
 from storage import CHARACTERS, SHOP, Transaction
 
 router = APIRouter(prefix="/api")
@@ -95,7 +96,7 @@ def active_banners(now=None):
 
 def public_state(state):
     return {
-        **state,
+        **{k: v for k, v in state.items() if k != "dev_backup"},
         "week": week_summary(state),
         "xp_to_next": xp_to_next(state["level"]),
         "catalog": {
@@ -123,6 +124,21 @@ def get_state():
 @router.post("/reset")
 def reset_state():
     storage.reset()
+    return public_state(storage.load())
+
+
+# ---------------- Dev Mode ----------------
+class DevIn(BaseModel):
+    on: bool
+    password: str = ""
+
+
+@router.post("/dev")
+def dev_mode(body: DevIn):
+    """Switches Dev Mode on (needs the password, case sensitive) or off."""
+    if body.on and body.password != DEV_PASSWORD:
+        raise HTTPException(403, "Wrong password")
+    storage.set_dev_mode(body.on)
     return public_state(storage.load())
 
 

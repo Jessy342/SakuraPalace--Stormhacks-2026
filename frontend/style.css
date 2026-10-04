@@ -837,3 +837,7 @@ button.focus-pill { cursor: pointer; font: inherit; font-weight: 700; color: inh
 .lang-pick small { display: block; margin-bottom: -2px; color: var(--cyan); font-weight: 700; font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; }
 .lang-pick button { flex: 1; }
 .lang-pick button.active { color: #2a1c05; background: linear-gradient(180deg, #fff3cf, #ffc24f); border-color: #fff; box-shadow: 0 0 14px rgba(255,194,79,.6); }
+
+/* ---------- Dev Mode ---------- */
+.dev-box small { display: block; margin-bottom: 6px; line-height: 1.45; }
+.dev-pill { color: #2a1c05; font-size: .75rem; letter-spacing: .12em; border-color: #fff; background: linear-gradient(90deg, #ffd27a, #ff8fc4); }

@@ -38,6 +38,7 @@ DEFAULT_STATE = {
     "stats": {"pulls": 0, "focus_seconds": 0, "tasks_done": 0, "distractions": 0, "pomodoros": 0},
     "daily": {},  # "YYYY-MM-DD" -> {"focus": seconds, "tasks": count}, last 60 days (for the weekly stats card)
     "login": {"last_day": None, "streak": 0, "best": 0},  # daily login gift + streak
+    "dev_mode": False,  # Dev Mode: everything unlocked and unlimited lotus (the real progress waits in "dev_backup")
     "settings": {
         "voice_mode": "dub",  # "dub" = English voice, "sub" = Japanese voice + English subtitles
         "blocked_apps": ["discord.exe", "steam.exe", "epicgameslauncher.exe", "riotclientservices.exe"],
@@ -93,6 +94,8 @@ def _migrate(state):
     state["owned_outfits"] = [o for o in state["owned_outfits"] if o in outfits]
     if state["outfit"] not in state["owned_outfits"]:
         state["outfit"] = ""
+    if state.get("dev_mode"):  # stays topped up, and picks up characters or items added since it was switched on
+        _unlock_everything(state)
     active = fix(state["active_character"])
     state["active_character"] = active if active in owned else next(iter(owned))
     return state
@@ -132,6 +135,36 @@ class Transaction:
         finally:
             _lock.release()
         return False
+
+
+UNLIMITED = 999_999_999  # shown as an infinity sign in the app
+
+
+def _unlock_everything(state):
+    for c in CHARACTERS["characters"]:
+        state["owned_characters"].setdefault(c["id"], {"bond": 0})
+    state["owned_accessories"] = [a["id"] for a in SHOP["accessories"]]
+    state["owned_backgrounds"] = [b["id"] for b in SHOP["backgrounds"]]
+    state["owned_outfits"] = [o["id"] for o in SHOP.get("outfits", [])]
+    state["points"] = UNLIMITED
+
+
+def set_dev_mode(on):
+    """Dev Mode on: remembers the real progress, then unlocks everything. Off: puts the real progress back
+    (whatever was done in Dev Mode is thrown away)."""
+    with _lock:
+        state = load()
+        if on and not state["dev_mode"]:
+            backup = copy.deepcopy(state)
+            _unlock_everything(state)
+            state["dev_mode"] = True
+            state["dev_backup"] = backup
+            save(state)
+        elif not on and state["dev_mode"]:
+            real = state.get("dev_backup") or copy.deepcopy(DEFAULT_STATE)
+            real["dev_mode"] = False
+            real.pop("dev_backup", None)
+            save(real)
 
 
 def reset():

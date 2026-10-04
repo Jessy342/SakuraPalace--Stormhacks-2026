@@ -361,10 +361,13 @@ function render() {
   renderOptions();
 }
 
+/** How the lotus count is written: an infinity sign in Dev Mode. */
+const pointsText = p => (S?.dev_mode ? '∞' : p);
+
 function updatePoints(p) {
   const el = $('hud-points');
-  el.textContent = p;
-  $('gacha-points').textContent = p;
+  el.textContent = pointsText(p);
+  $('gacha-points').textContent = pointsText(p);
   if (lastPoints !== null && p !== lastPoints) {
     const box = el.parentElement;
     box.classList.remove('flash-red', 'flash-green');
@@ -1050,7 +1053,7 @@ function tile(kind, it) {
 function renderDress() {
   document.querySelectorAll('#dress-cats button').forEach(b => b.classList.toggle('active', b.dataset.cat === dressCat));
   $('dress-cat-title').textContent = CAT_NAMES[dressCat];
-  $('dress-points').textContent = S.points;
+  $('dress-points').textContent = pointsText(S.points);
   const items = ['outfit', 'head', 'face', 'room'].includes(dressCat);
   $('dress-grid').classList.toggle('hidden', !items);
   $('dress-action').classList.toggle('hidden', !items);
@@ -1203,9 +1206,33 @@ document.addEventListener('click', async e => {
 
 // ======================= Options =======================
 function renderOptions() {
+  $('hud-dev').classList.toggle('hidden', !S.dev_mode);
+  $('dev-form').classList.toggle('hidden', !!S.dev_mode);
+  $('dev-off').classList.toggle('hidden', !S.dev_mode);
+  $('dev-status').textContent = S.dev_mode ? 'Dev Mode is ON: every character, outfit, accessory and background is unlocked and lotus is unlimited. Turning it off brings back your real progress.'
+    : 'Unlocks every character and item with unlimited lotus. Enter the password to turn it on.';
   $('sys-status').innerHTML = `<small>ElevenLabs voice: ${elevenOn ? '✅ connected' : '❌ no key (using browser voice)'}<br>
     Quests done: ${S.stats.tasks_done} · Pulls: ${S.stats.pulls} · Distractions caught: ${S.stats.distractions}</small>`;
 }
+
+$('dev-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    const res = await post('/dev', { on: true, password: $('dev-password').value });
+    $('dev-password').value = '';
+    document.activeElement?.blur();
+    await setState(res);
+    vfx.confetti(80);
+    addMsg('sys', 'Dev Mode on: everything is unlocked.');
+  } catch (err) { $('dev-password').value = ''; toastError(err); }
+});
+$('dev-off').addEventListener('click', async () => {
+  try {
+    loadedModelFor = null; // the companion may change back
+    await setState(await post('/dev', { on: false }));
+    addMsg('sys', 'Dev Mode off: your real progress is back.');
+  } catch (err) { toastError(err); }
+});
 
 // Performance mode: lower resolution and fewer effects, for laptops without a dedicated graphics card
 let perfMode = false;
