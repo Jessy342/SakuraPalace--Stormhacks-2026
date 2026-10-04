@@ -251,7 +251,7 @@ body[data-view="drawer"] .hud-right { margin-right: calc(var(--drawer-w) + 14px)
 .diff.easy { background: var(--good); } .diff.medium { background: #f0b54a; } .diff.hard { background: var(--bad); }
 .due { display: inline-block; margin-left: 6px; font-size: .7rem; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: rgba(255,255,255,.1); color: var(--muted); }
 .due.overdue { background: var(--bad); color: white; } .due.today { background: #f0b54a; color: #2a1c05; } .due.soon { background: rgba(240,181,74,.25); color: #ffd98f; }
-.week-card { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+.week-card { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
 .week-card > div { background: rgba(255,255,255,.06); border: 1px solid var(--line-soft); border-radius: 10px; padding: 8px 2px; text-align: center; }
 .week-card b { display: block; font-size: 1rem; color: var(--gold-hi); }
 .week-card small { font-size: .64rem; }

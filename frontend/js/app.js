@@ -526,8 +526,7 @@ function renderWeek() {
   const html = `
     <div><b>${streak}</b><small>day streak</small></div>
     <div><b>${h ? h + 'h ' : ''}${m}m</b><small>focused (week)</small></div>
-    <div><b>${w.tasks}</b><small>quests (week)</small></div>
-    <div><b>${S.stats.pomodoros || 0}</b><small>pomodoros</small></div>`;
+    <div><b>${w.tasks}</b><small>quests (week)</small></div>`;
   $('week-card').innerHTML = html;
   $('tracker-week').innerHTML = html;
   $('hud-streak').textContent = streak;
@@ -921,7 +920,7 @@ function summonSummary(results) {
   addMsg('sys', `✨ Summoned: ${results.map(r => `${r.name} (${r.rarity})`).join(', ')}`, true); // the full list goes in the Log only
   toast('', `<div class="st-title">✦ Summon complete</div>
     ${news.length ? `<div class="st-row">${news.map(n => `<span class="st-char r-${n.rarity}">${portraitImg(n.id, true)}<b>${esc(n.name)}</b><small>NEW</small></span>`).join('')}</div>` : ''}
-    <div class="st-sub">${[news.length ? 'Meet them in Characters (C)' : '', best.length ? `${best.length} bond up` : '', gained ? `+${gained} ${LOTUS}` : ''].filter(Boolean).join(' · ') || 'Better luck next time'}</div>`);
+    <div class="st-sub">${[news.length ? 'Meet them in Characters (C)' : '', best.length ? `${best.length} already with you` : '', gained ? `+${gained} ${LOTUS}` : ''].filter(Boolean).join(' · ') || 'Better luck next time'}</div>`);
   if (news.length) { vfx.confetti(90); vfx.burst(innerWidth / 2, innerHeight * 0.3, '#ff8fc4', 50); }
 }
 
@@ -996,7 +995,7 @@ function renderCharDetail() {
     <h2>${esc(c.name)}</h2>
     <div class="d-title">${esc(c.title || '')}</div>
     <div class="stars">${stars(c.rarity)}</div>
-    <div class="d-meta"><span>${classOf(c)[1]} ${classOf(c)[0]}</span>${own ? `<span>Bond ${own.bond}/6</span>` : ''}<span>Voice: ${voices}</span></div>
+    <div class="d-meta"><span>${classOf(c)[1]} ${classOf(c)[0]}</span><span>Voice: ${voices}</span></div>
     ${own ? `<p class="d-line">“${esc(c.intro_line)}”</p>
       <div class="lang-pick"><small>${isActive ? 'Speaks to you in' : 'Choose how they speak to you'}</small><div class="row">
         <button data-lang="en" class="${lang === 'en' ? 'active' : ''}">▶ English</button><button data-lang="ja" class="${lang === 'ja' ? 'active' : ''}">▶ Japanese</button></div></div>`

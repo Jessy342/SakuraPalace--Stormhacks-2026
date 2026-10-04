@@ -197,7 +197,7 @@ function card(r) {
     ${r.type === 'character' ? portraitImg(r.id, true) : ''}
     <div><b>${r.name}</b></div>
     <div class="stars">${stars(r.rarity)}</div>
-    <small>${r.refund ? '+' + r.refund + ' ' + LOTUS : ''}${r.bond ? ' · Bond ' + r.bond : ''}&nbsp;</small>`;
+    <small>${r.refund ? '+' + r.refund + ' ' + LOTUS : ''}&nbsp;</small>`;
   return c;
 }
 
@@ -216,7 +216,7 @@ function reveal(r, d, live) {
     `<i style="left:${(Math.random() * 100).toFixed(1)}%;--s:${(2 + Math.random() * 4).toFixed(1)}px;--d:${(5 + Math.random() * 7).toFixed(1)}s;animation-delay:-${(Math.random() * 10).toFixed(1)}s"></i>`).join('');
   const chips = [
     r.refund ? `<div class="rv-chip" title="Points">${GEM}<small>${r.refund}</small></div>` : '',
-    isChar ? `<div class="rv-chip bond" title="Bond">${HEART}<small>${r.new ? 'New' : 'Lv ' + r.bond}</small></div>` : '',
+    isChar && r.new ? `<div class="rv-chip bond" title="New companion">${HEART}<small>New</small></div>` : '',
   ].join('');
   s.innerHTML = `
     <div class="rv-bg" style="background-image:url(${d.backdrop || ''})"></div>
