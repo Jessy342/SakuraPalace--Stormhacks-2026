@@ -952,5 +952,5 @@ body.arrive #dialogue { animation: arrive-up .8s .35s both cubic-bezier(.2,.8,.2
 #to-title { position: fixed; left: 18px; bottom: 18px; z-index: 6; display: flex; align-items: center; gap: 8px; padding: 8px 14px 8px 10px; border-radius: 99px; background: rgba(8,10,28,.78); font-size: .82rem; transition: opacity .3s, transform .15s, border-color .15s; }
 #to-title svg { width: 20px; height: 20px; }
 #to-title:hover { transform: translateY(-2px); }
-body:not([data-view="lobby"]) #to-title { opacity: 0; pointer-events: none; }
+body[data-view="full"] #to-title, body[data-view="dress"] #to-title { opacity: 0; pointer-events: none; } /* only the full-screen Summon, Characters and Dressing Room cover that corner */
 body.arrive #to-title { animation: arrive-up .8s .4s both cubic-bezier(.2,.8,.2,1); }
