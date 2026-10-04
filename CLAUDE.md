@@ -24,15 +24,18 @@ backend/                 Python 3.12, FastAPI. One file per system.
   ai.py                  Gemini chat (JSON replies w/ emotion + add_tasks), weekly planner, Teacher mode -> /api/chat, /api/plan, /api/teacher/*
   voice.py               ElevenLabs TTS (+cache), STT (Scribe), sound effects, angry/praise lines -> /api/tts, /api/stt, /api/sfx/{name}, /api/yell
   focus.py               background watcher thread (Windows ctypes + psutil), warning -> drain -> force close -> /api/focus/*
-  data/characters.json   gacha roster (edit to add characters)   data/shop.json  accessories & backgrounds
+  data/characters.json   gacha roster + banners (edit to add characters)   data/shop.json  accessories & backgrounds
 frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. three.js + three-vrm are vendored in frontend/vendor/.
-  index.html, style.css
-  js/app.js              all UI wiring (tabs, chat, tasks, focus polling, shop, settings, teacher)
+  index.html, style.css  game-style HUD: lobby (dock, quest tracker, dialogue box), side drawer menus, full-screen Convene + Characters
+  js/app.js              all UI wiring (menus + keyboard shortcuts, chat, quests, focus polling, convene, characters, dressing room, shop, teacher)
+  js/environment.js      animated room behind the character (one canvas scene per background id in shop.json)
   js/character.js        3D scene, VRM loading, procedural idle/emotion animation, blink, lip sync, placeholder chibi
   js/accessories.js      accessories built from three.js shapes, attached to the head bone
   js/voice.js            speak() with lip-sync analyser, mic recording -> /api/stt, sound effects w/ beep fallback
-  js/gacha.js            summon cutscene (canvas meteor, flash, cards, character splash)
-  assets/characters/     char1.vrm ... char6.vrm (from VRoid Studio)
+  js/gacha.js            summon cutscene (canvas meteor, flash, silhouette reveal with portrait, summary cards)
+  assets/portraits/      <id>.webp + <id>_bust.webp, rendered from the VRM models by tools/make_portraits.mjs
+models/                  char1.vrm ... char9.vrm (from VRoid Studio), served at /models/
+tools/make_portraits.mjs dev tool: re-render portraits after adding/changing a model (see the comment at the top of the file)
 ```
 
 ## Rules
@@ -51,7 +54,8 @@ frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. th
 ## Useful facts
 - Gemini model default `gemini-3.5-flash` (google-genai SDK). Replies are JSON: `{emotion, reply, reply_ja, add_tasks}`.
 - ElevenLabs: TTS `eleven_flash_v2_5` (fast) and `eleven_v3` for expressive lines with audio tags like `[angry]`, `[shouting]`, `[laughs]`; STT `scribe_v2`; sound effects via `/v1/sound-generation` (cached to `frontend/assets/sfx/`).
-- Voice modes: "dub" = English voice; "sub" = Japanese voice + English subtitles.
+- Voice modes: "dub" = English voice; "sub" = Japanese voice + English subtitles. Each character in characters.json has `voice_id` (English) and `voice_id_ja` (Japanese); `/api/tts` takes `lang` ("en"/"ja") to pick between them.
+- Gacha banners live in characters.json (`banners`); `/api/gacha/pull` takes `banner`, and that banner's `featured` characters get a 50% rate-up within their rarity.
 - VRM expressions used: happy, angry, sad, surprised, relaxed, aa (mouth), blink. Normalized bones are posed in `poseVRM()`.
 - Demo mode (Focus tab checkbox) = 5s grace / 5s drain / 20s force-close, and lets you force the first gacha pull's rarity.
 - `window.character` is exposed for debugging in DevTools.

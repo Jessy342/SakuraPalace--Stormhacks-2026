@@ -30,9 +30,12 @@ def el_post(path, **kwargs):
         raise HTTPException(502, f"Can't reach ElevenLabs (check internet): {str(e)[:150]}")
 
 
-def voice_for(char):
-    if char and char.get("voice_id"):
-        return char["voice_id"]
+def voice_for(char, lang="en"):
+    """Each character can have an English (dub) voice and a Japanese (sub) voice; either one covers for the other."""
+    if char:
+        first, second = ("voice_id_ja", "voice_id") if lang == "ja" else ("voice_id", "voice_id_ja")
+        if char.get(first) or char.get(second):
+            return char.get(first) or char[second]
     return DEFAULT_MALE_VOICE if char and char.get("gender") == "male" else DEFAULT_FEMALE_VOICE
 
 
@@ -46,6 +49,14 @@ class TTSIn(BaseModel):
     text: str
     character_id: str | None = None
     expressive: bool = False  # True = eleven_v3 with audio tags like [angry] [shouting] [laughs]
+    lang: str = "en"          # "ja" = use the character's Japanese voice (sub mode)
+
+
+def tts_payload(text, model, lang):
+    payload = {"text": text, "model_id": model}
+    if lang == "ja" and ("flash" in model or "turbo" in model):
+        payload["language_code"] = "ja"  # only the flash/turbo models accept a forced language
+    return payload
 
 
 @router.post("/tts")
@@ -57,22 +68,22 @@ def tts(body: TTSIn):
         raise HTTPException(400, "No text")
     state = storage.load()
     char = get_character(body.character_id or state["active_character"])
-    voice = voice_for(char)
+    voice = voice_for(char, body.lang)
     model = TTS_EXPRESSIVE_MODEL if body.expressive else TTS_MODEL
 
-    key = hashlib.sha1(f"{voice}|{model}|{text}".encode()).hexdigest()
+    key = hashlib.sha1(f"{voice}|{model}|{body.lang}|{text}".encode()).hexdigest()
     cached = CACHE_DIR / f"{key}.mp3"
     if cached.exists():
         return FileResponse(cached, media_type="audio/mpeg")
 
     r = el_post(f"/text-to-speech/{voice}", params={"output_format": "mp3_44100_128"},
-                json={"text": text, "model_id": model})
+                json=tts_payload(text, model, body.lang))
     if r.status_code != 200 and body.expressive:
         # expressive model unavailable on this plan? retry with the fast model, tags stripped
         import re
         plain = re.sub(r"\[[^\]]+\]\s*", "", text)
         r = el_post(f"/text-to-speech/{voice}", params={"output_format": "mp3_44100_128"},
-                    json={"text": plain, "model_id": TTS_MODEL})
+                    json=tts_payload(plain, TTS_MODEL, body.lang))
     if r.status_code != 200:
         raise HTTPException(502, f"ElevenLabs TTS error {r.status_code}: {r.text[:300]}")
     cached.write_bytes(r.content)

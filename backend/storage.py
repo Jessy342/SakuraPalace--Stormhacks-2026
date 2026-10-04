@@ -55,12 +55,33 @@ def _merge(defaults, saved):
     return out
 
 
+# Old save files used the first placeholder roster; map those ids onto the character using the same model.
+LEGACY_IDS = {"aiko": "nino", "ren": "miyamura", "mika": "waguri", "yuki": "gojo", "kaito": "marin", "celestia": "lloyd"}
+
+
+def _migrate(state):
+    """Keeps old save files working after the roster changes (renamed or removed characters)."""
+    known = {c["id"] for c in CHARACTERS["characters"]}
+    fix = lambda cid: LEGACY_IDS.get(cid, cid)
+    owned = {}
+    for cid, info in state["owned_characters"].items():
+        if fix(cid) in known:
+            owned.setdefault(fix(cid), info)
+    if not owned:
+        owned[CHARACTERS["starter"]] = {"bond": 0}
+    state["owned_characters"] = owned
+    state["personality_overrides"] = {fix(k): v for k, v in state["personality_overrides"].items() if fix(k) in known}
+    active = fix(state["active_character"])
+    state["active_character"] = active if active in owned else next(iter(owned))
+    return state
+
+
 def load():
     with _lock:
         if SAVE_FILE.exists():
             try:
                 with open(SAVE_FILE, encoding="utf-8") as f:
-                    return _merge(DEFAULT_STATE, json.load(f))
+                    return _migrate(_merge(DEFAULT_STATE, json.load(f)))
             except (json.JSONDecodeError, OSError):
                 pass
         return copy.deepcopy(DEFAULT_STATE)

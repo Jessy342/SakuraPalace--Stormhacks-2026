@@ -1,11 +1,19 @@
-// Gacha summon cutscene: charge-up -> shooting star (colour = best rarity) -> flash -> card reveal -> character splash.
+// Gacha summon cutscene, in the style of anime gacha games:
+// stars gather -> a shooting star falls (its colour gives away the best rarity) -> flash ->
+// each notable character appears as a dark silhouette, then is revealed with name, stars and a voice line ->
+// summary of every pull.
 import { sfx, speak, stopSpeaking } from './voice.js';
 
 export const RARITY_COLORS = {
   Common: '#9aa5b1', Rare: '#4ea8ff', Epic: '#b06bff', Legendary: '#ffb627', Mythic: '#ff3b5c', Unbound: 'rainbow',
 };
 const ORDER = ['Common', 'Rare', 'Epic', 'Legendary', 'Mythic', 'Unbound'];
-const STARS = { Common: 1, Rare: 2, Epic: 3, Legendary: 4, Mythic: 5, Unbound: 6 };
+export const STARS = { Common: 2, Rare: 3, Epic: 4, Legendary: 5, Mythic: 6, Unbound: 7 };
+export const stars = rarity => '★'.repeat(STARS[rarity] || 1);
+/** Picture of a character rendered from their VRoid model (full body, or head-and-shoulders). */
+export const portrait = (id, bust = false) => `assets/portraits/${id}${bust ? '_bust' : ''}.webp`;
+/** <img> that removes itself if the picture doesn't exist, so the letter behind it shows instead. */
+export const portraitImg = (id, bust = false) => `<img src="${portrait(id, bust)}" alt="" draggable="false" onerror="this.parentNode.classList.add('noimg');this.remove()">`;
 
 const el = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -39,34 +47,35 @@ export async function playCutscene(results, bestRarity) {
   if (rank >= 4) { overlay.classList.add('cut-shake'); setTimeout(() => overlay.classList.remove('cut-shake'), 1300); }
   anim.burst();
 
-  // Card reveal
+  // One reveal per notable result: always for a single pull; in a 10-pull, new characters and Legendary+
+  const reveals = results.length === 1 ? results : results.filter(r => r.type === 'character' && (r.new || ORDER.indexOf(r.rarity) >= 3));
+  for (const r of reveals) {
+    if (skipping) break;
+    content.innerHTML = '';
+    content.appendChild(splash(r));
+    if (r.type === 'character' && r.new && r.intro_line) {
+      setTimeout(() => { if (!skipping && content.isConnected) speak(r.intro_line, { characterId: r.id }); }, 1300);
+    }
+    await clickToContinue(overlay, 1400);
+    stopSpeaking();
+  }
+
+  // Summary of everything pulled
   if (results.length > 1) {
+    skipping = false;
+    content.innerHTML = '';
     const grid = document.createElement('div');
     grid.className = 'pull-grid';
     content.appendChild(grid);
-    for (const [i, r] of results.entries()) {
-      grid.appendChild(card(r, i));
-      if (!skipping) await sleep(130);
+    for (const r of results) {
+      grid.appendChild(card(r));
+      await sleep(90);
     }
     const hint = document.createElement('div');
     hint.className = 'pull-hint';
     hint.textContent = 'Click to continue';
     content.appendChild(hint);
-    content.style.gridTemplateRows = 'auto';
-    await clickToContinue(overlay);
-  }
-
-  // Splash screens for new characters (and for a single pull, always)
-  const splashes = results.length === 1 ? results : results.filter(r => r.type === 'character' && (r.new || ORDER.indexOf(r.rarity) >= 3));
-  for (const r of splashes) {
-    if (skipping) break;
-    content.innerHTML = '';
-    content.appendChild(splash(r));
-    if (r.type === 'character' && r.new && r.intro_line) {
-      speak(r.intro_line, { characterId: r.id });
-    }
-    await clickToContinue(overlay);
-    stopSpeaking();
+    await clickToContinue(overlay, 300);
   }
 
   anim.stop();
@@ -82,11 +91,12 @@ function wait(ms) {
   });
 }
 
-function clickToContinue(overlay) {
+function clickToContinue(overlay, delay = 250) {
   return new Promise(resolve => {
     let finished = false;
-    const done = () => { if (finished) return; finished = true; overlay.removeEventListener('click', done); resolve(); };
-    setTimeout(() => overlay.addEventListener('click', done), 250);
+    const done = () => { if (finished) return; finished = true; overlay.removeEventListener('click', done); removeEventListener('keydown', key); resolve(); };
+    const key = e => { if (e.key === ' ' || e.key === 'Enter') done(); };
+    setTimeout(() => { overlay.addEventListener('click', done); addEventListener('keydown', key); }, delay);
     const poll = () => { if (finished) return; if (skipping) done(); else requestAnimationFrame(poll); };
     poll();
   });
@@ -94,37 +104,39 @@ function clickToContinue(overlay) {
 
 function rarityClass(r) { return 'r-' + r.rarity; }
 
-function card(r, i) {
+function card(r) {
   const c = document.createElement('div');
-  c.className = 'pull-card ' + rarityClass(r);
-  c.style.animationDelay = '0s';
-  const color = RARITY_COLORS[r.rarity] === 'rainbow' ? '#ff5fa2' : RARITY_COLORS[r.rarity];
-  c.style.setProperty('--rc', color);
+  c.className = 'pull-card ' + rarityClass(r) + (r.type === 'character' ? ' char' : '');
   c.innerHTML = `
     ${r.new ? '<span class="new">NEW</span>' : ''}
     <div class="big-initial ${r.rarity === 'Unbound' ? 'rainbow-text' : ''}">${r.type === 'character' ? r.name[0] : '◆'}</div>
+    ${r.type === 'character' ? portraitImg(r.id, true) : ''}
     <div><b>${r.name}</b></div>
-    <div class="stars" style="color:${color}">${'★'.repeat(STARS[r.rarity])}</div>
-    <small style="color:#ccc">${r.refund ? '+' + r.refund + ' pts' : ''}${r.bond ? ' · Bond ' + r.bond : ''}</small>`;
+    <div class="stars">${stars(r.rarity)}</div>
+    <small>${r.refund ? '+' + r.refund + ' ◆' : ''}${r.bond ? ' · Bond ' + r.bond : ''}&nbsp;</small>`;
   return c;
 }
 
 function splash(r) {
   const s = document.createElement('div');
-  s.className = 'splash ' + rarityClass(r);
-  const color = RARITY_COLORS[r.rarity] === 'rainbow' ? '#ff5fa2' : RARITY_COLORS[r.rarity];
-  s.style.setProperty('--rc', color);
+  s.className = 'splash ' + rarityClass(r) + (r.type === 'item' ? ' item' : '');
   const rb = r.rarity === 'Unbound' ? 'rainbow-text' : '';
+  const starRow = [...stars(r.rarity)].map((x, i) => `<span style="animation-delay:${1.1 + i * 0.12}s">${x}</span>`).join('');
   if (r.type === 'item') {
-    s.innerHTML = `<div class="rarity">${r.rarity.toUpperCase()}</div><div class="name ${rb}">${r.name}</div>
-      <div class="title">+${r.refund} points</div><div class="hint">Click to continue</div>`;
+    s.innerHTML = `<div class="rays"></div><div class="info"><div class="rarity">${r.rarity.toUpperCase()}</div><div class="name ${rb}">${r.name}</div>
+      <div class="title">+${r.refund} ◆ points</div><div class="hint" style="margin-top:30px">Click to continue</div></div>`;
   } else {
-    s.innerHTML = `<div class="rarity ${rb}">${r.rarity.toUpperCase()}</div>
-      <div class="name ${rb}">${r.name}</div>
-      <div class="stars">${'★'.repeat(STARS[r.rarity])}</div>
-      <div class="title">${r.title || ''}</div>
-      ${r.new ? `<div class="line">“${r.intro_line || ''}”</div>` : `<div class="line">Duplicate! Bond ${r.bond} · +${r.refund} points</div>`}
-      <div class="hint">Click to continue</div>`;
+    s.innerHTML = `<div class="rays"></div>
+      <div class="figure"><div class="initial">${r.name[0]}</div>${portraitImg(r.id)}</div>
+      <div class="info">
+        ${r.new ? '<div class="newtag">NEW</div>' : ''}
+        <div class="rarity ${rb}">${r.rarity.toUpperCase()}</div>
+        <div class="name ${rb}">${r.name}</div>
+        <div class="title">${r.title || ''}</div>
+        <div class="stars">${starRow}</div>
+        <div class="line">${r.new ? `“${r.intro_line || ''}”` : `Already with you. Bond ${r.bond} · +${r.refund} ◆ points`}</div>
+        <div class="hint">Click to continue</div>
+      </div>`;
   }
   return s;
 }

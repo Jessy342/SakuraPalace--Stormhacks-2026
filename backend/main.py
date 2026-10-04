@@ -20,7 +20,7 @@ import ai
 import focus
 import game
 import voice
-from config import FRONTEND_DIR, PORT
+from config import FRONTEND_DIR, MODELS_DIR, PORT
 
 app = FastAPI(title="Anime Assistant")
 app.include_router(game.router)
@@ -33,6 +33,9 @@ app.include_router(focus.router)
 def health():
     return {"ok": True}
 
+
+# VRoid models live in models/ (char1.vrm ...); a missing file just shows the placeholder character
+app.mount("/models", StaticFiles(directory=MODELS_DIR), name="models")
 
 # Serve the frontend (must be mounted last so /api routes win)
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

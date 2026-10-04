@@ -12,6 +12,7 @@ DATA_DIR = ROOT / "backend" / "data"
 SAVE_FILE = DATA_DIR / "save.json"
 UPLOAD_DIR = DATA_DIR / "uploads"
 SFX_DIR = FRONTEND_DIR / "assets" / "sfx"
+MODELS_DIR = ROOT / "models"  # VRoid .vrm files, served at /models/
 
 # --- API keys (never commit .env!) ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -32,3 +33,4 @@ PORT = int(os.getenv("PORT", "8765"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 SFX_DIR.mkdir(parents=True, exist_ok=True)
+MODELS_DIR.mkdir(parents=True, exist_ok=True)

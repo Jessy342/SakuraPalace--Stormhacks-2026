@@ -51,7 +51,7 @@ export async function speak(text, opts = {}) {
   if (!text) return;
   stopSpeaking();
   try {
-    const blob = await api('/tts', { method: 'POST', body: { text, character_id: opts.characterId, expressive: !!opts.expressive } });
+    const blob = await api('/tts', { method: 'POST', body: { text, character_id: opts.characterId, expressive: !!opts.expressive, lang: opts.lang === 'ja' ? 'ja' : 'en' } });
     if (blob) return playBlob(blob);
   } catch (e) {
     console.warn('TTS failed, using browser voice:', e.message);

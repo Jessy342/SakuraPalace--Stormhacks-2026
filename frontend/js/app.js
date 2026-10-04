@@ -1,8 +1,9 @@
-// Main UI logic: connects all the tabs to the backend and the 3D character.
+// Main UI logic: connects the game-style menus to the backend and the 3D character.
 import { api, post } from './api.js';
 import { Character } from './character.js';
+import { Environment } from './environment.js';
 import * as voice from './voice.js';
-import { playCutscene } from './gacha.js';
+import { playCutscene, stars, portrait, portraitImg } from './gacha.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -16,27 +17,53 @@ let lastEventId = 0;
 let lastYellAt = 0;
 let elevenOn = false;
 const character = new Character($('stage'), voice.mouthLevel);
+const environment = new Environment($('env'));
 window.character = character; // handy for debugging in DevTools (F12)
+window.environment = environment;
 
-const activeChar = () => S.catalog.characters.find(c => c.id === S.active_character);
+const charById = id => S.catalog.characters.find(c => c.id === id);
+const activeChar = () => charById(S.active_character);
 const isDemo = () => !!S.settings.demo_mode;
+
+// Personality types double as the character "classes" shown in the menus (︎ keeps the symbols flat, not emoji)
+const CLASSES = {
+  tsundere: ['Tsundere', '♥︎'], cheerful: ['Cheerful', '☀︎'], sensei: ['Sensei', '✎︎'],
+  chill: ['Chill', '❄︎'], rival: ['Rival', '⚔︎'],
+};
+const classOf = c => CLASSES[c.personality] || ['Unique', '✦'];
 
 // ======================= Speaking =======================
 let bubbleTimer = null;
+let typeTimer = null;
+function showBubble(text, sub = '') {
+  $('bubble-name').textContent = activeChar().name;
+  $('bubble-sub').textContent = sub;
+  $('bubble').classList.remove('hidden');
+  clearTimeout(bubbleTimer);
+  clearInterval(typeTimer);
+  // JRPG-style typewriter text
+  const el = $('bubble-text');
+  let i = 0;
+  el.textContent = '';
+  typeTimer = setInterval(() => {
+    i += 2;
+    el.textContent = text.slice(0, i);
+    if (i >= text.length) clearInterval(typeTimer);
+  }, 28);
+}
+
 async function say(text, { emotion = 'neutral', ja = '', expressive = false, seconds } = {}) {
   if (!text) return;
   const char = activeChar();
   const sub = S.settings.voice_mode === 'sub' && ja;
   const shown = text.replace(/\[[^\]]+\]\s*/g, '');
-  $('bubble-text').textContent = sub ? ja : shown;
-  $('bubble-sub').textContent = sub ? shown : '';
-  $('bubble').classList.remove('hidden');
-  clearTimeout(bubbleTimer);
+  showBubble(sub ? ja : shown, sub ? shown : '');
   character.setEmotion(emotion, seconds || Math.max(3, shown.length / 12));
   const started = Date.now();
   const minShow = 1500 + shown.length * 55; // keep subtitles readable even if audio is short/missing
   await voice.speak(sub ? ja : text, { characterId: char.id, expressive, lang: sub ? 'ja' : 'en', gender: char.gender });
   const wait = Math.max(2000, minShow - (Date.now() - started));
+  clearTimeout(bubbleTimer);
   bubbleTimer = setTimeout(() => $('bubble').classList.add('hidden'), wait);
 }
 
@@ -51,7 +78,7 @@ async function yell(stage, app = '', emotion = 'angry') {
 let uiSounds = true;
 try { uiSounds = localStorage.getItem('uiSounds') !== 'off'; } catch { /* storage blocked */ }
 document.addEventListener('pointerdown', e => {
-  const b = e.target.closest?.('button, input[type=checkbox], input[type=radio], .check');
+  const b = e.target.closest?.('button, input[type=checkbox], input[type=radio], .check, .ccard');
   if (uiSounds && b && !b.disabled) voice.uiClick();
 }, true);
 $('ui-sounds').checked = uiSounds;
@@ -91,15 +118,85 @@ function floater(text, cls = '') {
   setTimeout(() => f.remove(), 1900);
 }
 
+/** Small notice at the top of the screen. */
+function toast(text) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = text;
+  $('toasts').appendChild(t);
+  while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
+  setTimeout(() => t.remove(), 4600);
+}
+
+/** Adds a line to the Log. System lines also pop up as a notice. */
 function addMsg(role, text) {
   const m = document.createElement('div');
   m.className = 'msg ' + role;
   m.textContent = text;
   $('chat-log').appendChild(m);
   $('chat-log').scrollTop = 1e9;
+  if (role === 'sys') toast(text);
 }
 
 function toastError(e) { addMsg('sys', '⚠ ' + (e.message || e)); }
+
+// ======================= Menus (dock, drawer, full screens, keyboard) =======================
+const FULL = ['gacha', 'chars']; // these take over the whole screen; everything else is a side drawer
+let currentTab = null;
+
+function wipe() {
+  const w = $('wipe');
+  w.classList.remove('go');
+  void w.offsetWidth; // restart the animation
+  w.classList.add('go');
+}
+
+function applyShift() {
+  const px = document.body.dataset.view === 'drawer' ? $('drawer').offsetWidth + 16 : 0;
+  document.body.style.setProperty('--shift', px + 'px');
+  character.setShift(px);
+}
+
+function openTab(name) {
+  if (name === currentTab) name = null; // pressing the same button again closes the menu
+  const isFull = FULL.includes(name);
+  if (isFull || FULL.includes(currentTab)) wipe();
+  currentTab = name;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + name));
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.body.dataset.view = !name ? 'lobby' : isFull ? 'full' : 'drawer';
+  if (name && !isFull) $('drawer-title').textContent = $('tab-' + name).dataset.title;
+  $('rates-pop').classList.add('hidden');
+  applyShift();
+  character.setDressing(name === 'dress');
+  if (name !== 'dress') setFrame('full');
+  if (name === 'chat') $('chat-log').scrollTop = 1e9;
+  if (name === 'chars') { charPick = S.active_character; renderChars(); }
+}
+const closeTab = () => openTab(null);
+
+document.querySelectorAll('#tabs button').forEach(btn => btn.addEventListener('click', () => openTab(btn.dataset.tab)));
+addEventListener('resize', applyShift);
+$('rates-btn').addEventListener('click', () => $('rates-pop').classList.toggle('hidden'));
+
+addEventListener('keydown', e => {
+  if (!S || !$('cutscene').classList.contains('hidden') || e.ctrlKey || e.altKey || e.metaKey) return;
+  const typing = e.target.matches?.('input, textarea, select');
+  if (e.key === 'Escape') {
+    if (typing) e.target.blur();
+    if (currentTab) closeTab();
+    return;
+  }
+  if (typing) return;
+  if (e.key === 'Enter' || e.key === '/') {
+    if (FULL.includes(currentTab)) return;
+    e.preventDefault();
+    $('chat-input').focus();
+    return;
+  }
+  const btn = document.querySelector(`#tabs button[data-key="${e.key.toLowerCase()}"]`);
+  if (btn) { voice.uiClick(); openTab(btn.dataset.tab); }
+});
 
 // ======================= Rendering =======================
 async function setState(newState) {
@@ -108,9 +205,9 @@ async function setState(newState) {
   const char = activeChar();
   if (loadedModelFor !== char.id) {
     loadedModelFor = char.id;
-    const ok = await character.load(`assets/characters/${char.model}`, char.color);
+    const ok = await character.load(`/models/${char.model}`, char.color);
     $('model-hint').classList.toggle('hidden', ok);
-    $('model-hint').textContent = `Placeholder shown: export ${char.name} from VRoid Studio as frontend/assets/characters/${char.model}`;
+    $('model-hint').textContent = `Placeholder shown: export ${char.name} from VRoid Studio as models/${char.model}`;
   }
   character.setAccessories(S.equipped_accessories);
 }
@@ -120,23 +217,35 @@ function render() {
   // HUD
   $('hud-char').textContent = char.name;
   $('hud-title').textContent = char.title || '';
+  $('hud-avatar-fallback').textContent = char.name[0];
+  const av = $('hud-avatar');
+  if (av.dataset.id !== char.id) {
+    av.dataset.id = char.id;
+    av.style.display = '';
+    av.onerror = () => { av.style.display = 'none'; };
+    av.src = portrait(char.id, true);
+  }
   $('hud-level').textContent = S.level;
   $('hud-xp').style.width = (100 * S.xp / S.xp_to_next) + '%';
   $('hud-xptext').textContent = `${S.xp} / ${S.xp_to_next} XP`;
   updatePoints(S.points);
   const bg = S.catalog.backgrounds.find(b => b.id === S.background);
   document.body.style.background = bg ? bg.css : '';
+  environment.set(S.background);
 
   renderTasks();
   renderFocusSettings();
   renderGacha();
+  renderChars();
   renderShop();
-  renderSettings();
+  renderDress();
+  renderOptions();
 }
 
 function updatePoints(p) {
   const el = $('hud-points');
   el.textContent = p;
+  $('gacha-points').textContent = p;
   if (lastPoints !== null && p !== lastPoints) {
     const box = el.parentElement;
     box.classList.remove('flash-red', 'flash-green');
@@ -157,20 +266,17 @@ $('chat-form').addEventListener('submit', async e => {
 
 async function sendChat(text) {
   addMsg('user', text);
-  const thinking = document.createElement('div');
-  thinking.className = 'msg sys';
-  thinking.textContent = `${activeChar().name} is thinking…`;
-  $('chat-log').appendChild(thinking);
+  voice.stopSpeaking();
+  showBubble('…');
   try {
     const res = await post('/chat', { message: text, history: chatHistory });
-    thinking.remove();
     chatHistory.push({ role: 'user', text }, { role: 'model', text: res.reply });
     addMsg('bot', res.reply);
-    for (const t of res.added_tasks) addMsg('sys', `📝 Added task: ${t.title}${t.due ? ' (due ' + t.due + ')' : ''}`);
+    for (const t of res.added_tasks) addMsg('sys', `📝 New quest: ${t.title}${t.due ? ' (due ' + t.due + ')' : ''}`);
     if (res.added_tasks.length) voice.sfx('task_done');
     await setState(res.state);
     say(res.reply, { emotion: res.emotion, ja: res.reply_ja });
-  } catch (err) { thinking.remove(); toastError(err); }
+  } catch (err) { $('bubble').classList.add('hidden'); toastError(err); }
 }
 
 $('mic-btn').addEventListener('click', async () => {
@@ -180,21 +286,21 @@ $('mic-btn').addEventListener('click', async () => {
       voice.stopSpeaking();
       await voice.startRecording();
       btn.classList.add('recording');
-      btn.textContent = '■';
+      $('chat-input').placeholder = 'Listening… click the mic again to send';
     } catch (e) { toastError('Microphone not available: ' + e.message); }
   } else {
     btn.classList.remove('recording');
-    btn.textContent = '…';
+    $('chat-input').placeholder = 'Transcribing…';
     try {
       const text = await voice.stopRecording();
       if (text) await sendChat(text);
       else addMsg('sys', "Didn't catch that. Try again?");
     } catch (e) { toastError(e); }
-    btn.textContent = '🎤';
+    $('chat-input').placeholder = 'Press Enter to talk… (try: remind me to study at 5pm)';
   }
 });
 
-// ======================= Tasks =======================
+// ======================= Quests (tasks) =======================
 $('task-form').addEventListener('submit', async e => {
   e.preventDefault();
   try {
@@ -220,7 +326,7 @@ function dueInfo(due) {
   return { cls: 'later', label: `Due ${label}`, day };
 }
 
-/** What Aiko should say about deadlines, or '' if nothing is urgent. */
+/** What the companion should say about deadlines, or '' if nothing is urgent. */
 function reminderLine() {
   const pending = S.tasks.filter(t => !t.done);
   const by = cls => pending.filter(t => dueInfo(t.due)?.cls === cls);
@@ -237,14 +343,21 @@ function renderWeek() {
   const w = S.week || { focus_seconds: 0, tasks: 0 };
   const h = Math.floor(w.focus_seconds / 3600), m = Math.floor((w.focus_seconds % 3600) / 60);
   const streak = S.login?.streak || 0;
-  $('week-card').innerHTML = `
-    <div><b>🔥 ${streak}</b><small>day streak</small></div>
-    <div><b>${h ? h + 'h ' : ''}${m}m</b><small>focused this week</small></div>
-    <div><b>✅ ${w.tasks}</b><small>tasks this week</small></div>
-    <div><b>🍅 ${S.stats.pomodoros || 0}</b><small>pomodoros</small></div>`;
-  $('hud-streak').textContent = `🔥 ${streak}`;
+  const html = `
+    <div><b>${streak}</b><small>day streak</small></div>
+    <div><b>${h ? h + 'h ' : ''}${m}m</b><small>focused (week)</small></div>
+    <div><b>${w.tasks}</b><small>quests (week)</small></div>
+    <div><b>${S.stats.pomodoros || 0}</b><small>pomodoros</small></div>`;
+  $('week-card').innerHTML = html;
+  $('tracker-week').innerHTML = html;
+  $('hud-streak').textContent = streak;
   $('hud-streak').title = `${streak}-day streak (best: ${S.login?.best || streak}). Open the app every day for a bigger daily gift!`;
 }
+
+const questRow = (t, withDelete) => `
+  <li><span class="diff ${t.difficulty}">${t.difficulty}</span>
+    <span class="t">${esc(t.title)}${t.due ? `<span class="due ${dueInfo(t.due).cls}">${esc(dueInfo(t.due).label)}</span>` : ''}</span>
+    <button data-done="${t.id}" title="Complete">✓</button>${withDelete ? `<button class="ghost" data-del="${t.id}" title="Delete">✕</button>` : ''}</li>`;
 
 function renderTasks() {
   renderWeek();
@@ -253,34 +366,26 @@ function renderTasks() {
     .sort((a, b) => (a.d?.day || '9999z').localeCompare(b.d?.day || '9999z') || a.i - b.i) // soonest deadline first
     .map(x => x.t);
   const done = S.tasks.filter(t => t.done).slice(-20).reverse();
-  $('task-list').innerHTML = pending.length ? pending.map(t => `
-    <li><span class="diff ${t.difficulty}">${t.difficulty}</span>
-      <span class="t">${esc(t.title)}${t.due ? `<span class="due ${dueInfo(t.due).cls}">${esc(dueInfo(t.due).label)}</span>` : ''}</span>
-      <button data-done="${t.id}">✓</button><button class="ghost" data-del="${t.id}">✕</button></li>`).join('')
-    : '<li><span class="t"><small>Nothing to do! Add a task or ask your assistant to plan your week.</small></span></li>';
+  const empty = '<li class="empty"><span class="t">No active quests. Add one, or ask your companion to plan your week.</span></li>';
+  $('task-list').innerHTML = pending.length ? pending.map(t => questRow(t, true)).join('') : empty;
+  $('tracker-list').innerHTML = pending.length ? pending.slice(0, 4).map(t => questRow(t, false)).join('')
+    + (pending.length > 4 ? `<li class="empty"><span class="t">+${pending.length - 4} more…</span></li>` : '') : empty;
   $('done-list').innerHTML = done.map(t => `<li><span class="t">${esc(t.title)}</span></li>`).join('');
 }
 
-$('task-list').addEventListener('click', async e => {
-  const id = e.target.dataset.done, del = e.target.dataset.del;
-  try {
-    if (id) {
-      const res = await post(`/tasks/${id}/complete`);
-      voice.sfx('task_done');
-      floater(`+${res.xp_gained} XP  +${res.points_gained} ◆`);
-      await setState(res.state);
-      if (res.levels_gained) {
-        voice.sfx('level_up');
-        floater(`LEVEL UP! +${res.level_bonus} ◆`, 'big');
-        yell('levelup', '', 'surprised');
-      } else {
-        yell('praise', '', 'happy');
-      }
-    } else if (del) {
-      await setState(await api(`/tasks/${del}`, { method: 'DELETE' }));
-    }
-  } catch (err) { toastError(err); }
-});
+async function completeTask(id) {
+  const res = await post(`/tasks/${id}/complete`);
+  voice.sfx('task_done');
+  floater(`+${res.xp_gained} XP  +${res.points_gained} ◆`);
+  await setState(res.state);
+  if (res.levels_gained) {
+    voice.sfx('level_up');
+    floater(`LEVEL UP! +${res.level_bonus} ◆`, 'big');
+    yell('levelup', '', 'surprised');
+  } else {
+    yell('praise', '', 'happy');
+  }
+}
 
 $('plan-btn').addEventListener('click', async () => {
   const goals = $('plan-goals').value.trim();
@@ -290,7 +395,7 @@ $('plan-btn').addEventListener('click', async () => {
   try {
     const res = await post('/plan', { goals });
     await setState(res.state);
-    addMsg('sys', `🗓 Added ${res.added_tasks.length} tasks to your week.`);
+    addMsg('sys', `🗓 Added ${res.added_tasks.length} quests to your week.`);
     say(res.reply, { emotion: res.emotion });
   } catch (err) { toastError(err); }
   $('plan-btn').disabled = false;
@@ -353,7 +458,7 @@ $('save-focus').addEventListener('click', async () => {
     } });
     document.activeElement?.blur();
     await setState(res);
-    addMsg('sys', 'Focus settings saved.');
+    addMsg('sys', 'Focus rules saved.');
   } catch (err) { toastError(err); }
 });
 
@@ -410,7 +515,7 @@ async function pollFocus() {
     $('focus-platform').textContent = st.windows_detection ? 'Watching real apps and browser tabs (Windows).'
       : 'Real app detection only works on Windows. Use "Simulate distraction" to test.';
     const pill = $('hud-focus');
-    pill.className = 'focus-pill ' + (!st.active ? 'off' : onBreak ? 'break' : st.stage === 'ok' ? 'on' : st.stage);
+    pill.className = 'pill focus-pill ' + (!st.active ? 'off' : onBreak ? 'break' : st.stage === 'ok' ? 'on' : st.stage);
     pill.textContent = !st.active ? 'Focus off' : onBreak ? `☕ Break ${shown}` : st.stage === 'ok' ? `${pomo ? '🍅' : 'Focusing'} ${shown}`
       : st.stage === 'warning' ? `⚠ ${st.offender}` : `▼ Losing points`;
     $('focus-status').textContent = !st.active ? 'Not focusing' : onBreak ? 'Relax! Distractions are allowed on breaks.'
@@ -472,69 +577,181 @@ function handleFocusEvent(ev) {
   }
 }
 
-// ======================= Gacha =======================
+// ======================= Convene (gacha) =======================
+let bannerId = null;
+let shownBanner = null;
+
 function renderGacha() {
   const g = S.gacha;
-  $('pull1').textContent = `Wish ×1 · ${g.pull_cost} ◆`;
-  $('pull10').textContent = `Wish ×10 · ${g.ten_pull_cost} ◆`;
+  const banners = S.catalog.banners || [];
+  const b = banners.find(x => x.id === bannerId) || banners[0];
+  $('pull1').innerHTML = `<span class="gem">◆</span>×${g.pull_cost}&nbsp;&nbsp; Convene ×1`;
+  $('pull10').innerHTML = `<span class="gem">◆</span>×${g.ten_pull_cost}&nbsp;&nbsp; Convene ×10`;
   $('pull1').disabled = S.points < g.pull_cost;
   $('pull10').disabled = S.points < g.ten_pull_cost;
-  $('pity-text').textContent = `Pity: ${S.pity.since_legendary} / ${g.pity_limit} (Legendary+ guaranteed)`;
+  $('pity-limit').textContent = g.pity_limit;
+  $('pity-text').textContent = `Pity: ${S.pity.since_legendary} / ${g.pity_limit}`;
   $('force-row').classList.toggle('hidden', !isDemo());
   $('rates').innerHTML = g.rates.slice().reverse().map(r =>
     `<tr class="r-${r.rarity}"><td class="rarity-label">${r.rarity}</td><td>${(r.chance * 100).toFixed(1)}%</td></tr>`).join('');
-  $('collection').innerHTML = S.catalog.characters.map(c => {
-    const owned = S.owned_characters[c.id];
-    return `<div class="card r-${c.rarity} ${owned ? '' : 'locked'}">
-      <div class="swatch r-${c.rarity}" style="background:${c.color}">${owned ? c.name[0] : '?'}</div>
-      <b>${owned ? esc(c.name) : '???'}</b><div class="rarity-label">${c.rarity}</div>
-      ${owned ? `<small>Bond ${owned.bond}/6</small>` : ''}</div>`;
+  if (!b || shownBanner === b.id) return; // only redraw the art when the banner changes (it animates in)
+  shownBanner = bannerId = b.id;
+  $('banner-list').innerHTML = banners.map(x => `
+    <button class="bthumb ${x.id === b.id ? 'active' : ''}" data-banner="${x.id}" title="${esc(x.name)}">
+      ${x.tag ? `<span class="tag">${esc(x.tag)}</span>` : ''}${x.featured.map(id => portraitImg(id, true)).join('')}</button>`).join('');
+  $('banner-kind').textContent = b.kind;
+  $('banner-title').textContent = b.name;
+  $('banner-glyph').textContent = b.name;
+  $('banner-art').innerHTML = b.featured.map((id, i) => {
+    const c = charById(id);
+    return `<div class="art a${i} r-${c.rarity}"><div class="initial">${esc(c.name[0])}</div>${portraitImg(id)}
+      <div class="plate"><i>${classOf(c)[1]}</i><div><b>${esc(c.name)}</b><div class="stars">${stars(c.rarity)}</div></div></div></div>`;
   }).join('');
 }
 
 async function doPull(count) {
   try {
     voice.stopSpeaking();
-    const res = await post('/gacha/pull', { count, force_rarity: $('force-rarity').value || null });
+    const res = await post('/gacha/pull', { count, force_rarity: $('force-rarity').value || null, banner: bannerId });
     await playCutscene(res.results, res.best_rarity);
     await setState(res.state);
     const news = res.results.filter(r => r.new);
     addMsg('sys', `✨ Pulled: ${res.results.map(r => `${r.name} (${r.rarity})`).join(', ')}`);
-    if (news.length) addMsg('sys', `New character! Make ${news.map(n => n.name).join(' or ')} your assistant in ⚙ Settings.`);
+    if (news.length) addMsg('sys', `New character! Meet ${news.map(n => n.name).join(' and ')} in Characters (C).`);
   } catch (err) { toastError(err); }
 }
 $('pull1').addEventListener('click', () => doPull(1));
 $('pull10').addEventListener('click', () => doPull(10));
 
-// ======================= Shop =======================
+// ======================= Characters (data bank) =======================
+let charFilter = 'all';
+let charPick = null;
+
+function renderChars() {
+  const all = S.catalog.characters;
+  const owned = id => S.owned_characters[id];
+  $('chars-count').textContent = `${all.filter(c => owned(c.id)).length}/${all.length}`;
+  $('char-filters').innerHTML = [['all', 'All', '▦'], ...Object.entries(CLASSES).map(([k, v]) => [k, v[0], v[1]])].map(([k, label, icon]) =>
+    `<button data-filter="${k}" class="${charFilter === k ? 'active' : ''}"><i>${icon}</i>${label}</button>`).join('');
+  const list = all.filter(c => charFilter === 'all' || c.personality === charFilter);
+  if (!charPick || !charById(charPick)) charPick = S.active_character;
+  $('collection').innerHTML = list.map((c, i) => `
+    <div class="ccard r-${c.rarity} ${owned(c.id) ? '' : 'locked'} ${c.id === charPick ? 'selected' : ''}" data-pick="${c.id}" tabindex="0" style="animation-delay:${i * 0.04}s">
+      <div class="initial">${esc(c.name[0])}</div>${portraitImg(c.id, true)}
+      <span class="cls" title="${classOf(c)[0]}">${classOf(c)[1]}</span>
+      ${c.id === S.active_character ? '<span class="tag">Companion</span>' : ''}
+      ${owned(c.id) ? '' : '<div class="notidx">Not Indexed</div>'}
+      <div class="cname">${esc(c.name)}</div><div class="stars">${stars(c.rarity)}</div>
+    </div>`).join('') || '<small>No characters of this type yet.</small>';
+  renderCharDetail();
+}
+
+function renderCharDetail() {
+  const c = charById(charPick);
+  const own = S.owned_characters[c.id];
+  const isActive = c.id === S.active_character;
+  const voices = [c.voice_id && 'English', c.voice_id_ja && 'Japanese'].filter(Boolean).join(' + ') || 'Default voice';
+  $('char-detail').innerHTML = `
+    <div class="d-art r-${c.rarity} ${own ? '' : 'locked'}"><div class="initial">${esc(c.name[0])}</div>${portraitImg(c.id)}</div>
+    <div class="rarity-label r-${c.rarity} ${c.rarity === 'Unbound' ? 'rainbow-text' : ''}">${c.rarity.toUpperCase()}</div>
+    <h2>${esc(c.name)}</h2>
+    <div class="d-title">${esc(c.title || '')}</div>
+    <div class="stars">${stars(c.rarity)}</div>
+    <div class="d-meta"><span>${classOf(c)[1]} ${classOf(c)[0]}</span>${own ? `<span>Bond ${own.bond}/6</span>` : ''}<span>Voice: ${voices}</span></div>
+    ${own ? `<p class="d-line">“${esc(c.intro_line)}”</p>
+      <div class="row"><button data-preview="en" data-id="${c.id}">▶ English</button><button data-preview="ja" data-id="${c.id}">▶ Japanese</button></div>`
+      : '<p class="d-line">You have not met this character yet. Convene to bring them to your room.</p>'}
+    <div class="spacer"></div>
+    ${!own ? '<button class="primary big" data-open="gacha">Go to Convene</button>'
+      : isActive ? '<button class="big" disabled>Current companion</button><button class="primary big" data-open="dress">Customize</button>'
+      : `<button class="primary big" data-char="${c.id}">Set as companion</button>`}`;
+}
+
+/** Plays a character's intro line in their English or Japanese voice. */
+function previewVoice(id, lang) {
+  const c = charById(id);
+  voice.stopSpeaking();
+  if (id === S.active_character) character.setEmotion('happy', 4);
+  voice.speak(lang === 'ja' ? (c.intro_line_ja || c.intro_line) : c.intro_line, { characterId: c.id, lang, gender: c.gender });
+}
+
+// ======================= Shop + Dressing Room =======================
+const accIcon = id => ({ cat_ears: '🐱', glasses: '👓', halo: '😇', crown: '👑', witch_hat: '🧙', bow: '🎀' }[id] || '✨');
+const accSwatch = 'background:linear-gradient(135deg,#3b3f8f,#b0478f)';
+
 function renderShop() {
   $('shop-acc').innerHTML = S.catalog.accessories.map(a => {
     const owned = S.owned_accessories.includes(a.id);
-    const on = S.equipped_accessories.includes(a.id);
-    return `<div class="card ${on ? 'selected' : ''}"><div class="swatch" style="background:linear-gradient(135deg,#8b7bff,#ff5fa2)">${accIcon(a.id)}</div>
-      <b>${esc(a.name)}</b>
-      ${owned ? `<button data-equip="${a.id}" data-on="${!on}">${on ? 'Unequip' : 'Equip'}</button>`
-              : `<button data-buy="accessory:${a.id}" ${S.points < a.price ? 'disabled' : ''}>${a.price} ◆</button>`}</div>`;
+    return `<div class="card"><div class="swatch" style="${accSwatch}">${accIcon(a.id)}</div><b>${esc(a.name)}</b>
+      ${owned ? '<span class="owned">✓ Owned</span>'
+              : `<button data-buy="accessory:${a.id}" ${S.points < a.price ? 'disabled' : ''}><span class="gem">◆</span> ${a.price}</button>`}</div>`;
   }).join('');
   $('shop-bg').innerHTML = S.catalog.backgrounds.map(b => {
     const owned = S.owned_backgrounds.includes(b.id);
-    return `<div class="card ${S.background === b.id ? 'selected' : ''}"><div class="swatch" style="background:${b.css}"></div>
-      <b>${esc(b.name)}</b>
-      ${owned ? `<button data-bg="${b.id}">${S.background === b.id ? 'Using' : 'Use'}</button>`
-              : `<button data-buy="background:${b.id}" ${S.points < b.price ? 'disabled' : ''}>${b.price} ◆</button>`}</div>`;
+    return `<div class="card"><div class="swatch" style="background:${b.css}"></div><b>${esc(b.name)}</b>
+      ${owned ? '<span class="owned">✓ Owned</span>'
+              : `<button data-buy="background:${b.id}" ${S.points < b.price ? 'disabled' : ''}><span class="gem">◆</span> ${b.price}</button>`}</div>`;
   }).join('');
 }
-const accIcon = id => ({ cat_ears: '🐱', glasses: '👓', halo: '😇', crown: '👑', witch_hat: '🧙', bow: '🎀' }[id] || '✨');
 
-document.addEventListener('click', async e => {
-  const d = e.target.dataset || {};
+function renderDress() {
+  const mine = S.catalog.accessories.filter(a => S.owned_accessories.includes(a.id));
+  $('dress-acc').innerHTML = mine.map(a => {
+    const on = S.equipped_accessories.includes(a.id);
+    return `<div class="card ${on ? 'selected' : ''}"><div class="swatch" style="${accSwatch}">${accIcon(a.id)}</div><b>${esc(a.name)}</b>
+      <button data-equip="${a.id}" data-on="${!on}">${on ? 'Take off' : 'Wear'}</button></div>`;
+  }).join('') || '<small>No accessories yet. <button class="link" data-open="shop">Visit the Shop</button></small>';
+  $('bg-select').innerHTML = S.catalog.backgrounds.filter(b => S.owned_backgrounds.includes(b.id)).map(b => `
+    <div class="card ${S.background === b.id ? 'selected' : ''}"><div class="swatch" style="background:${b.css}"></div>
+    <b>${esc(b.name)}</b><button data-bg="${b.id}" ${S.background === b.id ? 'disabled' : ''}>${S.background === b.id ? 'In use' : 'Use'}</button></div>`).join('');
+  const char = activeChar();
+  const p = S.personality_overrides[char.id] || char.personality;
+  const presets = Object.keys(CLASSES);
+  if (document.activeElement !== $('personality-custom') && document.activeElement !== $('personality')) {
+    $('personality').value = presets.includes(p) ? p : 'custom';
+    $('personality-custom').classList.toggle('hidden', presets.includes(p));
+    if (!presets.includes(p)) $('personality-custom').value = p;
+  }
+  document.querySelectorAll('input[name=vmode]').forEach(r => { r.checked = r.value === S.settings.voice_mode; });
+}
+
+function setFrame(view) {
+  character.setFraming(view);
+  document.querySelectorAll('[data-frame]').forEach(b => b.classList.toggle('active', b.dataset.frame === view));
+}
+
+$('personality').addEventListener('change', () => {
+  $('personality-custom').classList.toggle('hidden', $('personality').value !== 'custom');
+});
+$('save-personality').addEventListener('click', async () => {
+  const v = $('personality').value === 'custom' ? $('personality-custom').value.trim() : $('personality').value;
+  if (!v) return;
   try {
-    if (d.buy) {
+    document.activeElement?.blur();
+    await setState(await post('/personality', { character_id: S.active_character, personality: v }));
+    addMsg('sys', 'Personality saved.');
+  } catch (err) { toastError(err); }
+});
+document.querySelectorAll('input[name=vmode]').forEach(r => r.addEventListener('change', async () => {
+  await setState(await post('/settings', { settings: { voice_mode: r.value } }));
+}));
+
+// ======================= One click handler for all the generated buttons =======================
+document.addEventListener('click', async e => {
+  const t = e.target.closest('[data-buy],[data-equip],[data-bg],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del]');
+  if (!t || t.disabled) return;
+  const d = t.dataset;
+  try {
+    if (d.done) {
+      await completeTask(d.done);
+    } else if (d.del) {
+      await setState(await api(`/tasks/${d.del}`, { method: 'DELETE' }));
+    } else if (d.buy) {
       const [kind, id] = d.buy.split(':');
       await setState(await post('/shop/buy', { kind, id }));
       voice.sfx('task_done');
       say('Ooh, thank you! I love it!', { emotion: 'happy' });
-      if (kind === 'accessory') await setState(await post('/equip', { kind, id, on: true }));
+      await setState(await post('/equip', { kind, id, on: true })); // wear / use it right away
     } else if (d.equip) {
       await setState(await post('/equip', { kind: 'accessory', id: d.equip, on: d.on === 'true' }));
       if (d.on === 'true') character.setEmotion('happy', 3);
@@ -543,7 +760,26 @@ document.addEventListener('click', async e => {
     } else if (d.char) {
       await setState(await post('/equip', { kind: 'character', id: d.char }));
       const c = activeChar();
-      say(c.intro_line, { emotion: 'happy' });
+      closeTab();
+      character.wave(2.5);
+      say(c.intro_line, { emotion: 'happy', ja: c.intro_line_ja });
+    } else if (d.pick) {
+      charPick = d.pick;
+      renderChars();
+    } else if (d.filter) {
+      charFilter = d.filter;
+      renderChars();
+    } else if (d.banner) {
+      bannerId = d.banner;
+      renderGacha();
+    } else if (d.frame) {
+      setFrame(d.frame);
+    } else if (d.preview) {
+      previewVoice(d.id || S.active_character, d.preview);
+    } else if (d.open) {
+      if (currentTab !== d.open) openTab(d.open);
+    } else if ('close' in d) {
+      closeTab();
     }
   } catch (err) { toastError(err); }
 });
@@ -601,44 +837,12 @@ async function teach(question) {
   } catch (err) { $('lesson').textContent = '⚠ ' + err.message; }
 }
 
-// ======================= Settings =======================
-function renderSettings() {
-  $('char-select').innerHTML = S.catalog.characters.filter(c => S.owned_characters[c.id]).map(c => `
-    <div class="card r-${c.rarity} ${c.id === S.active_character ? 'selected' : ''}">
-      <div class="swatch r-${c.rarity}" style="background:${c.color}">${c.name[0]}</div>
-      <b>${esc(c.name)}</b><div class="rarity-label">${c.rarity}</div>
-      <button data-char="${c.id}" ${c.id === S.active_character ? 'disabled' : ''}>${c.id === S.active_character ? 'Active' : 'Choose'}</button>
-    </div>`).join('');
-  const char = activeChar();
-  const p = S.personality_overrides[char.id] || char.personality;
-  const presets = ['tsundere', 'cheerful', 'sensei', 'chill', 'rival'];
-  if (document.activeElement !== $('personality-custom')) {
-    $('personality').value = presets.includes(p) ? p : 'custom';
-    $('personality-custom').classList.toggle('hidden', presets.includes(p));
-    if (!presets.includes(p)) $('personality-custom').value = p;
-  }
-  document.querySelectorAll('input[name=vmode]').forEach(r => { r.checked = r.value === S.settings.voice_mode; });
-  $('bg-select').innerHTML = S.catalog.backgrounds.filter(b => S.owned_backgrounds.includes(b.id)).map(b => `
-    <div class="card ${S.background === b.id ? 'selected' : ''}"><div class="swatch" style="background:${b.css}"></div>
-    <b>${esc(b.name)}</b><button data-bg="${b.id}">Use</button></div>`).join('');
+// ======================= Options =======================
+function renderOptions() {
   $('sys-status').innerHTML = `<small>ElevenLabs voice: ${elevenOn ? '✅ connected' : '❌ no key (using browser voice)'}<br>
-    Tasks done: ${S.stats.tasks_done} · Pulls: ${S.stats.pulls} · Distractions caught: ${S.stats.distractions}</small>`;
+    Quests done: ${S.stats.tasks_done} · Pulls: ${S.stats.pulls} · Distractions caught: ${S.stats.distractions}</small>`;
 }
 
-$('personality').addEventListener('change', () => {
-  $('personality-custom').classList.toggle('hidden', $('personality').value !== 'custom');
-});
-$('save-personality').addEventListener('click', async () => {
-  const v = $('personality').value === 'custom' ? $('personality-custom').value.trim() : $('personality').value;
-  if (!v) return;
-  try {
-    await setState(await post('/personality', { character_id: S.active_character, personality: v }));
-    addMsg('sys', 'Personality saved.');
-  } catch (err) { toastError(err); }
-});
-document.querySelectorAll('input[name=vmode]').forEach(r => r.addEventListener('change', async () => {
-  await setState(await post('/settings', { settings: { voice_mode: r.value } }));
-}));
 $('reset-btn').addEventListener('click', async () => {
   if (!$('reset-btn').dataset.confirm) {
     $('reset-btn').dataset.confirm = '1';
@@ -652,18 +856,13 @@ $('reset-btn').addEventListener('click', async () => {
   await setState(await post('/reset'));
 });
 
-// ======================= Tabs =======================
-document.querySelectorAll('#tabs button').forEach(btn => btn.addEventListener('click', () => {
-  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b === btn));
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + btn.dataset.tab));
-}));
-
 // ======================= Start =======================
 async function boot() {
   try {
     elevenOn = (await api('/voice/status')).elevenlabs;
     await setState(await api('/state'));
   } catch (e) {
+    console.error(e);
     addMsg('sys', '⚠ Could not reach the backend. Is the Python server running?');
     return;
   }
@@ -677,13 +876,17 @@ async function boot() {
 
   const c = activeChar();
   addMsg('bot', `${c.intro_line}`);
+  showBubble(c.intro_line);
   if (daily?.claimed) addMsg('sys', `🎁 Daily gift: +${daily.gift} ◆ (day ${daily.streak} streak${daily.streak >= 7 ? ', max bonus!' : ''})`);
   const reminder = reminderLine();
   if (reminder) addMsg('sys', '⏰ ' + reminder);
   character.wave(3);
 
-  // Browsers block sound until the first click, so greet out loud on the first interaction.
+  // Browsers block sound until the first click or key press, so greet out loud on the first interaction.
+  let greeted = false;
   const greet = async () => {
+    if (greeted) return;
+    greeted = true;
     if (Date.now() - lastPokeLine < 500) await new Promise(r => setTimeout(r, 3500)); // let the poke reaction finish
     character.wave(2.5);
     const h = new Date().getHours();
@@ -700,5 +903,6 @@ async function boot() {
     if (reminder) await say(reminder, { emotion: reminder.includes('overdue') ? 'angry' : 'surprised' });
   };
   document.addEventListener('pointerdown', greet, { once: true });
+  document.addEventListener('keydown', greet, { once: true });
 }
 boot();

@@ -43,7 +43,8 @@ def client():
 
 def personality_for(state, char):
     chosen = state["personality_overrides"].get(char["id"]) or char.get("personality", "cheerful")
-    return PERSONALITIES.get(chosen, chosen)  # if not a preset, it's the user's custom description
+    text = PERSONALITIES.get(chosen, chosen)  # if not a preset, it's the user's custom description
+    return f"{char['persona']} {text}" if char.get("persona") else text
 
 
 def parse_json(text):

@@ -87,6 +87,7 @@ def public_state(state):
             "characters": CHARACTERS["characters"],
             "accessories": SHOP["accessories"],
             "backgrounds": SHOP["backgrounds"],
+            "banners": CHARACTERS.get("banners", []),
         },
         "gacha": {
             "pull_cost": PULL_COST,
@@ -283,15 +284,21 @@ def roll_rarity(min_rarity=None):
     return rates[-1][0]
 
 
-def pick_reward(rarity):
+FEATURED_CHANCE = 0.5  # when a featured character's rarity is rolled, how often you get the featured one
+
+
+def pick_reward(rarity, featured=()):
     pool = [("character", c) for c in CHARACTERS["characters"] if c["rarity"] == rarity]
+    rate_up = [p for p in pool if p[1]["id"] in featured]
+    if rate_up and random.random() < FEATURED_CHANCE:
+        return random.choice(rate_up)
     pool += [("item", i) for i in CHARACTERS["items"] if i["rarity"] == rarity]
     if not pool:  # nothing at this rarity yet -> give a common item
         pool = [("item", i) for i in CHARACTERS["items"]]
     return random.choice(pool)
 
 
-def do_pull(state, min_rarity=None, forced=None):
+def do_pull(state, min_rarity=None, forced=None, featured=()):
     state["pity"]["since_legendary"] += 1
     if forced:
         rarity = forced
@@ -303,7 +310,7 @@ def do_pull(state, min_rarity=None, forced=None):
         state["pity"]["since_legendary"] = 0
     state["stats"]["pulls"] += 1
 
-    kind, reward = pick_reward(rarity)
+    kind, reward = pick_reward(rarity, featured)
     result = {"type": kind, "id": reward["id"], "name": reward["name"], "rarity": reward["rarity"], "new": False, "refund": 0}
     if kind == "item":
         state["points"] += reward["points"]
@@ -331,6 +338,7 @@ def do_pull(state, min_rarity=None, forced=None):
 class PullIn(BaseModel):
     count: int = 1
     force_rarity: str | None = None  # only works in demo mode (to show off cutscenes to judges)
+    banner: str | None = None        # banner id from characters.json; its featured characters get a rate-up
 
 
 @router.post("/gacha/pull")
@@ -338,6 +346,8 @@ def pull(body: PullIn):
     if body.count not in (1, 10):
         raise HTTPException(400, "Pull 1 or 10")
     cost = PULL_COST if body.count == 1 else TEN_PULL_COST
+    banner = next((b for b in CHARACTERS.get("banners", []) if b["id"] == body.banner), None)
+    featured = tuple(banner["featured"]) if banner else ()
     with Transaction() as state:
         if state["points"] < cost:
             raise HTTPException(400, f"Not enough points ({cost} needed)")
@@ -348,6 +358,7 @@ def pull(body: PullIn):
         for i in range(body.count):
             # 10-pull guarantee: if the first 9 had nothing Epic or better, the 10th is at least Epic
             need_epic = body.count == 10 and i == 9 and all(RARITY_ORDER.index(r["rarity"]) < epic for r in results)
-            results.append(do_pull(state, min_rarity="Epic" if need_epic else None, forced=forced if i == 0 else None))
+            results.append(do_pull(state, min_rarity="Epic" if need_epic else None, forced=forced if i == 0 else None,
+                                   featured=featured))
     best = max(results, key=lambda r: RARITY_ORDER.index(r["rarity"]))
     return {"results": results, "best_rarity": best["rarity"], "state": public_state(storage.load())}

@@ -19,26 +19,86 @@
     }
   </script>
 </head>
-<body>
-  <!-- 3D character fills the background -->
+<body data-view="lobby">
+  <!-- Icon shapes used by the menus -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-quest" viewBox="0 0 24 24"><path d="M7 4h10v17H7z M9.5 12.5l2 2 3.5-4.5 M10 4V2.5h4V4"/></symbol>
+      <symbol id="i-focus" viewBox="0 0 24 24"><path d="M7 3h10 M7 21h10 M8 3c0 5 8 5 8 9s-8 4-8 9 M16 3c0 5-8 5-8 9s8 4 8 9"/></symbol>
+      <symbol id="i-convene" viewBox="0 0 24 24"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></symbol>
+      <symbol id="i-chars" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></symbol>
+      <symbol id="i-dress" viewBox="0 0 24 24"><path d="M12 7.5a2 2 0 1 0-2-2 M12 7.5v2l8.6 6.2a1 1 0 0 1-.6 1.8H4a1 1 0 0 1-.6-1.8L12 9.5"/></symbol>
+      <symbol id="i-shop" viewBox="0 0 24 24"><path d="M5 8h14l-1 13H6z M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
+      <symbol id="i-teacher" viewBox="0 0 24 24"><path d="M12 5v15 M12 5c-2-1.5-5-2-8-1.500v14c3-.5 6 0 8 1.500 M12 5c2-1.500 5-2 8-1.500v14c-3-.5-6 0-8 1.500"/></symbol>
+      <symbol id="i-log" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z M8 9h8 M8 12h5"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.500"/><path d="M12 2v3.500 M12 18.500V22 M2 12h3.500 M18.500 12H22 M4.900 4.900l2.500 2.500 M16.600 16.600l2.500 2.500 M4.900 19.100l2.500-2.500 M16.600 7.400l2.500-2.500"/></symbol>
+      <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M5.500 11.500a6.500 6.500 0 0 0 13 0 M12 18v3"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M5 5l14 14 M19 5L5 19"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6 M12 7.500v.500"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- The living room: animated environment, then the 3D companion on top -->
+  <canvas id="env"></canvas>
+  <div id="floor"></div>
   <canvas id="stage"></canvas>
+  <div id="vignette"></div>
   <div id="model-hint" class="hidden"></div>
 
-  <!-- Top HUD -->
+  <!-- ===================== LOBBY HUD ===================== -->
   <header id="hud">
-    <div class="hud-name"><span id="hud-char">Aiko</span><small id="hud-title"></small></div>
-    <div class="hud-level">
-      <span>Lv <b id="hud-level">1</b></span>
-      <div class="xpbar"><div id="hud-xp"></div></div>
-      <small id="hud-xptext">0 / 100 XP</small>
+    <div class="player-card">
+      <div class="avatar"><img id="hud-avatar" alt="" /><span id="hud-avatar-fallback"></span></div>
+      <div class="player-info">
+        <div class="player-name"><span id="hud-char">…</span><small id="hud-title"></small></div>
+        <div class="player-level">
+          <span class="lv">Lv <b id="hud-level">1</b></span>
+          <div class="xpbar"><div id="hud-xp"></div></div>
+          <small id="hud-xptext">0 / 100 XP</small>
+        </div>
+      </div>
     </div>
-    <div class="hud-points"><span class="gem">◆</span> <b id="hud-points">0</b></div>
-    <div id="hud-streak" class="streak-pill" title="Daily streak">🔥 0</div>
-    <div id="hud-focus" class="focus-pill off">Focus off</div>
+    <div class="hud-right">
+      <div id="hud-focus" class="pill focus-pill off">Focus off</div>
+      <div id="hud-streak" class="pill streak-pill" title="Daily streak">0</div>
+      <div class="pill hud-points" title="Points: earn them from quests and focus, spend them on Convene and the shop"><span class="gem">◆</span><b id="hud-points">0</b></div>
+    </div>
   </header>
 
-  <!-- Subtitles / speech bubble -->
-  <div id="bubble" class="hidden"><div id="bubble-text"></div><div id="bubble-sub"></div></div>
+  <!-- Game navigation (left dock). The letter is the keyboard shortcut. -->
+  <nav id="tabs" class="dock">
+    <button data-tab="tasks" data-key="q"><svg><use href="#i-quest"/></svg><span>Quests</span><kbd>Q</kbd></button>
+    <button data-tab="focus" data-key="f"><svg><use href="#i-focus"/></svg><span>Focus</span><kbd>F</kbd></button>
+    <button data-tab="gacha" data-key="g"><svg><use href="#i-convene"/></svg><span>Convene</span><kbd>G</kbd></button>
+    <button data-tab="chars" data-key="c"><svg><use href="#i-chars"/></svg><span>Characters</span><kbd>C</kbd></button>
+    <button data-tab="dress" data-key="d"><svg><use href="#i-dress"/></svg><span>Dressing Room</span><kbd>D</kbd></button>
+    <button data-tab="shop" data-key="s"><svg><use href="#i-shop"/></svg><span>Shop</span><kbd>S</kbd></button>
+    <button data-tab="teacher" data-key="t"><svg><use href="#i-teacher"/></svg><span>Teacher</span><kbd>T</kbd></button>
+    <button data-tab="chat" data-key="l"><svg><use href="#i-log"/></svg><span>Log</span><kbd>L</kbd></button>
+    <button data-tab="settings" data-key="o"><svg><use href="#i-settings"/></svg><span>Options</span><kbd>O</kbd></button>
+  </nav>
+
+  <!-- Quest tracker (right side of the lobby) -->
+  <aside id="tracker" class="frame">
+    <div class="frame-title"><span>Quests</span><button class="link" data-open="tasks">View all</button></div>
+    <ul id="tracker-list" class="list"></ul>
+    <div id="tracker-week" class="week-card"></div>
+  </aside>
+
+  <!-- JRPG dialogue box + command bar -->
+  <div id="dialogue">
+    <div id="bubble" class="hidden">
+      <div class="nameplate" id="bubble-name"></div>
+      <div id="bubble-text"></div>
+      <div id="bubble-sub"></div>
+      <div class="next">▼</div>
+    </div>
+    <form id="chat-form">
+      <button type="button" id="mic-btn" title="Click to talk, click again to send"><svg><use href="#i-mic"/></svg></button>
+      <input id="chat-input" placeholder="Press Enter to talk… (try: remind me to study at 5pm)" autocomplete="off" />
+      <button type="submit" class="primary">Send</button>
+    </form>
+  </div>
 
   <!-- Distraction warning banner -->
   <div id="warning" class="hidden">
@@ -50,142 +110,89 @@
     </div>
   </div>
 
-  <!-- Floating reward popups go here -->
   <div id="floaters"></div>
+  <div id="toasts"></div>
 
-  <!-- Right-side panel with tabs -->
-  <aside id="panel">
-    <nav id="tabs">
-      <button data-tab="chat" class="active">Chat</button>
-      <button data-tab="tasks">Tasks</button>
-      <button data-tab="focus">Focus</button>
-      <button data-tab="gacha">Gacha</button>
-      <button data-tab="shop">Shop</button>
-      <button data-tab="teacher">Teacher</button>
-      <button data-tab="settings">⚙</button>
-    </nav>
+  <!-- ===================== SIDE DRAWER (keeps the companion visible) ===================== -->
+  <aside id="drawer" class="frame">
+    <div class="drawer-head">
+      <div class="drawer-title" id="drawer-title">Quests</div>
+      <button class="icon-btn" data-close title="Close (Esc)"><svg><use href="#i-close"/></svg></button>
+    </div>
 
-    <!-- CHAT -->
-    <section id="tab-chat" class="tab active">
-      <div id="chat-log"></div>
-      <form id="chat-form">
-        <button type="button" id="mic-btn" title="Click to talk, click again to send">🎤</button>
-        <input id="chat-input" placeholder="Talk to your assistant… (try: remind me to study at 5pm)" autocomplete="off" />
-        <button type="submit">Send</button>
-      </form>
-    </section>
-
-    <!-- TASKS -->
-    <section id="tab-tasks" class="tab">
+    <!-- QUESTS -->
+    <section id="tab-tasks" class="tab" data-title="Quests">
       <div id="week-card" class="week-card"></div>
       <form id="task-form" class="row">
-        <input id="task-title" placeholder="New task…" required />
+        <input id="task-title" placeholder="New quest…" required />
         <select id="task-diff">
           <option value="easy">Easy (+15 XP)</option>
           <option value="medium" selected>Medium (+30 XP)</option>
           <option value="hard">Hard (+60 XP)</option>
         </select>
         <input id="task-due" type="date" />
-        <button type="submit">Add</button>
+        <button type="submit" class="primary">Add</button>
       </form>
-      <h3>To do</h3>
+      <h3>Active quests</h3>
       <ul id="task-list" class="list"></ul>
       <details>
         <summary>Completed</summary>
         <ul id="done-list" class="list done"></ul>
       </details>
-      <h3>Plan my week ✨</h3>
+      <h3>Plan my week</h3>
       <textarea id="plan-goals" rows="3" placeholder="Tell me your goals and interests this week (e.g. midterm Friday, gym 3x, learn guitar)…"></textarea>
-      <button id="plan-btn">Make my plan</button>
+      <button id="plan-btn" class="primary">Make my plan</button>
     </section>
 
     <!-- FOCUS -->
-    <section id="tab-focus" class="tab">
+    <section id="tab-focus" class="tab" data-title="Focus">
       <div class="focus-card">
         <div id="pomo-picker" class="pomo-picker" role="radiogroup" aria-label="Session length">
           <button data-pomo="0">Free</button>
-          <button data-pomo="25" class="active">🍅 25 min</button>
-          <button data-pomo="50">🍅 50 min</button>
+          <button data-pomo="25" class="active">25 min</button>
+          <button data-pomo="50">50 min</button>
         </div>
         <div id="focus-phase" class="focus-phase"></div>
         <div id="focus-timer">25:00</div>
         <div class="pomo-bar"><div id="pomo-fill"></div></div>
         <div id="focus-status">Not focusing</div>
-        <button id="focus-toggle" class="big">Start focus session</button>
-        <small id="focus-hint">25 min work, then a 5 min break. The timer pauses while you're distracted. Earn 2 points + 1 XP per focused minute, plus a bonus for every finished round.</small>
+        <button id="focus-toggle" class="big primary">Start focus session</button>
+        <small id="focus-hint"></small>
       </div>
-      <h3>Blocked apps <small>(process names)</small></h3>
-      <textarea id="blocked-apps" rows="2"></textarea>
-      <h3>Blocked sites <small>(words in the tab title)</small></h3>
-      <textarea id="blocked-sites" rows="2"></textarea>
-      <div class="grid2">
-        <label>Grace period (s)<input id="grace" type="number" min="0" /></label>
-        <label>Drain every (s)<input id="drain-every" type="number" min="1" /></label>
-        <label>Points per drain<input id="drain-amount" type="number" min="0" /></label>
-        <label>Force-close after (s)<input id="force-close" type="number" min="5" /></label>
-      </div>
-      <label class="check"><input id="demo-mode" type="checkbox" /> Demo mode (fast timings + forced gacha rarity, for judges)</label>
-      <button id="save-focus">Save focus settings</button>
       <div class="sim">
         <button id="sim-on">Simulate distraction</button>
         <button id="sim-app">Simulate app (Discord)</button>
         <button id="sim-off">Stop simulating</button>
       </div>
       <small id="focus-platform"></small>
+      <details>
+        <summary>Focus rules</summary>
+        <h3>Blocked apps <small>(process names)</small></h3>
+        <textarea id="blocked-apps" rows="2"></textarea>
+        <h3>Blocked sites <small>(words in the tab title)</small></h3>
+        <textarea id="blocked-sites" rows="2"></textarea>
+        <div class="grid2">
+          <label>Grace period (s)<input id="grace" type="number" min="0" /></label>
+          <label>Drain every (s)<input id="drain-every" type="number" min="1" /></label>
+          <label>Points per drain<input id="drain-amount" type="number" min="0" /></label>
+          <label>Force-close after (s)<input id="force-close" type="number" min="5" /></label>
+        </div>
+        <label class="check"><input id="demo-mode" type="checkbox" /> Demo mode (fast timings + forced gacha rarity, for judges)</label>
+        <button id="save-focus">Save focus rules</button>
+      </details>
     </section>
 
-    <!-- GACHA -->
-    <section id="tab-gacha" class="tab">
-      <div id="banner">
-        <div class="banner-title">Starfall Wish</div>
-        <div class="banner-sub">Featured: <b>Celestia, the Unbound Star</b></div>
-        <div id="pity-text"></div>
+    <!-- DRESSING ROOM -->
+    <section id="tab-dress" class="tab" data-title="Dressing Room">
+      <div class="row view-row">
+        <button data-frame="full" class="active">Full body</button>
+        <button data-frame="face">Close-up</button>
+        <small>Drag the character to turn them around.</small>
       </div>
-      <div class="row">
-        <button id="pull1" class="big"></button>
-        <button id="pull10" class="big gold"></button>
-      </div>
-      <div id="force-row" class="hidden">
-        <label>Demo: force rarity of first pull
-          <select id="force-rarity">
-            <option value="">(random)</option>
-            <option>Rare</option><option>Epic</option><option>Legendary</option><option>Mythic</option><option>Unbound</option>
-          </select>
-        </label>
-      </div>
-      <details><summary>Rates</summary><table id="rates"></table>
-        <small>10-pull guarantees Epic or better. Duplicates refund points and raise Bond (max 6).</small></details>
-      <h3>Collection</h3>
-      <div id="collection" class="cards"></div>
-    </section>
-
-    <!-- SHOP -->
-    <section id="tab-shop" class="tab">
       <h3>Accessories</h3>
-      <div id="shop-acc" class="cards"></div>
-      <h3>Backgrounds</h3>
-      <div id="shop-bg" class="cards"></div>
-    </section>
-
-    <!-- TEACHER -->
-    <section id="tab-teacher" class="tab">
-      <div class="row">
-        <input id="teach-file" type="file" accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.docx,.pptx" />
-        <button id="teach-upload">Upload</button>
-      </div>
-      <small id="teach-file-name">No file yet. Upload notes, slides or a textbook chapter.</small>
-      <div id="lesson"></div>
-      <form id="teach-form" class="row">
-        <input id="teach-q" placeholder="Ask a question about the material…" />
-        <button type="submit">Ask</button>
-      </form>
-      <button id="teach-start">Teach me this file</button>
-    </section>
-
-    <!-- SETTINGS -->
-    <section id="tab-settings" class="tab">
-      <h3>Assistant</h3>
-      <div id="char-select" class="cards"></div>
+      <div id="dress-acc" class="cards"></div>
+      <h3>Room</h3>
+      <div id="bg-select" class="cards"></div>
       <h3>Personality</h3>
       <select id="personality">
         <option value="tsundere">Tsundere</option>
@@ -200,16 +207,115 @@
       <h3>Voice</h3>
       <label class="check"><input type="radio" name="vmode" value="dub" /> Dub (English voice)</label>
       <label class="check"><input type="radio" name="vmode" value="sub" /> Sub (Japanese voice + English subtitles)</label>
+      <div class="row">
+        <button data-preview="en">▶ Hear English voice</button>
+        <button data-preview="ja">▶ Hear Japanese voice</button>
+      </div>
+    </section>
+
+    <!-- SHOP -->
+    <section id="tab-shop" class="tab" data-title="Shop">
+      <h3>Accessories</h3>
+      <div id="shop-acc" class="cards"></div>
+      <h3>Rooms</h3>
+      <div id="shop-bg" class="cards"></div>
+    </section>
+
+    <!-- TEACHER -->
+    <section id="tab-teacher" class="tab" data-title="Teacher">
+      <div class="row">
+        <input id="teach-file" type="file" accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.docx,.pptx" />
+        <button id="teach-upload" class="primary">Upload</button>
+      </div>
+      <small id="teach-file-name">No file yet. Upload notes, slides or a textbook chapter.</small>
+      <div id="lesson"></div>
+      <form id="teach-form" class="row">
+        <input id="teach-q" placeholder="Ask a question about the material…" />
+        <button type="submit" class="primary">Ask</button>
+      </form>
+      <button id="teach-start">Teach me this file</button>
+    </section>
+
+    <!-- LOG (chat history) -->
+    <section id="tab-chat" class="tab" data-title="Log">
+      <div id="chat-log"></div>
+    </section>
+
+    <!-- OPTIONS -->
+    <section id="tab-settings" class="tab" data-title="Options">
+      <h3>Sound</h3>
       <label class="check"><input type="checkbox" id="ui-sounds" checked /> Click sounds on buttons</label>
-      <h3>Background</h3>
-      <div id="bg-select" class="cards"></div>
+      <h3>Keyboard</h3>
+      <div class="keys">
+        <span><kbd>Enter</kbd> talk</span><span><kbd>Esc</kbd> close menu</span><span><kbd>Q</kbd> quests</span><span><kbd>F</kbd> focus</span>
+        <span><kbd>G</kbd> convene</span><span><kbd>C</kbd> characters</span><span><kbd>D</kbd> dressing room</span><span><kbd>S</kbd> shop</span>
+        <span><kbd>T</kbd> teacher</span><span><kbd>L</kbd> log</span><span><kbd>O</kbd> options</span>
+      </div>
       <h3>System</h3>
       <div id="sys-status"></div>
       <button id="reset-btn" class="danger">Reset all progress</button>
     </section>
   </aside>
 
-  <!-- Gacha cutscene overlay -->
+  <!-- ===================== CONVENE (gacha) ===================== -->
+  <section id="tab-gacha" class="tab full">
+    <div class="full-bg"><div class="glyph" id="banner-glyph"></div></div>
+    <div class="full-top">
+      <div class="full-title"><svg><use href="#i-convene"/></svg>Convene</div>
+      <div class="full-right">
+        <div class="pill hud-points"><span class="gem">◆</span><b id="gacha-points">0</b></div>
+        <button class="icon-btn star" data-close title="Close (Esc)"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </div>
+    <div id="banner-list" class="g-banners"></div>
+    <div id="banner-art" class="g-art"></div>
+    <div id="banner" class="g-info">
+      <div class="banner-kind" id="banner-kind"></div>
+      <div class="banner-title" id="banner-title"></div>
+      <div class="banner-sub">Every <b>10</b> Convenes guarantees an <b>Epic</b> or above.<br>A <b>Legendary</b> or above is guaranteed within <b id="pity-limit">50</b> Convenes.<br>Featured characters have a higher drop chance.</div>
+      <div id="pity-text"></div>
+      <div id="force-row" class="hidden">
+        <label>Demo: force rarity of first pull
+          <select id="force-rarity">
+            <option value="">(random)</option>
+            <option>Rare</option><option>Epic</option><option>Legendary</option><option>Mythic</option><option>Unbound</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="g-tools">
+      <button class="icon-btn round" data-open="shop" title="Shop"><svg><use href="#i-shop"/></svg></button>
+      <button class="icon-btn round" data-open="chars" title="Characters"><svg><use href="#i-chars"/></svg></button>
+      <button class="icon-btn round" id="rates-btn" title="Drop rates"><svg><use href="#i-info"/></svg></button>
+    </div>
+    <div id="rates-pop" class="frame hidden">
+      <div class="frame-title"><span>Drop rates</span></div>
+      <table id="rates"></table>
+      <small>10-pull guarantees Epic or better. Duplicates refund points and raise Bond (max 6).</small>
+    </div>
+    <div class="g-pull">
+      <button id="pull1" class="pull-btn"></button>
+      <button id="pull10" class="pull-btn"></button>
+    </div>
+  </section>
+
+  <!-- ===================== CHARACTERS (data bank) ===================== -->
+  <section id="tab-chars" class="tab full">
+    <div class="full-bg stars"></div>
+    <div class="full-top">
+      <div class="full-title"><svg><use href="#i-chars"/></svg><div><small>Data Bank</small>Characters</div></div>
+      <div class="full-right">
+        <div class="indexed">Indexed <b id="chars-count">0/0</b></div>
+        <button class="icon-btn star" data-close title="Close (Esc)"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </div>
+    <div id="char-filters" class="c-filters"></div>
+    <div id="collection" class="c-grid"></div>
+    <div id="char-detail" class="c-detail frame"></div>
+  </section>
+
+  <!-- Menu transition wipe + gacha cutscene -->
+  <div id="wipe"></div>
   <div id="cutscene" class="hidden">
     <canvas id="cut-canvas"></canvas>
     <div id="cut-content"></div>

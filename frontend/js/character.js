@@ -6,7 +6,6 @@ import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { buildAccessory, DEFAULT_FACE } from './accessories.js';
 
 const EMOTIONS = ['happy', 'angry', 'sad', 'surprised', 'relaxed'];
-const PANEL_SPACE = 460; // pixels covered by the right panel; the character is centered in the rest
 const MAX_YAW = 0.7;    // how far she can turn her head left/right (radians, ~40°)
 const MAX_PITCH = 0.35; // how far she can look up/down (~20°)
 const IDLE_LOOK_BACK = 4; // seconds without mouse movement before she looks back at you
@@ -20,8 +19,8 @@ export class Character {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
 
-    this.scene.add(new THREE.AmbientLight(0xffffff, 1.6));
-    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    const key = new THREE.DirectionalLight(0xffffff, 2.3);
     key.position.set(1, 2, 3);
     this.scene.add(key);
     const rim = new THREE.DirectionalLight(0xffc0e0, 1.2);
@@ -44,6 +43,14 @@ export class Character {
     this.equipped = [];
     this.face = DEFAULT_FACE; // eye positions in accessory space (used by glasses)
 
+    // View: menus cover the right side of the screen, so the character slides over to stay centred in what's left.
+    this.shift = 0; this.shiftTarget = 0;
+    // Dressing room: drag to turn the character around, and zoom between full body (0) and close-up (1).
+    this.dragRotate = false;
+    this.drag = null;
+    this.spin = 0;
+    this.zoom = 0; this.zoomTarget = 0;
+
     // Cursor tracking: she turns her head (and eyes, on VRM models) toward the mouse.
     this.followCursor = true;
     this.cursor = null;            // {x, y} in normalized device coords, or null when the mouse is away
@@ -56,7 +63,12 @@ export class Character {
       const r = canvas.getBoundingClientRect();
       this.cursor = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
       this.lastMouseMove = this.clock.elapsedTime;
-      if (e.target === canvas) canvas.style.cursor = this.hitTest(this.cursor) ? 'pointer' : '';
+      if (this.drag) {
+        const dx = e.clientX - this.drag.x;
+        if (Math.abs(dx) > 4) this.drag.moved = true;
+        if (this.drag.moved) { this.spin = this.drag.spin + dx * 0.012; canvas.style.cursor = 'grabbing'; return; }
+      }
+      if (e.target === canvas) canvas.style.cursor = this.hitTest(this.cursor) ? 'pointer' : this.dragRotate ? 'grab' : '';
     });
 
     // Poking: click her body for a reaction, click her head for a headpat.
@@ -69,11 +81,13 @@ export class Character {
     canvas.addEventListener('pointerdown', e => {
       const r = canvas.getBoundingClientRect();
       const ndc = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
-      const zone = this.hitTest(ndc);
-      if (!zone) return;
-      this.pokeAt = this.clock.elapsedTime;
-      if (zone === 'head') this.setBlush(2.5);
-      if (this.onPoke) this.onPoke(zone);
+      if (this.dragRotate) { this.drag = { x: e.clientX, spin: this.spin, moved: false, ndc }; return; } // poke on release if it wasn't a drag
+      this.poke(ndc);
+    });
+    window.addEventListener('pointerup', () => {
+      const d = this.drag;
+      this.drag = null;
+      if (d && !d.moved) this.poke(d.ndc);
     });
     document.addEventListener('pointerleave', () => { this.cursor = null; });
     document.addEventListener('mouseout', e => { if (!e.relatedTarget) this.cursor = null; });
@@ -83,21 +97,40 @@ export class Character {
     this.renderer.setAnimationLoop(() => this.update());
   }
 
+  poke(ndc) {
+    const zone = this.hitTest(ndc);
+    if (!zone) return;
+    this.pokeAt = this.clock.elapsedTime;
+    if (zone === 'head') this.setBlush(2.5);
+    if (this.onPoke) this.onPoke(zone);
+  }
+
+  /** px = how many pixels on the right are covered by a menu. */
+  setShift(px) { this.shiftTarget = px; }
+
+  /** Dressing room mode: drag to rotate. Turning it off makes the character face forward again. */
+  setDressing(on) { this.dragRotate = on; if (!on) { this.drag = null; this.zoomTarget = 0; } }
+
+  /** 'full' body or 'face' close-up. */
+  setFraming(view) { this.zoomTarget = view === 'face' ? 1 : 0; }
+
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    // Shift the view so the character is centered in the space left of the panel
-    const p = Math.min(PANEL_SPACE, w * 0.4);
+    // Shift the view so the character is centered in the space left of the open menu
+    const p = Math.round(this.shift);
     this.camera.setViewOffset(w + p, h, p, 0, w, h);
     this.camera.updateProjectionMatrix();
   }
 
   frameCamera() {
-    const h = this.height;
-    const dist = (h * 1.4) / (2 * Math.tan(THREE.MathUtils.degToRad(15)));
-    this.camera.position.set(0, h * 0.58, dist);
-    this.camera.lookAt(0, h * 0.56, 0);
+    const h = this.height, z = this.zoom;
+    const half = Math.tan(THREE.MathUtils.degToRad(15));
+    const fullDist = (h * 1.4) / (2 * half), faceDist = 0.8 / (2 * half);
+    const y = THREE.MathUtils.lerp(h * 0.56, h - 0.16, z);
+    this.camera.position.set(0, y + 0.02 * h * (1 - z), THREE.MathUtils.lerp(fullDist, faceDist, z));
+    this.camera.lookAt(0, y, 0);
   }
 
   clear() {
@@ -378,13 +411,18 @@ export class Character {
     if (t > this.nextBlink) { this.blinkStart = t; this.nextBlink = t + 2 + Math.random() * 4; }
     if (this.blinkStart > 0 && t - this.blinkStart < 0.15) blink = Math.sin(((t - this.blinkStart) / 0.15) * Math.PI);
 
+    // glide the view when a menu opens/closes or the dressing room zooms
+    if (Math.abs(this.shiftTarget - this.shift) > 0.5) { this.shift += (this.shiftTarget - this.shift) * Math.min(1, dt * 7); this.resize(); }
+    if (Math.abs(this.zoomTarget - this.zoom) > 0.002) { this.zoom += (this.zoomTarget - this.zoom) * Math.min(1, dt * 5); this.frameCamera(); }
+    if (!this.dragRotate) this.spin += (0 - this.spin) * Math.min(1, dt * 5);
+
     this.updateLook(dt, t);
     const w = this.weights;
     if (this.root) {
       // whole-body motion: happy bounce, surprised hop, angry shake
       this.root.position.y = Math.abs(Math.sin(t * 6)) * 0.04 * w.happy + Math.max(0, Math.sin(t * 9)) * 0.03 * w.surprised;
       this.root.position.x = Math.sin(t * 40) * 0.01 * w.angry;
-      this.root.rotation.y = Math.sin(t * 0.5) * 0.06;
+      this.root.rotation.y = Math.sin(t * 0.5) * 0.06 + this.spin;
       // squish when poked: quick squash and stretch that settles in ~0.6s
       const since = t - this.pokeAt;
       const squish = since < 0.6 ? Math.sin(since * 22) * Math.exp(-since * 7) * 0.12 : 0;
@@ -452,7 +490,7 @@ export class Character {
     const set = (name, x, y, z) => { const n = b(name); if (n) n.rotation.set(x, y, z); };
 
     const breathe = Math.sin(t * 1.6);
-    const armDown = 1.2 - w.angry * 0.08 - w.happy * 0.2 + w.sad * 0.1;
+    const armDown = 1.32 - w.angry * 0.08 - w.happy * 0.2 + w.sad * 0.1;
     const elbow = 0.25 + w.angry * 0.9 + w.happy * 0.3;
     set('leftUpperArm', 0, 0, -armDown + breathe * 0.02);
     set('rightUpperArm', 0, 0, armDown - breathe * 0.02);
@@ -463,7 +501,9 @@ export class Character {
       set('rightUpperArm', 0, 0, armDown * (1 - wv) - 1.0 * wv);
       set('rightLowerArm', 0, elbow * (1 - wv) + 0.2 * wv, wv * (-0.6 + Math.sin(t * 12) * 0.45));
     }
-    set('spine', 0.02 * breathe + w.angry * 0.08 + w.sad * 0.1, 0, 0);
+    const sway = Math.sin(t * 0.35); // slow weight shift from one leg to the other
+    set('hips', 0, sway * 0.05, sway * 0.02);
+    set('spine', 0.02 * breathe + w.angry * 0.08 + w.sad * 0.1, -sway * 0.03, -sway * 0.02);
     set('chest', 0.015 * breathe, 0, 0);
     const talkNod = this.mouth * 0.06 * Math.sin(t * 7);
     const { yaw, pitch } = this.look; // split the turn between neck (40%) and head (60%) so it looks natural
