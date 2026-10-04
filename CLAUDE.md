@@ -75,6 +75,7 @@ tools/make_portraits.mjs dev tool: re-render portraits after adding/changing a m
 - Demo mode (Focus tab checkbox) = 5s grace / 5s drain / 20s force-close, and lets you force the first gacha pull's rarity.
 - `window.character` is exposed for debugging in DevTools.
 - Performance: never raycast against the VRM mesh on mouse move (it takes ~150ms and made the whole app stutter); `hitTest()` in character.js uses a head ball + body box instead. Avoid CSS `filter`/`backdrop-filter` on full-screen animated layers. The app logs its graphics chip and frame rate to `backend/data/app.log` 25s and 85s after start (`window.__fps`).
+- An outfit with `default_for: <character id>` in shop.json is that character's own clothes: free for them (shown as "Free", wearing it just means no outfit, `state.outfit = ""`), and it costs its price for everyone else.
 - The points symbol is a lotus (`#i-lotus` in index.html, `LOTUS` in gacha.js). Write points as ◆ in message text; `rich()` in app.js turns it into the lotus.
 - Portraits in `frontend/assets/portraits/` show each character in their signature pose; re-run tools/make_portraits.mjs after changing a model or a pose.
 

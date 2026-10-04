@@ -1027,9 +1027,11 @@ const CAT_NAMES = { outfit: 'Outfits', head: 'Headwear', face: 'Eyewear', room: 
 
 const OWNED = { accessory: 'owned_accessories', background: 'owned_backgrounds', outfit: 'owned_outfits' };
 const CATALOG = { accessory: 'accessories', background: 'backgrounds', outfit: 'outfits' };
-const ownsItem = (kind, id) => S[OWNED[kind]].includes(id);
+const ownsItem = (kind, id) => S[OWNED[kind]].includes(id) || ownClothes(kind, id);
 const findItem = (kind, id) => S.catalog[CATALOG[kind]].find(x => x.id === id);
-const isOn = (kind, id) => (kind === 'accessory' ? S.equipped_accessories.includes(id) : kind === 'outfit' ? S.outfit === id : S.background === id);
+/** Is this outfit the current companion's own default clothes? Those are free for them (and only for them). */
+const ownClothes = (kind, id) => kind === 'outfit' && findItem(kind, id)?.default_for === S.active_character;
+const isOn = (kind, id) => (kind === 'accessory' ? S.equipped_accessories.includes(id) : kind === 'outfit' ? S.outfit === id || (!S.outfit && ownClothes(kind, id)) : S.background === id);
 const thumbOf = (kind, id) => (kind === 'outfit' ? portrait(findItem(kind, id).portrait) : kind === 'accessory'
   ? (accThumbs ||= accessoryThumbs(S.catalog.accessories.map(a => a.id)))[id] : environment.thumb(id));
 
@@ -1038,13 +1040,13 @@ function applyTry() {
   const preview = picked?.kind === 'accessory' && !S.equipped_accessories.includes(picked.id) ? [picked.id] : [];
   character.setAccessories([...S.equipped_accessories, ...preview]);
   const outfit = findItem('outfit', picked?.kind === 'outfit' ? picked.id : S.outfit);
-  character.setOutfit(outfit && outfit.for === activeChar().gender ? outfit : null); // clothes only fit a body of the same build
+  character.setOutfit(outfit && outfit.for === activeChar().gender && outfit.default_for !== S.active_character ? outfit : null); // clothes only fit a body of the same build
   applyEnv();
 }
 
 function tile(kind, it) {
   const owned = ownsItem(kind, it.id), on = isOn(kind, it.id);
-  const badge = on ? (kind !== 'background' ? '✓ Wearing' : '✓ In use') : owned ? 'Owned' : `${LOTUS} ${it.price}`;
+  const badge = on ? (kind !== 'background' ? '✓ Wearing' : '✓ In use') : owned ? (S[OWNED[kind]].includes(it.id) ? 'Owned' : 'Free') : `${LOTUS} ${it.price}`;
   return `<button class="tile ${kind !== 'background' ? 'acc' : ''} ${on ? 'worn' : ''} ${owned ? '' : 'locked'} ${picked?.id === it.id ? 'trying' : ''}"
     data-item="${kind}:${it.id}" title="${esc(it.name)}"><img src="${thumbOf(kind, it.id)}" alt="" draggable="false"${kind === 'outfit' ? ` class="fit" style="filter:${tintFilter(it)}"` : ''}>
     <span class="badge">${badge}</span><span class="tname">${esc(it.name)}</span></button>`;
@@ -1070,11 +1072,12 @@ function renderDress() {
     const it = picked && findItem(picked.kind, picked.id);
     if (it) {
       const owned = ownsItem(picked.kind, it.id), on = isOn(picked.kind, it.id), short = it.price - S.points;
+      const mine = ownClothes(picked.kind, it.id) && !S.outfit || (ownClothes(picked.kind, it.id) && !S.owned_outfits.includes(it.id)); // their own default clothes
       const label = !owned ? (short > 0 ? `Need ${short} more ${LOTUS}` : `Buy · ${LOTUS} ${it.price}`)
-        : picked.kind !== 'background' ? (on ? 'Take off' : 'Wear') : (on ? 'In use' : 'Use this background');
+        : mine ? (on ? 'Wearing' : 'Wear') : picked.kind !== 'background' ? (on ? 'Take off' : 'Wear') : (on ? 'In use' : 'Use this background');
       $('dress-action').innerHTML = `<img class="${picked.kind !== 'background' ? 'acc' : ''} ${picked.kind === 'outfit' ? 'fit' : ''}" src="${thumbOf(picked.kind, it.id)}" alt=""${picked.kind === 'outfit' ? ` style="filter:${tintFilter(it)}"` : ''}>
-        <div class="what"><small>${on ? (picked.kind !== 'background' ? 'Wearing' : 'In use') : owned ? 'Owned' : 'Previewing · not owned'}</small><b>${esc(it.name)}</b></div>
-        <button class="primary big" data-apply ${(!owned && short > 0) || (owned && on && picked.kind === 'background') ? 'disabled' : ''}>${label}</button>`;
+        <div class="what"><small>${on ? (picked.kind !== 'background' ? 'Wearing' : 'In use') : owned ? (mine ? `${esc(activeChar().name.split(' ')[0])}'s own outfit · free` : 'Owned') : 'Previewing · not owned'}</small><b>${esc(it.name)}</b></div>
+        <button class="primary big" data-apply ${(!owned && short > 0) || (owned && on && (picked.kind === 'background' || mine)) ? 'disabled' : ''}>${label}</button>`;
     } else {
       $('dress-action').innerHTML = `<div class="what">Pick an item on the right to see it on ${esc(activeChar().name)}.<br>Items with a price can be previewed first, then bought here.</div>`;
     }
@@ -1116,7 +1119,9 @@ function reactToItem(kind) {
 /** The button under the picked item: buy it if it isn't owned, otherwise wear / take off / use it. */
 async function applyPicked() {
   const { kind, id } = picked;
-  if (!ownsItem(kind, id)) {
+  if (ownClothes(kind, id) && S.outfit !== id) { // back into their own clothes: take off whatever else is on
+    if (S.outfit) { await setState(await post('/equip', { kind, id: S.outfit, on: false })); reactToItem(kind); }
+  } else if (!ownsItem(kind, id)) {
     await setState(await post('/shop/buy', { kind, id }));
     voice.sfx('task_done');
     vfx.burst(innerWidth / 2, innerHeight * 0.4, '#ff8fc4', 60);
