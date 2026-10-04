@@ -5,6 +5,8 @@ Saves into frontend/assets/summon/:
   tree1/2.webp    cherry trees on little islands, cut out from their background
   lilypad.webp    a lily pad seen from above, cut out
   rocks.webp      a cluster of rocks and reeds for the water's edge, cut out
+  torii.webp      the shrine gate, cut out          pads.webp   a cluster of lily pads with a lotus, from above, cut out
+  lotus.webp      lotus flowers from the side, cut out   water.webp  the lake surface (a tile that repeats)
 The scene (frontend/js/summonscene.js) falls back to its simple drawn versions if a picture is missing.
 
 Run from the project root:   .venv\\Scripts\\python tools\\make_summon_art.py            (only missing pictures)
@@ -43,6 +45,16 @@ ART = {  # name -> (prompt, aspect ratio, cut out from the blue background?)
               "long drooping branches heavy with pale pink and deep pink blossoms. Seen from the side at eye level. " + PAINTED + CUTOUT, "1:1", True),
     "lilypad": ("One large round lily pad seen from directly above: rich green with detailed pale veins, a small notch cut into one side, a few "
                 "water droplets and a tiny pink lotus bud resting on it. " + PAINTED + CUTOUT, "1:1", True),
+    "torii": ("A traditional Japanese torii shrine gate seen straight from the front at eye level: tall vermilion-red lacquered wooden pillars with "
+              "black bases, a curved black-capped top beam, visible wood grain and weathering, a thick straw shimenawa rope with white paper "
+              "streamers hung across it, two small stone lanterns at its feet. " + PAINTED + CUTOUT, "1:1", True),
+    "pads": ("A cluster of four overlapping lily pads of different sizes seen from directly above, rich greens with detailed veins and water droplets, "
+             "with one fully open pink lotus flower with a golden centre and one closed bud between them. " + PAINTED + CUTOUT, "1:1", True),
+    "lotus": ("A small clump of pink lotus flowers seen from the side at eye level: two open blossoms and a bud on slender stems rising above "
+              "two round green leaves. " + PAINTED + CUTOUT, "1:1", True),
+    "water": ("Seamless tiling texture, seen from directly above: the surface of a calm dark lake at night. Deep indigo and violet water with "
+              "fine painted ripples and gentle wavelets, soft reflections of stars and pink-purple sky glow, a few tiny sparkles. Even lighting, "
+              "no objects, no shore, no horizon, no text. " + PAINTED, "1:1", False),
     "rocks": ("A small cluster of mossy lake rocks with tall reeds, cattails and a few pink water flowers growing between them, seen from the side "
               "at eye level, wide and low. " + PAINTED + CUTOUT, "16:9", True),
 }
@@ -79,7 +91,7 @@ def paint(name):
                 image.thumbnail((1024, 1024), Image.LANCZOS)
             else:
                 image = image.convert("RGB")
-                image.thumbnail((2048, 2048), Image.LANCZOS)
+                image.thumbnail((1024, 1024) if name == "water" else (2048, 2048), Image.LANCZOS)
             path = OUT / f"{name}.webp"
             image.save(path, "WEBP", quality=88)
             return path, image.size

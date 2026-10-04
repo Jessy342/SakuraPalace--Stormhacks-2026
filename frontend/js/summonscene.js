@@ -204,7 +204,7 @@ const RINGS = [ // from the heart outward: how many petals, their size, how far 
 const ART = 'assets/summon/';
 /** Fetches the painted pictures ahead of time (called when the app starts), so the scene opens with them in place. */
 export function preloadSummonArt() {
-  for (const n of ['sky', 'tree1', 'tree2', 'lilypad', 'rocks']) new Image().src = `${ART}${n}.webp`;
+  for (const n of ['sky', 'tree1', 'tree2', 'lilypad', 'rocks', 'torii', 'pads', 'lotus', 'water']) new Image().src = `${ART}${n}.webp`;
 }
 const paintedTexture = (name, onLoad) => new THREE.TextureLoader().load(`${ART}${name}.webp`, tex => { tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; onLoad(tex); }, undefined, () => {});
 
@@ -288,6 +288,7 @@ export function startScene(overlay) {
   const water = new THREE.Mesh(new THREE.CircleGeometry(190, 64), new THREE.MeshBasicMaterial({ map: waterTexture(), transparent: true, opacity: 0.86, fog: false }));
   water.rotation.x = -Math.PI / 2;
   scene.add(water);
+  let waterTile = null; // the painted lake surface, once loaded (it drifts slowly)
   const shimmers = [[9, 0.14], [17, 0.09]].map(([rep, opacity], i) => {
     const map = shimmerTexture(); map.repeat.set(rep, rep);
     const m = new THREE.Mesh(new THREE.CircleGeometry(150, 48), new THREE.MeshBasicMaterial({ map, ...additive({ opacity }) }));
@@ -413,6 +414,33 @@ export function startScene(overlay) {
   torii.add(beamTop, beamRed, beamLow);
   torii.position.set(Math.cos(3.75) * 24, 0, Math.sin(3.75) * 24); torii.lookAt(0, 0, 0);
   scene.add(torii);
+  paintedTexture('torii', tex => { // the painted gate (rope, paper streamers, stone lanterns) takes the place of the plain one
+    torii.visible = false;
+    standing(tex, torii.position.x, torii.position.z, 8.2, 0.02);
+  });
+  paintedTexture('pads', tex => { // clusters of pads with an open lotus, lying flat on the water
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7, alphaTest: 0.4 });
+    for (const [a, d, size] of [[0.9, 3.9, 2.3], [2.6, 5.2, 2.9], [4.3, 4.3, 2.5], [5.7, 6.4, 3.2], [1.8, 8.6, 3.6], [3.6, 9.4, 3.8], [0.2, 10.5, 4.0], [5.0, 11.8, 4.2], [2.2, 13.2, 4.4]]) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
+      m.rotation.x = -Math.PI / 2; m.rotation.z = a * 2.3; m.position.set(Math.cos(a) * d, 0.03, Math.sin(a) * d);
+      scene.add(m);
+    }
+  });
+  paintedTexture('lotus', tex => { // lotus flowers standing out of the water: a ring close round the heart, more further out
+    for (const [a, d, hgt] of [[0.5, 3.1, 1.0], [2.0, 3.4, 1.15], [3.5, 3.0, 0.95], [5.1, 3.3, 1.1], [1.1, 11.6, 2.2], [2.9, 12.4, 2.4], [4.4, 11.9, 2.1], [5.9, 12.8, 2.5]]) standing(tex, Math.cos(a) * d, Math.sin(a) * d, hgt, 0.04);
+  });
+  paintedTexture('water', tex => { // the painted lake surface, repeated; a haze over it carries the far water into the glow of the horizon
+    tex.wrapS = tex.wrapT = THREE.MirroredRepeatWrapping; tex.repeat.set(30, 30);
+    water.material.map.dispose(); water.material.map = tex; water.material.color.set(0xd8d0ff); water.material.needsUpdate = true;
+    const haze = new THREE.Mesh(new THREE.CircleGeometry(190, 64), new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, fog: false, map: canvasTexture(256, 256, (g, w) => {
+      const c = w / 2, gr = g.createRadialGradient(c, c, 0, c, c, c);
+      gr.addColorStop(0, 'rgba(10,8,40,.18)'); gr.addColorStop(0.1, 'rgba(22,16,70,.3)'); gr.addColorStop(0.32, 'rgba(96,52,140,.72)'); gr.addColorStop(0.6, 'rgba(214,116,176,.94)'); gr.addColorStop(1, 'rgba(255,176,207,1)');
+      g.fillStyle = gr; g.fillRect(0, 0, w, w);
+    }) }));
+    haze.rotation.x = -Math.PI / 2; haze.position.y = 0.004;
+    scene.add(haze);
+    waterTile = tex;
+  });
   const paper = canvasTexture(64, 96, (g, w, h) => { // a paper lantern: warm light through paper, dark wooden frame and ribs
     const gr = g.createRadialGradient(w / 2, h * 0.55, 2, w / 2, h * 0.55, h * 0.6);
     gr.addColorStop(0, '#fff6d0'); gr.addColorStop(0.5, '#ffc56a'); gr.addColorStop(1, '#e8742c');
@@ -585,6 +613,7 @@ export function startScene(overlay) {
       l.g.rotation.y = t * 0.2 + l.p;
     }
     auroraMaps[0].offset.x = t * 0.006; auroraMaps[1].offset.x = -t * 0.004;
+    if (waterTile) { waterTile.offset.x = t * 0.01; waterTile.offset.y = Math.sin(t * 0.25) * 0.05; }
     shimmers[0].offset.x = t * 0.012; shimmers[0].offset.y = t * 0.005;
     shimmers[1].offset.x = -t * 0.009; shimmers[1].offset.y = t * 0.014;
 
