@@ -5,12 +5,14 @@ const $ = id => document.getElementById(id);
 export const GAMES = {
   catch: { name: 'Petal Catch', how: 'Move the basket to catch falling petals. Golden petals are worth 5. Phones cost you 5!' },
   memory: { name: 'Memory Match', how: 'Find the matching pairs. The fewer turns you need, the more petals you earn.' },
+  rhythm: { name: 'Rhythm Tap', how: 'Press D F J K (or click a lane) when a note reaches the line. Hit them on the beat!' },
+  wheel: { name: 'Daily Spin', how: 'One free spin a day: 10 to 500 Sakura Petals, or a rare Free Wish (a free Summon).' },
 };
 
 let closeCurrent = null;
 
 /** Opens a game. Resolves with the score when it ends, or null when the player closes it. */
-export function playGame(id, { portraits = [] } = {}) {
+export function playGame(id, opts = {}) {
   const box = $('minigame'), stage = $('mg-stage');
   $('mg-title').textContent = GAMES[id].name;
   $('mg-how').textContent = GAMES[id].how;
@@ -28,7 +30,7 @@ export function playGame(id, { portraits = [] } = {}) {
       stage.innerHTML = '';
       resolve(score);
     };
-    const stop = (id === 'catch' ? petalCatch : memoryMatch)(stage, finish, portraits);
+    const stop = { catch: petalCatch, memory: memoryMatch, rhythm: rhythmTap, wheel: dailyWheel }[id](stage, finish, opts);
     closeCurrent = () => finish(null);
   });
 }
@@ -37,7 +39,7 @@ export const gameOpen = () => !!closeCurrent;
 
 // ---------------- Petal Catch ----------------
 function petalCatch(stage, finish) {
-  const W = 760, H = 440, SECONDS = 30;
+  const W = 760, H = 440, SECONDS = 20;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H; canvas.className = 'mg-canvas';
   stage.appendChild(canvas);
@@ -63,7 +65,7 @@ function petalCatch(stage, finish) {
     const pace = 1 + (SECONDS - left) / SECONDS; // it gets busier
     spawn -= dt;
     if (spawn <= 0) {
-      spawn = 0.42 / pace;
+      spawn = 0.34 / pace;
       const r = Math.random(), kind = r < 0.13 ? 'phone' : r < 0.23 ? 'gold' : 'petal';
       things.push({ kind, x: 40 + Math.random() * (W - 80), y: -20, vy: (120 + Math.random() * 90) * pace, rot: Math.random() * 6.28, sway: Math.random() * 6.28 });
     }
@@ -116,7 +118,7 @@ function petalCatch(stage, finish) {
 }
 
 // ---------------- Memory Match ----------------
-function memoryMatch(stage, finish, portraits) {
+function memoryMatch(stage, finish, { portraits = [] }) {
   const faces = portraits.slice().sort(() => Math.random() - 0.5).slice(0, 6);
   const deck = [...faces, ...faces].sort(() => Math.random() - 0.5);
   const grid = document.createElement('div');
@@ -146,4 +148,153 @@ function memoryMatch(stage, finish, portraits) {
     show();
   });
   return () => clearTimeout(timer);
+}
+
+// ---------------- Rhythm Tap ----------------
+// A short synth track is made on the spot (no sound files); the notes you tap are its melody.
+function rhythmTap(stage, finish) {
+  const W = 760, H = 440, LANES = 4, KEYS = ['d', 'f', 'j', 'k'], BPM = 126, BEAT = 60 / BPM, FALL = 1.5, LINE = H - 70, LEAD = 2.4;
+  const COLORS = ['#ff8fc4', '#ffd27a', '#8fd8ff', '#b79bff'], SCALE = [523.25, 587.33, 659.25, 783.99, 880, 1046.5]; // C major pentatonic
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H; canvas.className = 'mg-canvas'; canvas.style.cursor = 'var(--hand)';
+  stage.appendChild(canvas);
+  const g = canvas.getContext('2d');
+  // the chart: 44 beats, busier in the second half, never the same lane three times in a row
+  const notes = [];
+  let seed = 7, prev = -1, prev2 = -1;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let beat = 0; beat < 44; beat += 0.5) {
+    const onBeat = beat % 1 === 0, chance = onBeat ? (beat < 8 ? 0.75 : 0.9) : (beat < 16 ? 0.12 : 0.4);
+    if (rand() > chance) continue;
+    let lane = Math.floor(rand() * LANES);
+    if (lane === prev && lane === prev2) lane = (lane + 1) % LANES;
+    prev2 = prev; prev = lane;
+    notes.push({ t: LEAD + beat * BEAT, lane, hit: null, pitch: SCALE[(lane + Math.floor(beat / 4)) % SCALE.length] });
+  }
+  const END = LEAD + 44 * BEAT + 1.2;
+
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ac = new AC(), out = ac.createGain();
+  out.gain.value = 0.5; out.connect(ac.destination);
+  const t0 = ac.currentTime + 0.1;
+  const tone = (at, freq, len, type, vol, slideTo) => {
+    const o = ac.createOscillator(), v = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, at);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, at + len);
+    v.gain.setValueAtTime(vol, at); v.gain.exponentialRampToValueAtTime(0.001, at + len);
+    o.connect(v); v.connect(out); o.start(at); o.stop(at + len + 0.02);
+  };
+  const BASS = [130.81, 130.81, 174.61, 196]; // one bass note per bar: C C F G
+  for (let beat = -4; beat < 44; beat++) {
+    const at = t0 + LEAD + beat * BEAT;
+    tone(at, 150, 0.16, 'sine', 0.9, 45);                                  // kick on every beat
+    tone(at + BEAT / 2, 6000, 0.04, 'square', 0.05);                        // tick between beats
+    if (beat >= 0) tone(at, BASS[Math.floor(beat / 4) % 4], BEAT * 0.9, 'triangle', 0.28);
+  }
+  for (const n of notes) tone(t0 + n.t, n.pitch, 0.22, 'triangle', 0.3);     // the melody is the notes you tap
+
+  let alive = true, combo = 0, best = 0, flash = [0, 0, 0, 0], word = null;
+  const now = () => ac.currentTime - t0;
+  const tap = lane => {
+    if (!alive) return;
+    flash[lane] = 1;
+    const t = now();
+    let pick = null;
+    for (const n of notes) if (n.hit === null && n.lane === lane && Math.abs(n.t - t) < 0.2 && (!pick || Math.abs(n.t - t) < Math.abs(pick.t - t))) pick = n;
+    if (!pick) return;
+    const off = Math.abs(pick.t - t);
+    pick.hit = off < 0.075 ? 1 : off < 0.14 ? 0.6 : 0.25;
+    combo++; best = Math.max(best, combo);
+    word = { text: pick.hit === 1 ? 'PERFECT' : pick.hit === 0.6 ? 'GOOD' : 'OK', life: 0.5, lane };
+  };
+  const key = e => { const lane = KEYS.indexOf(e.key.toLowerCase()); if (lane >= 0 && !e.repeat) { e.preventDefault(); tap(lane); } };
+  addEventListener('keydown', key);
+  canvas.addEventListener('pointerdown', e => { const r = canvas.getBoundingClientRect(); tap(Math.min(LANES - 1, Math.floor((e.clientX - r.left) / r.width * LANES))); });
+  const score = () => Math.round(notes.reduce((sum, n) => sum + (n.hit || 0), 0) / notes.length * 100);
+
+  let last = performance.now();
+  function tick(time) {
+    if (!alive) return;
+    requestAnimationFrame(tick);
+    const dt = Math.min(0.05, (time - last) / 1000); last = time;
+    const t = now(), lw = W / LANES;
+    if (t > END) { finish(score()); return; }
+    const beatPulse = Math.max(0, 1 - ((t - LEAD) / BEAT % 1 + 1) % 1 * 2.5);
+    const bg = g.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#1c1440'); bg.addColorStop(1, '#4a2466');
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < LANES; i++) {
+      g.fillStyle = `rgba(255,255,255,${0.03 + flash[i] * 0.16})`; g.fillRect(i * lw + 3, 0, lw - 6, H);
+      flash[i] = Math.max(0, flash[i] - dt * 5);
+      g.fillStyle = COLORS[i]; g.globalAlpha = 0.5 + beatPulse * 0.3; g.fillRect(i * lw + 12, LINE - 3, lw - 24, 6); g.globalAlpha = 1;
+      g.fillStyle = 'rgba(255,255,255,.75)'; g.font = '700 22px "M PLUS Rounded 1c", sans-serif'; g.textAlign = 'center';
+      g.fillText(KEYS[i].toUpperCase(), i * lw + lw / 2, H - 24);
+    }
+    for (const n of notes) {
+      if (n.hit === null && t - n.t > 0.2) { n.hit = 0; combo = 0; word = { text: 'MISS', life: 0.4, lane: n.lane }; }
+      if (n.hit !== null) continue;
+      const y = LINE - (n.t - t) / FALL * LINE;
+      if (y < -30) continue;
+      g.fillStyle = COLORS[n.lane]; g.shadowColor = COLORS[n.lane]; g.shadowBlur = 14;
+      g.beginPath(); g.roundRect(n.lane * lw + 18, y - 11, lw - 36, 22, 11); g.fill(); g.shadowBlur = 0;
+      g.fillStyle = 'rgba(255,255,255,.7)'; g.beginPath(); g.roundRect(n.lane * lw + 26, y - 7, lw - 52, 5, 3); g.fill();
+    }
+    if (word) {
+      word.life -= dt;
+      if (word.life <= 0) word = null;
+      else { g.globalAlpha = Math.min(1, word.life * 3); g.fillStyle = word.text === 'MISS' ? '#ff6b81' : '#fff3c4'; g.font = '800 24px "M PLUS Rounded 1c", sans-serif'; g.fillText(word.text, word.lane * lw + lw / 2, LINE - 40); g.globalAlpha = 1; }
+    }
+    if (t < LEAD - 0.2) { g.fillStyle = '#fff'; g.font = '800 40px "M PLUS Rounded 1c", sans-serif'; g.fillText(t < LEAD - 1.5 ? 'Get ready…' : 'Go!', W / 2, H / 2 - 40); }
+    document.getElementById('mg-score').textContent = `Score ${score()} · Combo ${combo}`;
+  }
+  requestAnimationFrame(tick);
+  return () => { alive = false; removeEventListener('keydown', key); ac.close().catch(() => {}); };
+}
+
+// ---------------- Daily wheel ----------------
+function dailyWheel(stage, finish, { slices = [], spin }) {
+  const wrap = document.createElement('div');
+  wrap.className = 'mg-wheel';
+  wrap.innerHTML = '<canvas width="800" height="800"></canvas><div class="won"></div><button class="primary big">Spin!</button>';
+  stage.appendChild(wrap);
+  const canvas = wrap.querySelector('canvas'), g = canvas.getContext('2d'), btn = wrap.querySelector('button'), won = wrap.querySelector('.won');
+  const N = slices.length, STEP = Math.PI * 2 / N, COLORS = ['#ff8fc4', '#7a5cc8', '#ffd27a', '#4f3a8f'];
+  let angle = 0, alive = true, timer = null;
+  function draw() {
+    const c = 400, r = 372;
+    g.clearRect(0, 0, 800, 800);
+    g.save(); g.translate(c, c); g.rotate(angle);
+    for (let i = 0; i < N; i++) {
+      const wish = /wish/i.test(slices[i]), big = slices[i] === '500';
+      g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, r, i * STEP - Math.PI / 2 - STEP / 2, i * STEP - Math.PI / 2 + STEP / 2); g.closePath();
+      g.fillStyle = wish ? '#fff1c9' : big ? '#ff4f9e' : COLORS[i % COLORS.length]; g.fill();
+      g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 4; g.stroke();
+      g.save(); g.rotate(i * STEP); g.fillStyle = wish ? '#7a3d00' : '#fff'; g.textAlign = 'center';
+      g.font = `800 ${wish ? 40 : 58}px "M PLUS Rounded 1c", sans-serif`;
+      g.fillText(wish ? 'FREE' : slices[i], 0, -r + 92);
+      if (wish) g.fillText('WISH', 0, -r + 136);
+      g.restore();
+    }
+    g.beginPath(); g.arc(0, 0, 54, 0, 6.29); g.fillStyle = '#fff1c9'; g.fill(); g.lineWidth = 8; g.strokeStyle = '#e3b565'; g.stroke();
+    g.restore();
+    g.beginPath(); g.arc(c, c, r + 8, 0, 6.29); g.lineWidth = 14; g.strokeStyle = '#ffd27a'; g.stroke();
+    g.beginPath(); g.moveTo(c - 26, 2); g.lineTo(c + 26, 2); g.lineTo(c, 62); g.closePath(); g.fillStyle = '#fff'; g.fill(); g.lineWidth = 5; g.strokeStyle = '#ff4f9e'; g.stroke(); // the pointer
+  }
+  draw();
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    let prize;
+    try { prize = await spin(); } catch (err) { won.textContent = err.message || 'Could not spin'; return; }
+    const from = angle, to = Math.PI * 2 * 6 - prize.index * STEP + (Math.random() - 0.5) * STEP * 0.6, start = performance.now(), DUR = 5200;
+    (function turn(time) {
+      if (!alive) return;
+      const p = Math.min(1, (time - start) / DUR), ease = 1 - Math.pow(1 - p, 4);
+      angle = from + (to - from) * ease;
+      draw();
+      if (p < 1) return requestAnimationFrame(turn);
+      won.textContent = prize.wish ? 'Free Wish!' : `+${prize.points} Sakura Petals`;
+      timer = setTimeout(() => finish(prize), 1400);
+    })(start);
+  });
+  return () => { alive = false; clearTimeout(timer); };
 }

@@ -887,9 +887,9 @@ function renderGacha() {
   const g = S.gacha;
   const banners = S.catalog.banners || [];
   const b = banners.find(x => x.id === bannerId) || banners[0];
-  $('pull1').innerHTML = `${LOTUS}×${g.pull_cost}&nbsp;&nbsp; SUMMON ×1`;
+  $('pull1').innerHTML = S.free_wishes > 0 ? `FREE WISH (${S.free_wishes})&nbsp;&nbsp; SUMMON ×1` : `${LOTUS}×${g.pull_cost}&nbsp;&nbsp; SUMMON ×1`;
   $('pull10').innerHTML = `${LOTUS}×${g.ten_pull_cost}&nbsp;&nbsp; SUMMON ×10`;
-  $('pull1').disabled = S.points < g.pull_cost;
+  $('pull1').disabled = S.points < g.pull_cost && !(S.free_wishes > 0);
   $('pull10').disabled = S.points < g.ten_pull_cost;
   $('pity-limit').textContent = g.pity_limit;
   $('pity-text').textContent = `Pity: ${S.pity.since_legendary} / ${g.pity_limit}`;
@@ -1231,7 +1231,12 @@ document.addEventListener('click', async e => {
 // ======================= Options =======================
 function renderOptions() {
   if (document.activeElement !== $('player-name')) $('player-name').value = S.player_name || '';
-  $('games-left').textContent = S.minigame_left > 0 ? `${S.minigame_left} more can be won today.` : 'Today\'s limit is reached: come back tomorrow!';
+  const spin = S.wheel_info.available, rounds = S.rhythm_tickets || 0;
+  $('wheel-status').textContent = spin ? 'Your free spin is ready! 10 to 500 Sakura Petals, or a rare Free Wish.' : 'Spun today. Come back tomorrow for another free spin!';
+  document.querySelector('[data-game="wheel"]').classList.toggle('ready', spin);
+  document.querySelector('[data-game="wheel"]').classList.toggle('locked', !spin);
+  $('rhythm-status').textContent = rounds ? `Tap the notes to the beat. ${rounds} round${rounds > 1 ? 's' : ''} unlocked.` : 'Locked: finish a quest to unlock a round.';
+  document.querySelector('[data-game="rhythm"]').classList.toggle('locked', !rounds);
   $('hud-dev').classList.toggle('hidden', !S.dev_mode);
   $('dev-form').classList.toggle('hidden', !!S.dev_mode);
   $('dev-off').classList.toggle('hidden', !S.dev_mode);
@@ -1316,12 +1321,32 @@ $('reset-btn').addEventListener('click', async () => {
 const withName = text => (S?.player_name ? text.replace(/^((?:\[[^\]]+\]\s*)*)/, `$1${S.player_name}! `) : text);
 
 async function startGame(id) {
+  if (id === 'rhythm' && !(S.rhythm_tickets > 0)) { say('Finish a quest first, then we can play Rhythm Tap!', { emotion: 'happy' }); return addMsg('sys', '🎵 Rhythm Tap is locked: finish a quest to unlock a round.'); }
+  if (id === 'wheel' && !S.wheel_info.available) return addMsg('sys', '🎡 You already used today\'s free spin. Come back tomorrow!');
   voice.stopSpeaking();
   character.paused = true; environment.paused = true; // rest the lobby while the game runs
-  const score = await playGame(id, { portraits: S.catalog.characters.map(c => portrait(c.id)) });
+  const score = await playGame(id, { portraits: S.catalog.characters.map(c => portrait(c.id)), slices: S.wheel_info.slices, spin: () => post('/wheel/spin') });
   environment.paused = false; character.paused = FULL.includes(currentTab);
-  if (score === null) return;
+  if (score === null) { if (id === 'wheel') setState(await api('/state')); return; } // (closed mid-spin: the prize was still given)
+  const who = S.player_name ? `, ${S.player_name}` : '';
   try {
+    if (id === 'wheel') { // the prize was already given when the wheel was spun
+      await setState(score.state);
+      voice.sfx(score.wish || score.points >= 200 ? 'level_up' : 'task_done');
+      if (score.wish) {
+        vfx.confetti(120);
+        floater('🎟 Free Wish!', 'big');
+        addMsg('sys', '🎡 Daily spin: a Free Wish! Your next single Summon is free.');
+        say(`No way${who}! A free wish! Go summon someone!`, { emotion: 'surprised' });
+      } else {
+        floater(`🎡 +${score.points} ◆`, 'big');
+        vfx.flyTo(innerWidth / 2, innerHeight * 0.45, $('hud-points').parentElement, LOTUS, 10);
+        addMsg('sys', `🎡 Daily spin: +${score.points} ◆`);
+        say(score.points >= 200 ? `Sugoi${who}! ${score.points} Sakura Petals from one spin!` : `${score.points} Sakura Petals${who}. Spin again tomorrow!`, { emotion: 'happy' });
+      }
+      character.react();
+      return;
+    }
     const res = await post('/minigame', { game: id, score });
     await setState(res.state);
     if (res.earned > 0) {
@@ -1329,13 +1354,19 @@ async function startGame(id) {
       floater(`+${res.earned} ◆`, 'big');
       vfx.flyTo(innerWidth / 2, innerHeight * 0.45, $('hud-points').parentElement, LOTUS, 10);
       character.react();
-      const who = S.player_name ? `, ${S.player_name}` : '';
       say(res.earned >= 60 ? `Sugoi${who}! ${res.earned} Sakura Petals!` : `Nice one${who}! That's ${res.earned} Sakura Petals.`, { emotion: 'happy' });
-    } else {
-      addMsg('sys', "You've won all the Sakura Petals mini games can give today. Come back tomorrow!");
-      say("That's all the petals I can give you from games today. Back to work!", { emotion: 'happy' });
-    }
+    } else say('No petals that time. Try again!', { emotion: 'sad' });
   } catch (err) { toastError(err); }
+}
+
+/** The 7-day login streak card, shown when today's gift is claimed. Click anywhere (or wait) to close it. */
+function showStreak(daily) {
+  $('streak-days').innerHTML = daily.rewards.map((r, i) => `<div class="streak-day ${i + 1 < daily.day ? 'done' : i + 1 === daily.day ? 'today' : ''}"><small>Day ${i + 1}</small><b>${r}</b></div>`).join('');
+  $('streak-text').innerHTML = rich(`Day ${daily.day}: +${daily.gift} ◆`);
+  $('streak').classList.remove('hidden');
+  const close = () => $('streak').classList.add('hidden');
+  $('streak').onclick = close;
+  setTimeout(close, 6000);
 }
 document.querySelectorAll('[data-game]').forEach(b => b.addEventListener('click', () => startGame(b.dataset.game)));
 $('mg-close').addEventListener('click', closeGame);
@@ -1395,10 +1426,12 @@ async function boot() {
     }
     if (!first) return;
     if (daily?.claimed) {
+      showStreak(daily);
       voice.sfx('task_done');
       floater(`🎁 +${daily.gift} ◆`, 'big');
       vfx.flyTo(innerWidth / 2, innerHeight * 0.4, $('hud-points').parentElement, LOTUS, 10);
-      await say(`Here's your daily gift: ${daily.gift} Sakura Petals! ${daily.streak > 1 ? `That's a ${daily.streak} day streak!` : 'Come back tomorrow for more!'}`, { emotion: 'happy' });
+      await say(`Login streak, day ${daily.day}: ${daily.gift} Sakura Petals! ${daily.day < 7 ? 'Come back tomorrow for more!' : 'That is the big one!'}`, { emotion: 'happy' });
+      if (S.wheel_info.available) await say('Your free daily spin is ready in Mini Games, too!', { emotion: 'happy' });
     }
     if (reminder) await say(reminder, { emotion: reminder.includes('overdue') ? 'angry' : 'surprised' });
   };

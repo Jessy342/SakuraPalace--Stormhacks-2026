@@ -18,7 +18,9 @@ SHOP = _load_json("shop.json")
 
 DEFAULT_STATE = {
     "player_name": "",  # what the companion calls you (asked on the title screen)
-    "minigames": {"day": None, "earned": 0},  # Sakura Petals won in mini games today (there is a daily limit)
+    "rhythm_tickets": 0,  # rounds of Rhythm Tap you have unlocked (finishing a quest gives one, up to 3)
+    "wheel": {"day": None},  # the day the free daily wheel was last spun
+    "free_wishes": 0,  # free single summons won on the wheel
     "points": 1600,  # enough for one 10-pull so the demo starts fun
     "xp": 0,
     "level": 1,
@@ -149,6 +151,7 @@ def _unlock_everything(state):
     state["owned_backgrounds"] = [b["id"] for b in SHOP["backgrounds"]]
     state["owned_outfits"] = [o["id"] for o in SHOP.get("outfits", [])]
     state["points"] = UNLIMITED
+    state["rhythm_tickets"] = 3
 
 
 def set_dev_mode(on):

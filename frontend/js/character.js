@@ -94,14 +94,22 @@ export class Character {
     canvas.addEventListener('pointerdown', e => {
       const r = canvas.getBoundingClientRect();
       const ndc = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
-      if (this.dragRotate) { this.drag = { x: e.clientX, spin: this.spin, moved: false, ndc }; return; } // poke on release if it wasn't a drag
-      this.poke(ndc);
+      this.drag = { x: e.clientX, spin: this.spin, moved: false, ndc }; // drag to turn them; a plain click pokes (on release)
     });
     window.addEventListener('pointerup', () => {
       const d = this.drag;
       this.drag = null;
       if (d && !d.moved) this.poke(d.ndc);
     });
+    // Scroll wheel / touchpad over the character: up and down zooms in toward the face, sideways (or Shift + scroll) turns them.
+    // A touchpad pinch arrives as Ctrl + scroll and zooms too.
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const unit = e.deltaMode === 1 ? 32 : 1; // (a mouse wheel that reports lines instead of pixels)
+      const sideways = e.shiftKey ? e.deltaY : e.deltaX, upDown = e.shiftKey ? 0 : e.deltaY;
+      if (Math.abs(sideways) > Math.abs(upDown) && !e.ctrlKey) this.spinTarget += sideways * unit * 0.004;
+      else this.zoomTarget = Math.max(0, Math.min(1, this.zoomTarget - upDown * unit * (e.ctrlKey ? 0.012 : 0.0016)));
+    }, { passive: false });
     document.addEventListener('pointerleave', () => { this.cursor = null; });
     document.addEventListener('mouseout', e => { if (!e.relatedTarget) this.cursor = null; });
 

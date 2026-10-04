@@ -290,9 +290,11 @@
 
     <!-- OPTIONS -->
     <section id="tab-games" class="tab" data-title="Mini Games">
-      <p class="games-intro">Take a short break and win Sakura Petals. <span id="games-left"></span></p>
-      <button class="game-card" data-game="catch"><i>🌸</i><span><b>Petal Catch</b><small>Catch falling petals in your basket for 30 seconds. Dodge the phones!</small></span><em>up to 80</em></button>
+      <p class="games-intro">Take a short break and win Sakura Petals.</p>
+      <button class="game-card wheel-card" data-game="wheel"><i>🎡</i><span><b>Daily Spin</b><small id="wheel-status">One free spin every day: 10 to 500 Sakura Petals, or a rare Free Wish.</small></span><em>free</em></button>
+      <button class="game-card" data-game="catch"><i>🌸</i><span><b>Petal Catch</b><small>Catch falling petals in your basket for 20 seconds. Dodge the phones!</small></span><em>up to 80</em></button>
       <button class="game-card" data-game="memory"><i>🎴</i><span><b>Memory Match</b><small>Find the six pairs of companions in as few turns as you can.</small></span><em>up to 80</em></button>
+      <button class="game-card" data-game="rhythm"><i>🎵</i><span><b>Rhythm Tap</b><small id="rhythm-status">Tap the notes to the beat. Finish a quest to unlock a round.</small></span><em>up to 100</em></button>
     </section>
 
     <section id="tab-settings" class="tab" data-title="Options">
@@ -426,6 +428,15 @@
   </section>
 
   <!-- Menu transition wipe + gacha cutscene -->
+  <!-- Login streak (shown once a day when the gift is claimed) -->
+  <div id="streak" class="hidden">
+    <div class="streak-panel frame">
+      <div class="streak-title">Login Streak</div>
+      <div id="streak-days" class="streak-days"></div>
+      <div id="streak-text" class="streak-text"></div>
+      <small>Come back every day: skipping a day starts again at Day 1.</small>
+    </div>
+  </div>
   <!-- Mini game window -->
   <div id="minigame" class="hidden">
     <div class="mg-panel frame">

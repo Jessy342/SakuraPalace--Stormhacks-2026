@@ -954,3 +954,24 @@ body.arrive #dialogue { animation: arrive-up .8s .35s both cubic-bezier(.2,.8,.2
 #to-title:hover { transform: translateY(-2px); }
 body[data-view="full"] #to-title, body[data-view="dress"] #to-title { opacity: 0; pointer-events: none; } /* only the full-screen Summon, Characters and Dressing Room cover that corner */
 body.arrive #to-title { animation: arrive-up .8s .4s both cubic-bezier(.2,.8,.2,1); }
+
+/* ---------- daily spin, rhythm tap, login streak ---------- */
+.game-card.locked { opacity: .6; }
+.game-card.ready { border-color: var(--gold-hi); box-shadow: 0 0 14px rgba(255,210,122,.45); }
+.mg-wheel { display: grid; justify-items: center; gap: 12px; }
+.mg-wheel canvas { width: min(400px, 60vh); height: min(400px, 60vh); filter: drop-shadow(0 8px 24px rgba(0,0,0,.5)); }
+.mg-wheel button { min-width: 180px; font-size: 1.1rem; }
+.mg-wheel .won { min-height: 1.6em; font-size: 1.2rem; font-weight: 700; color: var(--gold-hi); }
+#streak { position: fixed; inset: 0; z-index: 57; display: grid; place-items: center; background: rgba(10,6,28,.6); animation: fadein .3s; cursor: var(--hand); }
+.streak-panel { padding: 20px 26px 18px; text-align: center; animation: t-rise .45s both; }
+.streak-title { font-size: 1.3rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--gold-hi); margin-bottom: 14px; }
+.streak-days { display: grid; grid-template-columns: repeat(7, 84px); gap: 8px; }
+.streak-day { padding: 10px 4px; border-radius: 6px 16px 6px 16px; border: 1px solid var(--line-soft); background: rgba(255,255,255,.05); }
+.streak-day small { display: block; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; font-size: .68rem; }
+.streak-day b { display: block; font-size: 1.15rem; margin-top: 4px; }
+.streak-day.done { opacity: .55; }
+.streak-day.done b::after { content: " ✓"; color: #8ef0b0; }
+.streak-day.today { border-color: var(--gold-hi); background: linear-gradient(180deg, rgba(255,210,122,.35), rgba(255,140,190,.18)); box-shadow: 0 0 22px rgba(255,210,122,.6); animation: streak-pop .7s .3s both cubic-bezier(.2,1.6,.4,1); }
+@keyframes streak-pop { from { scale: .6; } }
+.streak-text { margin: 14px 0 6px; font-size: 1.05rem; font-weight: 700; }
+.streak-panel > small { color: var(--muted); }
