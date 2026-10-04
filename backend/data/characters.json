@@ -148,9 +148,9 @@
     }
   ],
   "items": [
-    {"id": "stardust_s", "name": "Stardust Pouch", "rarity": "Common", "points": 20},
-    {"id": "stardust_m", "name": "Stardust Bag", "rarity": "Common", "points": 40},
-    {"id": "stardust_l", "name": "Stardust Chest", "rarity": "Rare", "points": 80}
+    {"id": "stardust_s", "name": "Sakura Petal Pouch", "rarity": "Common", "points": 20},
+    {"id": "stardust_m", "name": "Sakura Petal Bag", "rarity": "Common", "points": 40},
+    {"id": "stardust_l", "name": "Sakura Petal Chest", "rarity": "Rare", "points": 80}
   ],
   "banners": [
     {"id": "limitless", "rotating": true, "scene": "galaxy", "kind": "Limited Character Summon", "name": "Limitless Sky", "tag": "EVENT", "featured": ["gojo", "levi", "reze"]},

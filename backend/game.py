@@ -320,7 +320,7 @@ def buy(body: BuyIn):
         if item["id"] in state[owned_key]:
             raise HTTPException(400, "You already own this")
         if state["points"] < item["price"]:
-            raise HTTPException(400, "Not enough points")
+            raise HTTPException(400, "Not enough Sakura Petals")
         state["points"] -= item["price"]
         state[owned_key].append(item["id"])
     return public_state(storage.load())
@@ -467,7 +467,7 @@ def pull(body: PullIn):
     featured = tuple(banner["featured"]) if banner else ()
     with Transaction() as state:
         if state["points"] < cost:
-            raise HTTPException(400, f"Not enough points ({cost} needed)")
+            raise HTTPException(400, f"Not enough Sakura Petals ({cost} needed)")
         forced = body.force_rarity if (state["settings"].get("demo_mode") and body.force_rarity in RARITY_ORDER) else None
         state["points"] -= cost
         results = []

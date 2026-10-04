@@ -215,7 +215,7 @@ function reveal(r, d, live) {
   const embers = Array.from({ length: 26 }, () =>
     `<i style="left:${(Math.random() * 100).toFixed(1)}%;--s:${(2 + Math.random() * 4).toFixed(1)}px;--d:${(5 + Math.random() * 7).toFixed(1)}s;animation-delay:-${(Math.random() * 10).toFixed(1)}s"></i>`).join('');
   const chips = [
-    r.refund ? `<div class="rv-chip" title="Points">${GEM}<small>${r.refund}</small></div>` : '',
+    r.refund ? `<div class="rv-chip" title="Sakura Petals">${GEM}<small>${r.refund}</small></div>` : '',
     isChar && r.new ? `<div class="rv-chip bond" title="New companion">${HEART}<small>New</small></div>` : '',
   ].join('');
   s.innerHTML = `

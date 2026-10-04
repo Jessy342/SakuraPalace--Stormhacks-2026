@@ -160,11 +160,11 @@ YELLS = {
         "rival": ["[shouting] {app}?! You think a champion slacks off? Close it!", "[angry] Ha! Distracted already? Close {app}!"],
     },
     "drain": {
-        "tsundere": ["[shouting] That's it! I'm taking your points, you idiot!", "[angry] Every second on {app} costs you! Hmph!"],
-        "cheerful": ["[sad] Your points are melting away... please come back!", "[pouting] I'm not happy anymore! Points are draining!"],
-        "sensei": ["[stern] You are losing points. Every minute matters.", "[disappointed] Points deducted. I expected better."],
-        "chill": ["[annoyed] And there go your points. Nice.", "[sighs] Points draining. Your call."],
-        "rival": ["[shouting] You're losing to ME right now! Points gone!", "[laughs] Ha! Your points are mine!"],
+        "tsundere": ["[shouting] That's it! I'm taking your sakura petals, you idiot!", "[angry] Every second on {app} costs you! Hmph!"],
+        "cheerful": ["[sad] Your sakura petals are melting away... please come back!", "[pouting] I'm not happy anymore! Your petals are draining!"],
+        "sensei": ["[stern] You are losing sakura petals. Every minute matters.", "[disappointed] Sakura petals deducted. I expected better."],
+        "chill": ["[annoyed] And there go your sakura petals. Nice.", "[sighs] Petals draining. Your call."],
+        "rival": ["[shouting] You're losing to ME right now! Petals gone!", "[laughs] Ha! Your sakura petals are mine!"],
     },
     "praise": {
         "tsundere": ["[embarrassed] W-well, I guess that wasn't terrible. Good job... idiot.", "[huffs] Hmph. Fine. You did well. Don't let it go to your head!"],

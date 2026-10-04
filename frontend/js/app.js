@@ -682,8 +682,8 @@ try { pomoCustom = localStorage.getItem('pomoCustom') === '1'; } catch { /* stor
 const fmt = sec => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 
 function pomoHint(m) {
-  return m ? `${m} min work, then a ${breakFor(m)} min break. The timer pauses while you're distracted. Earn 5 points + 2 XP per focused minute, plus a bonus for every finished round.`
-    : 'Free session: counts up until you end it. Earn 5 points + 2 XP per focused minute.';
+  return m ? `${m} min work, then a ${breakFor(m)} min break. The timer pauses while you're distracted. Earn 5 Sakura Petals + 2 XP per focused minute, plus a bonus for every finished round.`
+    : 'Free session: counts up until you end it. Earn 5 Sakura Petals + 2 XP per focused minute.';
 }
 
 function renderPomoPicker() {
@@ -765,7 +765,7 @@ $('focus-toggle').addEventListener('click', async () => {
       await setState(res.state);
       floater(`+${res.points_gained} ◆  +${res.xp_gained} XP`);
       const rounds = res.pomodoros ? ` Finished ${res.pomodoros} pomodoro${res.pomodoros > 1 ? 's' : ''} (+${res.pomodoro_bonus} bonus).` : '';
-      addMsg('sys', `Focus session done: ${res.minutes} min focused, earned ${res.points_gained} points, lost ${res.points_lost}.${rounds}`);
+      addMsg('sys', `Focus session done: ${res.minutes} min focused, earned ${res.points_gained} Sakura Petals, lost ${res.points_lost}.${rounds}`);
       if (res.levels_gained) { voice.sfx('level_up'); vfx.levelUp(res.state.level); yell('levelup', '', 'surprised'); }
     }
   } catch (err) { toastError(err); }
@@ -815,7 +815,7 @@ async function pollFocus() {
     const pill = $('hud-focus');
     pill.className = 'pill focus-pill ' + (!st.active ? 'off' : onBreak ? 'break' : st.stage === 'ok' ? 'on' : st.stage);
     pill.textContent = !st.active ? 'Focus off' : onBreak ? `☕ Break ${shown}` : st.stage === 'ok' ? `${pomo ? '🍅' : 'Focusing'} ${shown}`
-      : st.stage === 'warning' ? `⚠ ${st.offender}` : `▼ Losing points`;
+      : st.stage === 'warning' ? `⚠ ${st.offender}` : `▼ Losing petals`;
     $('focus-status').textContent = !st.active ? 'Not focusing' : onBreak ? 'Relax! Distractions are allowed on breaks.'
       : st.stage === 'ok' ? 'Focused ✓' : st.offender_kind === 'app'
         ? `${st.offender} is still running! Timer paused until you end it in Task Manager.`
@@ -829,8 +829,8 @@ async function pollFocus() {
       banner.classList.remove('hidden');
       banner.classList.toggle('soft', st.stage === 'warning');
       $('warn-text').textContent = st.stage === 'warning'
-        ? `Close ${st.offender} within ${Math.max(0, t.grace - st.distracted_for)}s or you start losing points!`
-        : `Losing points! ${st.offender} gets force-closed in ${Math.max(0, t.force - st.distracted_for)}s`;
+        ? `Close ${st.offender} within ${Math.max(0, t.grace - st.distracted_for)}s or you start losing Sakura Petals!`
+        : `Losing Sakura Petals! ${st.offender} gets force-closed in ${Math.max(0, t.force - st.distracted_for)}s`;
       // Apps like Discord keep running in the system tray after you close the window,
       // so the session stays paused until the process is really gone.
       const isApp = st.offender_kind === 'app';
@@ -867,7 +867,7 @@ function handleFocusEvent(ev) {
   } else if (ev.type === 'break_start') {
     voice.sfx('level_up');
     floater(`🍅 Round done! +${ev.points} ◆`, 'big');
-    addMsg('sys', `🍅 Pomodoro finished! +${ev.points} bonus points. Break: ${ev.app}.`);
+    addMsg('sys', `🍅 Pomodoro finished! +${ev.points} bonus Sakura Petals. Break: ${ev.app}.`);
     lastYellAt = now;
     yell('break_start', ev.app, 'happy');
   } else if (ev.type === 'break_over') {
@@ -1230,8 +1230,8 @@ function renderOptions() {
   $('hud-dev').classList.toggle('hidden', !S.dev_mode);
   $('dev-form').classList.toggle('hidden', !!S.dev_mode);
   $('dev-off').classList.toggle('hidden', !S.dev_mode);
-  $('dev-status').textContent = S.dev_mode ? 'Dev Mode is ON: every character, outfit, accessory and background is unlocked and lotus is unlimited. Turning it off brings back your real progress.'
-    : 'Unlocks every character and item with unlimited lotus. Enter the password to turn it on.';
+  $('dev-status').textContent = S.dev_mode ? 'Dev Mode is ON: every character, outfit, accessory and background is unlocked and Sakura Petals are unlimited. Turning it off brings back your real progress.'
+    : 'Unlocks every character and item with unlimited Sakura Petals. Enter the password to turn it on.';
   $('sys-status').innerHTML = `<small>${elevenOn ? '' : 'ElevenLabs voice: ❌ no key (using browser voice)<br>'}
     Quests done: ${S.stats.tasks_done} · Pulls: ${S.stats.pulls} · Distractions caught: ${S.stats.distractions}</small>`;
 }
@@ -1353,7 +1353,7 @@ async function boot() {
       voice.sfx('task_done');
       floater(`🎁 +${daily.gift} ◆`, 'big');
       vfx.flyTo(innerWidth / 2, innerHeight * 0.4, $('hud-points').parentElement, LOTUS, 10);
-      await say(`Here's your daily gift: ${daily.gift} points! ${daily.streak > 1 ? `That's a ${daily.streak} day streak!` : 'Come back tomorrow for more!'}`, { emotion: 'happy' });
+      await say(`Here's your daily gift: ${daily.gift} Sakura Petals! ${daily.streak > 1 ? `That's a ${daily.streak} day streak!` : 'Come back tomorrow for more!'}`, { emotion: 'happy' });
     }
     if (reminder) await say(reminder, { emotion: reminder.includes('overdue') ? 'angry' : 'surprised' });
   };
