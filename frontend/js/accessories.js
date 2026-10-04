@@ -164,16 +164,18 @@ export function buildAccessory(id, face = DEFAULT_FACE) {
       for (const side of id === 'monocle' ? [1] : [-1, 1]) {
         const at = new THREE.Vector3(side * eyeX, eyeY, frontZ + 0.004);
         if (id === 'heart_glasses') {
-          const lens = new THREE.Mesh(new THREE.ShapeGeometry(heart), mat('#ff8fc4', { transparent: true, opacity: 0.55 }));
+          const lens = new THREE.Mesh(new THREE.ShapeGeometry(heart), mat('#ff8fc4', { transparent: true, opacity: 0.3 }));
           lens.position.copy(at);
-          const rim = new THREE.Mesh(new THREE.ExtrudeGeometry(heart, { depth: 0.003, bevelEnabled: false }), pink);
+          const frameShape = heart.clone(); // a heart-shaped frame: the heart with a smaller heart cut out of it
+          frameShape.holes.push(new THREE.Path(heart.getPoints(24).map(q => new THREE.Vector2(q.x * 0.84, q.y * 0.84 - r * 0.03))));
+          const rim = new THREE.Mesh(new THREE.ExtrudeGeometry(frameShape, { depth: 0.003, bevelEnabled: false }), pink);
           rim.position.copy(at).add(new THREE.Vector3(0, 0, -0.004)); rim.scale.setScalar(1.12);
           g.add(rim, lens);
         } else {
           const ring = new THREE.Mesh(new THREE.TorusGeometry(r, r * 0.09, 10, 36), frame);
           ring.position.copy(at);
           const lens = new THREE.Mesh(new THREE.CircleGeometry(r, 32), id === 'sunglasses'
-            ? mat('#0c0c12', { transparent: true, opacity: 0.92, metalness: 0.6, roughness: 0.15 }) : mat('#d9f0ff', { transparent: true, opacity: 0.16, roughness: 0.05 }));
+            ? mat('#0c0c12', { transparent: true, opacity: 0.5, metalness: 0.6, roughness: 0.15 }) : mat('#d9f0ff', { transparent: true, opacity: 0.16, roughness: 0.05 }));
           lens.position.copy(at);
           g.add(ring, lens);
         }
@@ -237,22 +239,32 @@ export function buildAccessory(id, face = DEFAULT_FACE) {
       }
       break;
     }
-    case 'masquerade': { // an ornate mask around the eyes, with a feather
+    case 'masquerade': { // a phantom thief's mask: white, sharp-edged, with black around the eyes
       const { eyeX, eyeY, frontZ } = face;
-      const r = (face.r || 0.026) * 1.05, wdt = eyeX + r * 1.9, ht = r * 1.55;
-      const shape = new THREE.Shape();
-      shape.moveTo(0, ht * 0.55); shape.bezierCurveTo(wdt * 0.5, ht * 1.25, wdt * 1.05, ht * 0.9, wdt * 1.12, ht * 0.25);
-      shape.bezierCurveTo(wdt * 1.0, -ht * 0.9, wdt * 0.35, -ht * 1.0, 0, -ht * 0.35);
-      shape.bezierCurveTo(-wdt * 0.35, -ht * 1.0, -wdt * 1.0, -ht * 0.9, -wdt * 1.12, ht * 0.25);
-      shape.bezierCurveTo(-wdt * 1.05, ht * 0.9, -wdt * 0.5, ht * 1.25, 0, ht * 0.55);
-      for (const side of [-1, 1]) { const hole = new THREE.Path(); hole.absellipse(side * eyeX, 0, r * 0.95, r * 0.62, 0, Math.PI * 2); shape.holes.push(hole); }
-      const body = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.004, bevelEnabled: false }), mat('#6a2fb8', { metalness: 0.5, roughness: 0.35 }));
-      body.position.set(0, eyeY, frontZ + 0.003);
-      const trim = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.002, bevelEnabled: false }), mat('#ffd15c', { metalness: 0.9, roughness: 0.25 }));
-      trim.position.set(0, eyeY, frontZ); trim.scale.set(1.07, 1.12, 1);
-      const feather = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.1, 6), mat('#ff7eb6'));
-      feather.position.set(wdt * 1.0, eyeY + ht + 0.03, frontZ); feather.rotation.z = -0.5; feather.scale.z = 0.3;
-      g.add(trim, body, feather);
+      const r = face.r || 0.026, w = eyeX + r * 1.5, h = r * 1.5;
+      const poly = pts => { const sh = new THREE.Shape(); pts.forEach(([x, y], k) => (k ? sh.lineTo(x, y) : sh.moveTo(x, y))); sh.closePath(); return sh; };
+      const half = [[0, h * 0.5], [w * 0.3, h * 0.95], [w * 0.78, h * 1.0], [w * 1.3, h * 1.85], [w * 1.04, h * 0.3], [w * 1.2, -h * 0.55],
+        [w * 0.66, -h * 0.72], [w * 0.3, -h * 1.3], [w * 0.15, -h * 0.4], [0, -h * 0.12]];
+      const outline = [...half, ...half.slice(1, -1).reverse().map(([x, y]) => [-x, y])];
+      // slanted, sharp eye openings, each with a thick black rim
+      const eye = (side, k) => [[-0.95, -0.12], [-0.25, 0.58], [1.12, 0.62], [0.35, -0.5]].map(([x, y]) => [side * (eyeX + x * r * k), y * r * k]);
+      const body = poly(outline), edgeShape = poly(outline);
+      const layers = new THREE.Group();
+      for (const side of [-1, 1]) {
+        const rim = poly(eye(side, 1.42)), hole = new THREE.Path(eye(side, 1).map(([x, y]) => new THREE.Vector2(x, y)));
+        body.holes.push(hole);
+        edgeShape.holes.push(hole); // (the black backing needs the openings too, or the eyes are covered)
+        rim.holes.push(hole);
+        const rimMesh = new THREE.Mesh(new THREE.ExtrudeGeometry(rim, { depth: 0.0025, bevelEnabled: false }), mat('#0e0e12', { roughness: 0.6 }));
+        rimMesh.position.z = 0.004;
+        layers.add(rimMesh);
+      }
+      const white = new THREE.Mesh(new THREE.ExtrudeGeometry(body, { depth: 0.004, bevelEnabled: false }), mat('#f6f6f8', { roughness: 0.35 }));
+      const edge = new THREE.Mesh(new THREE.ExtrudeGeometry(edgeShape, { depth: 0.002, bevelEnabled: false }), mat('#0e0e12', { roughness: 0.6 }));
+      edge.scale.set(1.06, 1.1, 1); edge.position.z = -0.0022;
+      layers.add(edge, white);
+      layers.position.set(0, eyeY, frontZ + 0.003);
+      g.add(layers);
       break;
     }
     case 'fox_mask': { // a festival fox mask, worn on the side of the head
@@ -328,6 +340,9 @@ export function buildAccessory(id, face = DEFAULT_FACE) {
     default:
       return null;
   }
+  // See-through parts (lenses) must not hide what is behind them: the eyes are drawn as see-through layers too,
+  // and a lens that wrote to the depth buffer made them vanish, leaving blank white lenses.
+  g.traverse(o => { if (o.isMesh && o.material.transparent) { o.material.depthWrite = false; o.renderOrder = 30; } });
   return g;
 }
 

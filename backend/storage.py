@@ -82,6 +82,11 @@ def _migrate(state):
     state["owned_backgrounds"] += [b for b, info in rooms.items() if info["price"] == 0 and b not in state["owned_backgrounds"]]
     if state["background"] not in state["owned_backgrounds"]:
         state["background"] = state["owned_backgrounds"][0]
+    accessories = {a["id"] for a in SHOP["accessories"]}
+    gone = [a for a in state["owned_accessories"] if a not in accessories]  # accessories that no longer exist are refunded
+    state["points"] += 300 * len(gone)
+    state["owned_accessories"] = [a for a in state["owned_accessories"] if a in accessories]
+    state["equipped_accessories"] = [a for a in state["equipped_accessories"] if a in accessories]
     outfits = {o["id"] for o in SHOP.get("outfits", [])}
     removed = [o for o in state["owned_outfits"] if o not in outfits]  # outfits that no longer exist are refunded
     state["points"] += 400 * len(removed)

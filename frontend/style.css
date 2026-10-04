@@ -783,3 +783,38 @@ button.focus-pill { cursor: pointer; font: inherit; font-weight: 700; color: inh
 .pomo-custom { display: inline-flex; align-items: center; gap: 4px; padding: 0 10px 0 4px; font-size: .85rem; color: var(--muted); }
 .pomo-custom input { width: 58px; padding: 4px 6px; text-align: center; border-radius: 99px; }
 .pomo-picker { flex-wrap: wrap; justify-content: center; }
+
+/* ---------- custom focus minutes: themed − / + instead of the browser's own arrows ---------- */
+.pomo-custom input::-webkit-outer-spin-button, .pomo-custom input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pomo-custom input { -moz-appearance: textfield; width: 52px; font-weight: 700; color: var(--gold-hi); border-color: var(--line); }
+.pomo-picker .pomo-custom button { width: 26px; height: 26px; padding: 0; border-radius: 50%; font-size: 1rem; line-height: 1; color: #2a1c05;
+  border: 0; background: linear-gradient(180deg, #fff3cf, #ffc24f); box-shadow: 0 2px 8px rgba(255,194,79,.4); }
+.pomo-picker .pomo-custom button:hover { background: linear-gradient(180deg, #fff, #ffd27a); transform: scale(1.12); }
+.pomo-picker .pomo-custom button:disabled { opacity: .4; }
+
+/* ---------- confirmation window ---------- */
+#confirm { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: rgba(8,6,24,.6); animation: fadein .2s; }
+@keyframes fadein { from { opacity: 0; } }
+.confirm-box { width: min(420px, 90vw); padding: 24px 26px 20px; text-align: center; border-color: var(--gold); animation: pop .25s ease-out;
+  box-shadow: 0 20px 60px rgba(5,5,25,.7), 0 0 40px rgba(255,143,196,.3); }
+.confirm-title { font: 700 1.35rem var(--display); letter-spacing: .04em; background: linear-gradient(90deg, #fff3cf, #ffd27a 45%, #ff8fc4);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.confirm-text { margin: 8px 0 4px; color: var(--muted); font-size: .92rem; line-height: 1.5; }
+.confirm-count { height: 56px; display: grid; place-items: center; font: 700 2.6rem var(--display); color: var(--gold-hi); text-shadow: 0 0 20px rgba(255,210,122,.7); }
+.confirm-count.done { height: 14px; }
+.confirm-actions { display: flex; justify-content: center; gap: 22px; }
+.confirm-btn { width: 58px; height: 58px; padding: 0; border-radius: 50%; font-size: 1.5rem; font-weight: 800; border: 2px solid #fff; transition: transform .2s cubic-bezier(.2,1.7,.4,1), opacity .2s, filter .2s; }
+.confirm-btn.yes { color: #06301c; background: linear-gradient(160deg, #b8ffdc, #3fd68f); box-shadow: 0 0 22px rgba(63,214,143,.6); }
+.confirm-btn.no { color: #3a0612; background: linear-gradient(160deg, #ffc2cc, #ff5470); box-shadow: 0 0 22px rgba(255,84,112,.6); }
+.confirm-btn:hover:not(:disabled) { transform: scale(1.14); }
+.confirm-btn:disabled { opacity: .3; filter: grayscale(.7); box-shadow: none; }
+
+/* ---------- the character model in the collection (drag to rotate) ---------- */
+.d-art canvas.viewer { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .35s; cursor: grab; touch-action: none; }
+.d-art canvas.viewer.dragging { cursor: grabbing; }
+.d-art.live canvas.viewer { opacity: 1; }
+.d-art img { transition: opacity .3s; }
+.d-art.live img { opacity: 0; }
+.d-hint { position: absolute; right: 10px; top: 8px; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase;
+  color: rgba(40,20,70,.7); pointer-events: none; opacity: 0; transition: opacity .3s; }
+.d-art.live .d-hint { opacity: 1; }

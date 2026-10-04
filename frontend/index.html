@@ -203,7 +203,7 @@
           <button data-pomo="25" class="active">25 min</button>
           <button data-pomo="50">50 min</button>
           <button data-pomo="custom">Custom</button>
-          <label id="pomo-custom" class="pomo-custom hidden"><input id="pomo-minutes" type="number" min="1" max="180" value="15" /> min</label>
+          <span id="pomo-custom" class="pomo-custom hidden"><button type="button" data-step="-5" title="5 minutes less">−</button><input id="pomo-minutes" type="number" min="1" max="180" value="15" aria-label="Minutes" /><button type="button" data-step="5" title="5 minutes more">+</button> min</span>
         </div>
         <div id="focus-phase" class="focus-phase"></div>
         <div id="focus-timer">25:00</div>
@@ -362,6 +362,19 @@
 
   <!-- Menu transition wipe + gacha cutscene -->
   <div id="wipe"></div>
+  <!-- A small confirmation window (used when ending a focus session) -->
+  <div id="confirm" class="hidden">
+    <div class="confirm-box frame">
+      <div class="confirm-title" id="confirm-title"></div>
+      <div class="confirm-text" id="confirm-text"></div>
+      <div class="confirm-count" id="confirm-count"></div>
+      <div class="confirm-actions">
+        <button id="confirm-no" class="confirm-btn no" title="Cancel">✕</button>
+        <button id="confirm-yes" class="confirm-btn yes" title="Confirm">✓</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Effects over everything: click sparkles, reward bursts, confetti, the level-up celebration -->
   <canvas id="fx"></canvas>
   <div id="levelup" class="hidden"><div class="lu-rays"></div><div class="lu-text">LEVEL UP</div><div class="lu-num">Lv 2</div></div>

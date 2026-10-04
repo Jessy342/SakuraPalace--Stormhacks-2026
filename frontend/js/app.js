@@ -7,6 +7,7 @@ import { Environment } from './environment.js';
 import * as voice from './voice.js';
 import { playCutscene, stars, portrait, portraitImg, LOTUS } from './gacha.js';
 import * as vfx from './vfx.js';
+import { ModelViewer } from './viewer.js';
 
 const $ = id => document.getElementById(id);
 /** Escapes text for HTML and draws the points symbol (written ◆ in messages) as the lotus. */
@@ -240,6 +241,7 @@ function openTab(name) {
     $('collection').classList.add('intro'); setTimeout(() => $('collection').classList.remove('intro'), 900);
   }
   if (name === 'dress') renderDress();
+  if (name !== 'chars' && viewer) viewer.stop();
   applyEnv();
 }
 let dressReturn = null; // the menu the dressing room was opened from
@@ -262,6 +264,11 @@ addEventListener('keydown', e => {
     return;
   }
   if (typing) return;
+  if (!$('confirm').classList.contains('hidden')) return; // a confirmation window is open
+  if (currentTab === 'chars' || (currentTab === 'dress' && ['outfit', 'head', 'face', 'room'].includes(dressCat))) {
+    if (e.key.startsWith('Arrow')) { e.preventDefault(); gridMove(e.key); return; }
+    if (e.key === 'Enter') { e.preventDefault(); gridEnter(); return; }
+  }
   if (e.key === 'Enter' || e.key === '/') {
     if (FULL.includes(currentTab)) return;
     e.preventDefault();
@@ -271,6 +278,46 @@ addEventListener('keydown', e => {
   const btn = document.querySelector(`#tabs button[data-key="${e.key.toLowerCase()}"]`);
   if (btn) { voice.uiClick(); openTab(btn.dataset.tab); }
 });
+
+/** Arrow keys: move the selection through the character cards or the dressing room tiles. */
+function gridMove(key) {
+  const chars = currentTab === 'chars';
+  const cells = [...document.querySelectorAll(chars ? '#collection .ccard' : '#dress-grid .tile')];
+  if (!cells.length) return;
+  const cols = cells.filter(c => c.offsetTop === cells[0].offsetTop).length || 1;
+  let i = cells.findIndex(c => (chars ? c.dataset.pick === charPick : picked && c.dataset.item === `${picked.kind}:${picked.id}`));
+  if (i < 0) i = 0;
+  else i += { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[key];
+  if (i < 0 || i >= cells.length) return;
+  voice.uiClick();
+  cells[i].click();
+  document.querySelector(chars ? `#collection .ccard[data-pick="${charPick}"]` : '#dress-grid .tile.trying')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+/** Enter: make the picked character your companion, or wear / use the picked item (buying stays a deliberate click). */
+function gridEnter() {
+  if (currentTab === 'chars') { $('char-detail').querySelector('[data-char]')?.click(); return; }
+  if (!picked) return;
+  if (ownsItem(picked.kind, picked.id)) $('dress-action').querySelector('[data-apply]:not(:disabled)')?.click();
+  else toast('Not owned yet: click Buy to get it.');
+}
+
+/** A small themed window asking to confirm. The ✓ and ✕ unlock after `seconds` (a countdown is shown). Resolves true / false. */
+function confirmAfter(title, text, seconds = 5) {
+  return new Promise(resolve => {
+    const yes = $('confirm-yes'), no = $('confirm-no');
+    $('confirm-title').textContent = title;
+    $('confirm-text').textContent = text;
+    $('confirm').classList.remove('hidden');
+    let left = seconds;
+    const show = () => { yes.disabled = no.disabled = left > 0; $('confirm-count').textContent = left > 0 ? left : ''; $('confirm-count').classList.toggle('done', left <= 0); };
+    show();
+    const timer = setInterval(() => { left--; show(); if (left <= 0) clearInterval(timer); }, 1000);
+    const done = answer => { clearInterval(timer); $('confirm').classList.add('hidden'); yes.onclick = no.onclick = null; resolve(answer); };
+    yes.onclick = () => done(true);
+    no.onclick = () => done(false);
+  });
+}
 
 // ======================= Rendering =======================
 async function setState(newState) {
@@ -638,7 +685,7 @@ function pomoHint(m) {
 
 function renderPomoPicker() {
   document.querySelectorAll('#pomo-picker button').forEach(b => {
-    b.classList.toggle('active', b.dataset.pomo === 'custom' ? pomoCustom : !pomoCustom && +b.dataset.pomo === pomoChoice);
+    if (!b.dataset.step) b.classList.toggle('active', b.dataset.pomo === 'custom' ? pomoCustom : !pomoCustom && +b.dataset.pomo === pomoChoice);
     b.disabled = focusActive;
   });
   $('pomo-picker').classList.toggle('locked', focusActive);
@@ -651,6 +698,12 @@ function renderPomoPicker() {
 $('pomo-picker').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b || focusActive) return;
+  if (b.dataset.step) { // the − and + next to the custom minutes
+    const box = $('pomo-minutes');
+    box.value = Math.max(1, Math.min(180, (Math.round(+box.value) || 0) + +b.dataset.step));
+    box.dispatchEvent(new Event('input'));
+    return;
+  }
   pomoCustom = b.dataset.pomo === 'custom';
   pomoChoice = pomoCustom ? Math.max(1, Math.min(180, +$('pomo-minutes').value || 15)) : +b.dataset.pomo;
   try { localStorage.setItem('pomoChoice', pomoChoice); localStorage.setItem('pomoCustom', pomoCustom ? '1' : '0'); } catch { /* storage blocked */ }
@@ -703,6 +756,7 @@ $('focus-toggle').addEventListener('click', async () => {
       say(pomoChoice ? `Focus mode on. ${pomoChoice} minutes, then you get a break. I'm watching you.`
         : `Focus mode on. I'm watching you.`, { emotion: 'relaxed' });
     } else {
+      if (!await confirmAfter('End focus session?', 'You keep what you have earned so far, but the current round will not count.')) return;
       const res = await post('/focus/stop');
       $('warning').classList.add('hidden');
       await setState(res.state);
@@ -923,13 +977,15 @@ function renderChars() {
   renderCharDetail();
 }
 
+let viewer = null; // the 3D model in the detail panel (made the first time the Characters screen opens)
+
 function renderCharDetail() {
   const c = charById(charPick);
   const own = S.owned_characters[c.id];
   const isActive = c.id === S.active_character;
   const voices = [c.voice_id && 'English', c.voice_id_ja && 'Japanese'].filter(Boolean).join(' + ') || 'Default voice';
   $('char-detail').innerHTML = `
-    <div class="d-art r-${c.rarity} ${own ? '' : 'locked'}"><div class="initial">${esc(c.name[0])}</div>${portraitImg(c.id)}</div>
+    <div class="d-art r-${c.rarity} ${own ? '' : 'locked'}"><div class="initial">${esc(c.name[0])}</div>${portraitImg(c.id)}${own ? '<span class="d-hint">Drag to rotate</span>' : ''}</div>
     <div class="rarity-label r-${c.rarity} ${c.rarity === 'Unbound' ? 'rainbow-text' : ''}">${c.rarity.toUpperCase()}</div>
     <h2>${esc(c.name)}</h2>
     <div class="d-title">${esc(c.title || '')}</div>
@@ -942,6 +998,8 @@ function renderCharDetail() {
     ${!own ? '<button class="primary big" data-open="gacha">Go to Summon</button>'
       : isActive ? '<button class="big" disabled>Current companion</button><button class="primary big" data-open="dress">Customize</button>'
       : `<button class="primary big" data-char="${c.id}">Set as companion</button>`}`;
+  // characters you own are shown as their real 3D model (the picture stays until it has loaded)
+  if (currentTab === 'chars' && own) (viewer ||= new ModelViewer()).show($('char-detail').querySelector('.d-art'), c.id, `/models/${c.model}`, S.personality_overrides[c.id] || c.personality);
 }
 
 /** Plays a character's intro line in their English or Japanese voice. */

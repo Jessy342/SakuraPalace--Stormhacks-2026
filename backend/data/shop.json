@@ -42,9 +42,7 @@
     {"id": "monocle", "name": "Monocle", "price": 250, "slot": "face"},
     {"id": "eyepatch", "name": "Eyepatch", "price": 250, "slot": "face"},
     {"id": "blindfold", "name": "Sorcerer's Blindfold", "price": 400, "slot": "face"},
-    {"id": "pointed_shades", "name": "Pointed Shades", "price": 450, "slot": "face"},
-    {"id": "face_mask", "name": "Face Mask", "price": 150, "slot": "face"},
-    {"id": "masquerade", "name": "Masquerade Mask", "price": 350, "slot": "face"},
+    {"id": "masquerade", "name": "Phantom Mask", "price": 350, "slot": "face"},
     {"id": "fox_mask", "name": "Fox Mask", "price": 400, "slot": "face"}
   ],
   "backgrounds": [
