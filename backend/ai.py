@@ -3,6 +3,7 @@ import json
 import re
 import shutil
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -88,9 +89,11 @@ def base_system(state, char):
     pending = [t for t in state["tasks"] if not t["done"]]
     task_lines = "\n".join(f"- [{t['id']}] {t['title']} ({t['difficulty']}{', due ' + t['due'] if t.get('due') else ''})" for t in pending) or "- (none)"
     sub = state["settings"].get("voice_mode") == "sub"
+    today = date.today()
     return f"""You are {char['name']} ("{char.get('title', '')}"), the user's personal anime assistant inside a productivity app.
 Personality: {personality_for(state, char)}
 Stay fully in character. You help the user stay focused, manage their schedule, and feel motivated.
+Today is {today.strftime('%A')}, {today.isoformat()}. Work out due dates like "Friday" or "tomorrow" from this.
 
 User stats: level {state['level']}, {state['points']} points, {state['stats']['tasks_done']} tasks done.
 Their pending tasks:
@@ -99,7 +102,7 @@ Their pending tasks:
 Rules:
 - Your reply is SPOKEN aloud, so keep it short: 1-3 sentences, no markdown, no emojis, no lists.
 - If the user asks you to add/schedule/remember something to do, put it in "add_tasks".
-- Difficulty is "easy", "medium" or "hard". "due" is an ISO date like 2026-10-04 or null.
+- Difficulty is "easy", "medium" or "hard". "due" is an ISO date (YYYY-MM-DD) or null.
 - {"Also give a natural Japanese version of your reply in reply_ja (the voice speaks Japanese, the English is shown as subtitles)." if sub else "Set reply_ja to an empty string."}
 
 Respond ONLY with JSON in this exact shape:
