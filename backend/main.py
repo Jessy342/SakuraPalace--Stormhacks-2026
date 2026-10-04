@@ -25,11 +25,13 @@ from fastapi.staticfiles import StaticFiles
 import ai
 import focus
 import game
+import journey
 import voice
 
 app = FastAPI(title="Sakura Assistant")
 app.include_router(game.router)
 app.include_router(ai.router)
+app.include_router(journey.router)
 app.include_router(voice.router)
 app.include_router(focus.router)
 

@@ -18,6 +18,11 @@ SHOP = _load_json("shop.json")
 
 DEFAULT_STATE = {
     "player_name": "",  # what the companion calls you (asked on the title screen)
+    "goals": [],  # bigger ambitions: {id, category, title, want, plan, note, status tracking|paused|done, created, note_day, rewarded}
+    "ideas": {"day": None, "items": [], "dismissed": []},  # offers the companion came up with: {id, emoji, title, body, action}
+    "feed": {"instruction": "Make me a feed about my interests. Keep the tone clear and direct. Ensure it is quick to skim. Try to avoid clickbait.",
+             "day": None, "items": [], "earned_day": None, "earned": 0},  # news cards: {id, emoji, title, body, source, url, liked, paid, at}
+    "game_ready": {},  # mini game -> the time (unix seconds) it can be played again
     "rhythm_tickets": 0,  # rounds of Rhythm Tap you have unlocked (finishing a quest gives one, up to 3)
     "wheel": {"day": None},  # the day the free daily wheel was last spun
     "free_wishes": 0,  # free single summons won on the wheel

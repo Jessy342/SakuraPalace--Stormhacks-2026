@@ -11,6 +11,7 @@ import * as vfx from './vfx.js';
 import { ModelViewer } from './viewer.js';
 import { runTitle, skipTitle } from './title.js';
 import { playGame, closeGame, gameOpen } from './minigames.js';
+import { initJourney } from './journey.js';
 
 const $ = id => document.getElementById(id);
 /** Escapes text for HTML and draws the points symbol (written ◆ in messages) as the lotus. */
@@ -244,6 +245,7 @@ function openTab(name) {
     $('collection').classList.add('intro'); setTimeout(() => $('collection').classList.remove('intro'), 900);
   }
   if (name === 'dress') renderDress();
+  if (name === 'journey') journey.opened();
   if (name !== 'chars' && viewer) viewer.stop();
   applyEnv();
 }
@@ -363,6 +365,7 @@ function render() {
   renderChars();
   renderDress();
   renderOptions();
+  journey.render();
 }
 
 /** How the lotus count is written: an infinity sign in Dev Mode. */
@@ -643,6 +646,7 @@ setInterval(checkEvents, 20000);
 
 async function completeTask(id, from) {
   const res = await post(`/tasks/${id}/complete`);
+  journey.questDone(S.tasks.find(t => t.id === id)); // a goal's starter quest: its progress note is rewritten
   voice.sfx('task_done');
   floater(`+${res.xp_gained} XP  +${res.points_gained} ◆`);
   const [x, y] = vfx.at(from); // the reward bursts out of the button you pressed and flies to your points
@@ -801,6 +805,7 @@ async function pollFocus() {
     const st = await api('/focus/status?since=' + lastEventId);
     const wasActive = focusActive;
     focusActive = st.active;
+    lockGames();
     if (wasActive !== focusActive) renderPomoPicker();
     const pomo = st.active && st.pomodoro;
     const onBreak = pomo && st.phase === 'break';
@@ -1237,6 +1242,7 @@ function renderOptions() {
   document.querySelector('[data-game="wheel"]').classList.toggle('locked', !spin);
   $('rhythm-status').textContent = rounds ? `Tap the notes to the beat. ${rounds} round${rounds > 1 ? 's' : ''} unlocked.` : 'Locked: finish a quest to unlock a round.';
   document.querySelector('[data-game="rhythm"]').classList.toggle('locked', !rounds);
+  showCooldowns();
   $('hud-dev').classList.toggle('hidden', !S.dev_mode);
   $('dev-form').classList.toggle('hidden', !!S.dev_mode);
   $('dev-off').classList.toggle('hidden', !S.dev_mode);
@@ -1316,11 +1322,51 @@ $('reset-btn').addEventListener('click', async () => {
   await setState(await post('/reset'));
 });
 
+// ======================= Journey (goals, ideas, feed) =======================
+const journey = initJourney({
+  post: (path, body, method) => (method ? api(path, { method }) : post(path, body)),
+  state: () => S,
+  setState: s => setState(s),
+  sendChat: text => sendChat(text),
+  say: (text, opts) => say(text, opts),
+  addMsg: (role, text) => addMsg(role, text),
+  petals: n => { floater(`+${n} ◆`); vfx.flyTo(innerWidth - 220, innerHeight * 0.4, $('hud-points').parentElement, LOTUS, 3); },
+  goalDone: (reward, goal) => { // finishing a goal is a big moment
+    voice.sfx('level_up');
+    vfx.confetti(180);
+    floater(`🎯 Goal reached! +${reward.xp} XP  +${reward.points} ◆`, 'big');
+    vfx.flyTo(innerWidth / 2, innerHeight * 0.4, $('hud-points').parentElement, LOTUS, 14);
+    if (reward.levels) vfx.levelUp(S.level);
+    addMsg('sys', `🎯 Goal reached: ${goal?.title || ''} (+${reward.xp} XP, +${reward.points} ◆)`);
+    character.react();
+    say(`You did it${S.player_name ? ', ' + S.player_name : ''}! "${goal?.title || 'Your goal'}" is done. I'm so proud of you!`, { emotion: 'happy', expressive: true });
+  },
+});
+
 // ======================= Mini games =======================
+/** Mini games are a break-time thing: while a focus session runs they are put away completely. */
+function lockGames() {
+  document.querySelector('#tabs [data-tab="games"]').classList.toggle('hidden', focusActive);
+  if (focusActive && currentTab === 'games') closeTab();
+  if (focusActive && gameOpen()) closeGame();
+}
+/** Petal Catch and Memory Match rest for a few minutes after a round: the cards count down to when they can be played again. */
+const coolLeft = id => (S?.dev_mode ? 0 : Math.max(0, Math.ceil((S?.game_ready?.[id] || 0) - Date.now() / 1000)));
+function showCooldowns() {
+  for (const id of ['catch', 'memory']) {
+    const card = document.querySelector(`[data-game="${id}"]`), left = coolLeft(id);
+    card.classList.toggle('locked', left > 0);
+    card.querySelector('em').textContent = left > 0 ? `again in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : 'up to 80';
+  }
+}
+setInterval(() => { if (currentTab === 'games') showCooldowns(); }, 1000);
+
 /** Puts the player's name into a spoken line, after any [tone] tags: "[happy] Good morning!" -> "[happy] Jo! Good morning!" */
 const withName = text => (S?.player_name ? text.replace(/^((?:\[[^\]]+\]\s*)*)/, `$1${S.player_name}! `) : text);
 
 async function startGame(id) {
+  if (focusActive) return addMsg('sys', '🎮 Mini games are put away during a focus session.');
+  if (coolLeft(id) > 0) return addMsg('sys', `🎮 That game is resting. You can play it again in ${Math.floor(coolLeft(id) / 60)}:${String(coolLeft(id) % 60).padStart(2, '0')}.`);
   if (id === 'rhythm' && !(S.rhythm_tickets > 0)) { say('Finish a quest first, then we can play Rhythm Tap!', { emotion: 'happy' }); return addMsg('sys', '🎵 Rhythm Tap is locked: finish a quest to unlock a round.'); }
   if (id === 'wheel' && !S.wheel_info.available) return addMsg('sys', '🎡 You already used today\'s free spin. Come back tomorrow!');
   voice.stopSpeaking();
@@ -1434,6 +1480,7 @@ async function boot() {
       if (S.wheel_info.available) await say('Your free daily spin is ready in Mini Games, too!', { emotion: 'happy' });
     }
     if (reminder) await say(reminder, { emotion: reminder.includes('overdue') ? 'angry' : 'surprised' });
+    journey.daily(); // today's ideas (said out loud), goal notes and feed
   };
 
   // The title screen: wait there until the player enters (and tells us their name the first time), then greet.

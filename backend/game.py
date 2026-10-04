@@ -145,6 +145,7 @@ def set_player(body: PlayerIn):
 MINIGAME_PLAY_CAP = 80   # most Sakura Petals one round of Petal Catch or Memory Match can pay
 RHYTHM_PLAY_CAP = 100    # Rhythm Tap pays a little more: it has to be unlocked by finishing a quest
 RHYTHM_TICKETS_MAX = 3   # unlocked rounds you can save up
+GAME_COOLDOWN = {"catch": 180, "memory": 180}  # seconds to wait after a round before that game can be played again
 
 
 def minigame_reward(game, score):
@@ -167,6 +168,11 @@ def minigame(body: MinigameIn):
     """Pays out a finished mini game in Sakura Petals. Rhythm Tap uses up one unlocked round."""
     reward = minigame_reward(body.game, body.score)
     with Transaction() as state:
+        ready = state.setdefault("game_ready", {})
+        if time.time() < ready.get(body.game, 0) and not state.get("dev_mode"):
+            raise HTTPException(400, "That game is still resting. Try again in a moment!")
+        if body.game in GAME_COOLDOWN:
+            ready[body.game] = int(time.time()) + GAME_COOLDOWN[body.game]
         if body.game == "rhythm":
             if state.get("rhythm_tickets", 0) < 1:
                 raise HTTPException(400, "Finish a quest first to unlock Rhythm Tap")

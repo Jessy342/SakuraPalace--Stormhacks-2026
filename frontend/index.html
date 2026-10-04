@@ -74,6 +74,7 @@
       <symbol id="i-shop" viewBox="0 0 24 24"><path d="M5 8h14l-1 13H6z M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
       <symbol id="i-teacher" viewBox="0 0 24 24"><path d="M12 5v15 M12 5c-2-1.5-5-2-8-1.500v14c3-.5 6 0 8 1.500 M12 5c2-1.500 5-2 8-1.500v14c-3-.5-6 0-8 1.500"/></symbol>
       <symbol id="i-log" viewBox="0 0 24 24"><path d="M3 4h13v10H9l-4 3.500V14H3z"/><path d="M19 9h2v9h-2v3l-3.500-3H11"/></symbol>
+      <symbol id="i-journey" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.500 8.500l-2 5-5 2 2-5z"/></symbol>
       <symbol id="i-game" viewBox="0 0 24 24"><path d="M7 8h10a5 5 0 0 1 4.9 6l-.6 3a2.300 2.300 0 0 1-4 1L15.500 16h-7L6.700 18a2.300 2.300 0 0 1-4-1l-.6-3A5 5 0 0 1 7 8z"/><path d="M7.500 10.500v3M6 12h3M15.500 11.200h.01M17.800 13h.01"/></symbol>
       <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.200"/><circle cx="9" cy="17" r="2.200"/></symbol>
       <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M5.500 11.500a6.500 6.500 0 0 0 13 0 M12 18v3"/></symbol>
@@ -132,6 +133,7 @@
     <button data-tab="chars" data-key="c"><svg><use href="#i-chars"/></svg><span>Characters</span><kbd>C</kbd></button>
     <button data-tab="dress" data-key="d"><svg><use href="#i-dress"/></svg><span>Dressing Room &amp; Shop</span><kbd>D</kbd></button>
     <button data-tab="chat" data-key="l"><svg><use href="#i-log"/></svg><span>Log</span><kbd>L</kbd></button>
+    <button data-tab="journey" data-key="j"><svg><use href="#i-journey"/></svg><span>Journey: Goals, Ideas &amp; Feed</span><kbd>J</kbd></button>
     <button data-tab="games" data-key="m"><svg><use href="#i-game"/></svg><span>Mini Games</span><kbd>M</kbd></button>
     <button data-tab="settings" data-key="o"><svg><use href="#i-settings"/></svg><span>Options</span><kbd>O</kbd></button>
   </nav>
@@ -260,12 +262,12 @@
         <button id="focus-toggle" class="big primary">Start focus session</button>
         <small id="focus-hint"></small>
       </div>
-      <div class="sim">
+      <div class="sim hidden">
         <button id="sim-on">Simulate distraction</button>
         <button id="sim-app">Simulate app (Discord)</button>
         <button id="sim-off">Stop simulating</button>
       </div>
-      <small id="focus-platform"></small>
+      <small id="focus-platform" class="hidden"></small>
       <details>
         <summary>Focus rules</summary>
         <h3>Blocked apps <small>(process names)</small></h3>
@@ -289,6 +291,15 @@
     </section>
 
     <!-- OPTIONS -->
+    <section id="tab-journey" class="tab" data-title="Journey">
+      <div id="journey-tabs" class="subtabs">
+        <button data-pane="goals" class="active">Goals</button>
+        <button data-pane="ideas">Ideas</button>
+        <button data-pane="feed">Feed</button>
+      </div>
+      <div id="journey-body"></div>
+    </section>
+
     <section id="tab-games" class="tab" data-title="Mini Games">
       <p class="games-intro">Take a short break and win Sakura Petals.</p>
       <button class="game-card wheel-card" data-game="wheel"><i>🎡</i><span><b>Daily Spin</b><small id="wheel-status">One free spin every day: 10 to 500 Sakura Petals, or a rare Free Wish.</small></span><em>free</em></button>
@@ -308,7 +319,7 @@
       <div class="keys">
         <span><kbd>Enter</kbd> Talk</span><span><kbd>Esc</kbd> Close menu</span><span><kbd>Q</kbd> Quests</span><span><kbd>F</kbd> Focus</span>
         <span><kbd>G</kbd> Summon</span><span><kbd>C</kbd> Characters</span><span><kbd>D</kbd> Dressing room</span>
-        <span><kbd>L</kbd> Log</span><span><kbd>M</kbd> Mini games</span><span><kbd>O</kbd> Options</span>
+        <span><kbd>L</kbd> Log</span><span><kbd>J</kbd> Journey</span><span><kbd>M</kbd> Mini games</span><span><kbd>O</kbd> Options</span>
       </div>
       <h3>System</h3>
       <div id="sys-status"></div>

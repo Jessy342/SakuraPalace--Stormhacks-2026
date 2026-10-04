@@ -23,6 +23,7 @@ backend/                 Python 3.12, FastAPI. One file per system.
   game.py                tasks, XP/levels, shop, gacha (rates, pity, 10-pull, duplicates)  -> /api/state, /api/tasks, /api/gacha/pull ...
   ai.py                  Gemini chat (JSON replies w/ emotion + add_tasks), weekly planner, Teacher mode -> /api/chat, /api/plan, /api/teacher/*
   voice.py               ElevenLabs TTS (+cache), STT (Scribe), sound effects, angry/praise lines -> /api/tts, /api/stt, /api/sfx/{name}, /api/yell
+  journey.py             Goals (Gemini turns a wish into a plan + starter quests, living progress notes), Ideas (daily offers; accepting one sends its `action` to the chat), Feed (real items found with Gemini + Google Search, falling back to Google News headlines) -> /api/goals, /api/ideas, /api/feed, /api/open
   focus.py               background watcher thread (Windows ctypes + psutil), warning -> drain -> force close -> /api/focus/*
   data/characters.json   gacha roster + banners (edit to add characters)   data/shop.json  accessories & backgrounds
 frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. three.js + three-vrm are vendored in frontend/vendor/.
@@ -40,6 +41,7 @@ frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. th
   js/outfits.js          outfits = the real clothes of another VRoid model: the donor's body, clothes and shoes are bound to the wearer's bones (same skeleton in every VRoid model), the wearer keeps face and hair. Colour variants repaint the textures. Listed in shop.json `outfits` (model file + optional hue/saturate/brightness); worn via `state.outfit`. To add an outfit, add a VRoid model wearing it to models/ and a line in shop.json. Do not build clothes from primitive shapes: that was tried and looked bad
   js/title.js            the title screen (painted backdrop assets/title/bg.webp from tools/make_title_art.py, falling petals, logo, menu, name login). Shown on every start; open the app with `?notitle` to skip it (automated tests do)
   js/minigames.js        mini games that earn Sakura Petals (Petal Catch, Memory Match, Rhythm Tap with a synth track made in the browser, and the free Daily Spin wheel), played in the #minigame window; `POST /api/minigame {game, score}` pays out per round (no daily limit); Rhythm Tap needs `state.rhythm_tickets` (one per finished quest, up to 3); `POST /api/wheel/spin` is once a day and can give a free single summon (`state.free_wishes`)
+  js/journey.js          the Journey drawer (key J): Goals / Ideas / Feed tabs, laid out like a phone assistant app's lists
   js/voice.js            speak() with lip-sync analyser, mic recording -> /api/stt, sound effects w/ beep fallback
   js/gacha.js            summon cutscene (gate, rarity tease, starfall, eruption, then a cinematic reveal: the character large on the right in front of their own `scene` from characters.json, slim info block on the left; summary cards)
   assets/portraits/      <id>.webp + <id>_bust.webp, rendered from the VRM models by tools/make_portraits.mjs
@@ -78,6 +80,8 @@ tools/make_portraits.mjs dev tool: re-render portraits after adding/changing a m
 - `window.character` is exposed for debugging in DevTools.
 - Performance: never raycast against the VRM mesh on mouse move (it takes ~150ms and made the whole app stutter); `hitTest()` in character.js uses a head ball + body box instead. Avoid CSS `filter`/`backdrop-filter` on full-screen animated layers. The app logs its graphics chip and frame rate to `backend/data/app.log` 25s and 85s after start (`window.__fps`).
 - An outfit with `default_for: <character id>` in shop.json is that character's own clothes: free for them (shown as "Free", wearing it just means no outfit, `state.outfit = ""`), and it costs its price for everyone else.
+- Mini games are hidden while a focus session runs, and Petal Catch / Memory Match rest 3 minutes after a round (`state.game_ready`, `GAME_COOLDOWN` in game.py; none in Dev Mode).
+- Goals pay 300 XP + 500 petals when marked done (once). Reading the feed pays 5 petals per card, 50 a day at most. Feed links open in the real browser through `POST /api/open`.
 - Login streak: `/api/daily` pays 20, 40, 80, 120, 200, 300, 500 for days 1-7 in a row (`LOGIN_REWARDS`), starting over after day 7 or a skipped day.
 - In the lobby the scroll wheel / touchpad zooms toward the character's face and sideways scroll (or Shift + scroll, or dragging) turns them.
 - The player's name (`state.player_name`, `POST /api/player {name}`) is typed on the title screen or in Options; the chat prompt gets it and `withName()` in app.js puts it into the spoken greeting.
