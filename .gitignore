@@ -12,6 +12,7 @@ backend/data/*.tmp
 backend/data/uploads/
 backend/data/tts_cache/
 backend/data/app.log
+backend/data/ja_cache.json
 
 # OS junk
 .DS_Store

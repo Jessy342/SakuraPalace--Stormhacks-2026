@@ -349,6 +349,7 @@ body[data-view="full"] #hud, body[data-view="full"] .dock, body[data-view="full"
 /* the animated backdrop of each full-screen menu is drawn by environment.js; this only holds the big faint title */
 .full-bg { position: absolute; inset: 0; overflow: hidden; }
 .glyph { position: absolute; left: 24vw; top: -9vh; font: 900 44vh var(--display); letter-spacing: -.04em; white-space: nowrap; color: rgba(120,190,255,.13); pointer-events: none; }
+.tab.full::before { content: ""; position: absolute; inset: 0; background: rgba(9,11,32,.8); } /* your room, dimmed so the menu stays readable */
 .full-top { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 26px 38px; z-index: 3; }
 .full-title { display: flex; align-items: center; gap: 12px; font: 500 1.35rem var(--display); letter-spacing: .06em; }
 .full-title small { display: block; font-size: .78rem; color: var(--gold); letter-spacing: .1em; }
@@ -448,7 +449,9 @@ body[data-view="full"] #hud, body[data-view="full"] .dock, body[data-view="full"
 #cut-skip { position: absolute; right: 28px; top: 24px; z-index: 3; border-radius: 99px; background: rgba(255,255,255,.12); }
 .flash { position: absolute; inset: 0; background: white; animation: flash 0.9s ease-out forwards; pointer-events: none; z-index: 2; }
 @keyframes flash { from { opacity: 1; } to { opacity: 0; } }
-.cut-shake { animation: shake .15s 8; }
+.cut-shake { animation: shake .12s 4; }
+.cut-quake { animation: quake .09s 12; }
+@keyframes quake { 25% { transform: translate(-9px, 5px) rotate(-.6deg); } 75% { transform: translate(9px, -5px) rotate(.6deg); } }
 .pull-grid { display: grid; grid-template-columns: repeat(5, min(150px, 14vw)); gap: 14px; }
 .pull-card {
   position: relative; height: min(240px, 26vh); overflow: hidden; border-radius: 4px 18px 4px 4px; opacity: 0;
@@ -464,6 +467,8 @@ body[data-view="full"] #hud, body[data-view="full"] .dock, body[data-view="full"
 .pull-card.char:not(.noimg) .big-initial { display: none; }
 .pull-card .new { position: absolute; top: 0; right: 0; z-index: 2; background: var(--accent); font-size: .7rem; font-weight: 800; padding: 2px 8px; border-radius: 0 0 0 8px; }
 @keyframes cardin { from { opacity: 0; transform: translateY(30px) rotateY(90deg); } to { opacity: 1; transform: none; } }
+.pull-card.shiny::before { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.6) 50%, transparent 60%); background-size: 300% 100%; animation: sweep 2.2s .6s ease-in-out infinite; }
 .pull-hint, .splash .hint { opacity: .6; font-size: .9rem; }
 .pull-hint { position: absolute; bottom: 6vh; left: 0; right: 0; text-align: center; }
 .splash { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(ellipse at 72% 50%, rgba(5,3,15,.88) 0%, rgba(5,3,15,.5) 60%, rgba(5,3,15,.25) 100%); text-shadow: 0 2px 12px #000; }
@@ -474,6 +479,25 @@ body[data-view="full"] #hud, body[data-view="full"] .dock, body[data-view="full"
 @keyframes spin { to { transform: rotate(360deg); } }
 .splash .figure { position: absolute; left: 30%; bottom: -8vh; height: 108vh; transform: translateX(-50%); animation: figin 1.5s cubic-bezier(.2,.8,.2,1) both; }
 .splash .figure img { height: 100%; animation: reveal 1.5s ease-out both; }
+/* a band of light that sweeps across the character after the reveal */
+.splash .figure .shine { position: absolute; inset: 0; -webkit-mask-size: auto 100%; mask-size: auto 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  background: linear-gradient(110deg, transparent 40%, rgba(255,255,255,.85) 50%, transparent 60%); background-size: 300% 100%; background-position: 130% 0;
+  animation: sweep 2.6s 1.3s ease-in-out infinite; mix-blend-mode: screen; }
+@keyframes sweep { 0% { background-position: 130% 0; } 45%, 100% { background-position: -30% 0; } }
+/* the rarity written on a tilted ribbon racing across the screen */
+.splash .ribbon { position: absolute; left: -10%; right: -10%; top: 12%; transform: rotate(-6deg); overflow: hidden; white-space: nowrap; padding: 6px 0;
+  background: color-mix(in srgb, var(--rc) 80%, #000); color: rgba(255,255,255,.92); font: 900 1.1rem var(--display); letter-spacing: .3em;
+  box-shadow: 0 0 30px var(--rc); animation: ribbonin .5s .7s cubic-bezier(.2,.8,.2,1) both; }
+.splash .ribbon span { display: inline-block; animation: ribbonrun 18s linear infinite; }
+@keyframes ribbonin { from { transform: rotate(-6deg) scaleY(0); opacity: 0; } }
+@keyframes ribbonrun { to { transform: translateX(-50%); } }
+.splash .name.letters .word { display: inline-block; white-space: nowrap; }
+.splash .name.letters .word span { display: inline-block; animation: letterin .5s cubic-bezier(.2,1.4,.4,1) backwards; }
+@keyframes letterin { from { opacity: 0; transform: translateY(40px) scale(2.4) rotate(12deg); filter: blur(6px); } }
+/* MYTHIC / UNBOUND slammed across the screen before the rarest characters appear */
+.slam { font: 900 clamp(3rem, 11vw, 11rem)/1 var(--display); letter-spacing: .04em; color: var(--rc); text-shadow: 0 0 60px var(--rc), 0 0 8px #fff;
+  animation: slam .9s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes slam { 0% { opacity: 0; transform: scale(5); filter: blur(20px); } 22% { opacity: 1; transform: scale(1); filter: none; } 80% { opacity: 1; transform: scale(1.06); } 100% { opacity: 0; transform: scale(1.5); } }
 .splash .figure .initial { width: 60vh; height: 100%; place-items: center; font: 900 40vh var(--display); color: var(--rc); }
 @keyframes figin { from { transform: translateX(-50%) scale(1.25); } }
 @keyframes reveal { 0%, 45% { filter: brightness(0) drop-shadow(0 0 30px var(--rc)); } 60% { filter: brightness(3) drop-shadow(0 0 60px #fff); } 100% { filter: drop-shadow(0 0 30px color-mix(in srgb, var(--rc) 60%, transparent)); } }
@@ -496,3 +520,16 @@ body[data-view="full"] #hud, body[data-view="full"] .dock, body[data-view="full"
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01s !important; transition-duration: .01s !important; } }
 body[data-tab="dress"] #dialogue { bottom: 84px; } /* keep the speech box above the turn / zoom buttons */
+
+/* lessons in the Log: a written explanation with pictures for bigger questions */
+.lesson { align-self: stretch; padding: 14px 16px; border-radius: 12px; background: rgba(0,0,0,.32); border: 1px solid var(--line); line-height: 1.55; font-size: .92rem; user-select: text; }
+.lesson-title { font: 700 1.1rem var(--display); letter-spacing: .04em; color: var(--gold-hi); margin-bottom: 8px; }
+.lesson-title::before { content: "✦ "; color: var(--gold); }
+.lesson-images { display: flex; gap: 8px; margin-bottom: 10px; }
+.lesson-images a { flex: 1; min-width: 0; text-decoration: none; color: var(--muted); font-size: .72rem; text-align: center; }
+.lesson-images img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line-soft); background: #fff; display: block; margin-bottom: 3px; }
+.lesson-body h4 { margin: 12px 0 4px; font: 700 .98rem var(--display); color: var(--gold-hi); }
+.lesson-body p { margin: 6px 0; }
+.lesson-body ul, .lesson-body ol { margin: 6px 0; padding-left: 22px; }
+.lesson-body code { background: rgba(255,255,255,.12); padding: 1px 5px; border-radius: 5px; }
+#chat-form input:disabled { opacity: .6; }

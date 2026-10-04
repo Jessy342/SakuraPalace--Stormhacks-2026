@@ -2,14 +2,19 @@
 import json
 import re
 import shutil
+import threading
+import urllib.parse
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
+
+import requests
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 import storage
-from config import GEMINI_API_KEY, GEMINI_MODEL, UPLOAD_DIR
+from config import DATA_DIR, GEMINI_API_KEY, GEMINI_MODEL, UPLOAD_DIR
 from game import create_task, public_state
 from storage import Transaction, get_character
 
@@ -61,8 +66,9 @@ def parse_json(text):
     return {"emotion": "neutral", "reply": (text or "...").strip()[:600]}
 
 
-def gemini_json(system, contents, thinking="minimal"):
-    """thinking: minimal (fast + cheap, used for chat) | low | medium | high. Thinking tokens are billed as output."""
+def gemini_json(system, contents, thinking="minimal", schema=None):
+    """thinking: minimal (fast + cheap, used for chat) | low | medium | high. Thinking tokens are billed as output.
+    schema (optional) forces the reply into an exact JSON shape."""
     from google.genai import types
     resp = client().models.generate_content(
         model=GEMINI_MODEL,
@@ -70,6 +76,7 @@ def gemini_json(system, contents, thinking="minimal"):
         config=types.GenerateContentConfig(
             system_instruction=system,
             response_mime_type="application/json",
+            response_schema=schema,
             temperature=0.9,
             thinking_config=types.ThinkingConfig(thinking_level=thinking),
         ),
@@ -105,9 +112,122 @@ Rules:
 - If the user asks you to add/schedule/remember something to do, put it in "add_tasks".
 - Difficulty is "easy", "medium" or "hard". "due" is an ISO date (YYYY-MM-DD) or null.
 - {"Also give a natural Japanese version of your reply in reply_ja (the voice speaks Japanese, the English is shown as subtitles)." if sub else "Set reply_ja to an empty string."}
+- If the user asks you to explain, teach, compare or work through something (anything that needs more than three sentences),
+  keep "reply" as a short spoken lead-in and put the full explanation in "lesson". For normal chat set "lesson" to null.
+- lesson.markdown is a clear mini-lesson in your own voice, in English: short headings, bullet points, a worked example or steps,
+  and one quick check question at the end. Plain markdown only, no LaTeX and no tables.
+- lesson.images is 1 to 3 exact English Wikipedia article titles whose main picture would help the user (for example "Photosynthesis", "Chloroplast").
 
 Respond ONLY with JSON in this exact shape:
-{{"emotion": "happy|angry|sad|surprised|relaxed|neutral", "reply": "...", "reply_ja": "...", "add_tasks": [{{"title": "...", "difficulty": "medium", "due": null}}]}}"""
+{{"emotion": "happy|angry|sad|surprised|relaxed|neutral", "reply": "...", "reply_ja": "...", "add_tasks": [{{"title": "...", "difficulty": "medium", "due": null}}],
+"lesson": null or {{"title": "...", "markdown": "...", "images": ["..."]}}}}"""
+
+
+# ---------------- Pictures for lessons (from Wikipedia) ----------------
+def wiki_image(title):
+    """Main picture of a Wikipedia article, or None."""
+    try:
+        r = requests.get("https://en.wikipedia.org/api/rest_v1/page/summary/" + urllib.parse.quote(str(title).replace(" ", "_"), safe=""),
+                         timeout=4, headers={"User-Agent": "AnimeAssistant/1.0 (student hackathon project)"})
+        info = r.json()
+        picture = (info.get("thumbnail") or {}).get("source")
+        if r.status_code == 200 and picture:
+            return {"url": picture, "caption": info.get("title", title),
+                    "link": info.get("content_urls", {}).get("desktop", {}).get("page", "")}
+    except (requests.RequestException, ValueError):
+        pass
+    return None
+
+
+def build_lesson(raw):
+    """Cleans up the lesson Gemini returned and looks up its pictures. Returns None if there is no lesson."""
+    if not isinstance(raw, dict) or not str(raw.get("markdown") or "").strip():
+        return None
+    titles = [t for t in (raw.get("images") or []) if isinstance(t, str)][:3]
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        images = [i for i in pool.map(wiki_image, titles) if i]
+    return {"title": str(raw.get("title") or "Lesson")[:120], "markdown": str(raw["markdown"])[:8000], "images": images}
+
+
+# ---------------- Japanese for sub mode ----------------
+# In sub mode every spoken line must be Japanese. Chat replies come with reply_ja; all the other lines
+# (praise, warnings, greetings, pokes...) are translated here once and remembered in a file.
+JA_CACHE_FILE = DATA_DIR / "ja_cache.json"
+_ja_lock = threading.Lock()
+_ja_warmed = set()
+try:
+    JA_CACHE = json.loads(JA_CACHE_FILE.read_text(encoding="utf-8"))
+except (OSError, ValueError):
+    JA_CACHE = {}
+
+
+def translate_ja(char, lines):
+    system = f"""You translate lines spoken by {char['name']}, an anime character, into natural spoken Japanese in that character's way of talking.
+{char.get('persona', '')}
+Rules: keep any [bracketed] tags exactly as they are, in English, in the same position. Keep app, site and task names as they are.
+Respond ONLY with JSON: {{"lines": ["..."]}} with exactly one Japanese line for each input line, in the same order."""
+    shape = {"type": "OBJECT", "properties": {"lines": {"type": "ARRAY", "items": {"type": "STRING"}}}, "required": ["lines"]}
+    data = gemini_json(system, [{"role": "user", "parts": [{"text": "Translate these lines:\n" + json.dumps(lines, ensure_ascii=False)}]}], schema=shape)
+    out = data if isinstance(data, list) else data.get("lines")
+    if isinstance(out, list) and len(lines) == 1 and len(out) > 1:
+        out = ["".join(str(x) for x in out)]  # one line that came back split into its sentences
+    if not isinstance(out, list) or len(out) != len(lines):
+        raise ValueError("translation came back with the wrong number of lines")
+    out = [str(x) for x in out]
+    if not all(re.search(r"[぀-ヿ一-鿿]", x) for x in out):
+        raise ValueError("translation came back without Japanese text")
+    return out
+
+
+def remember_ja(char, lines):
+    """Translates the lines that aren't remembered yet and saves them."""
+    missing = [t for t in lines if f"{char['id']}|{t}" not in JA_CACHE]
+    for i in range(0, len(missing), 30):
+        batch = missing[i:i + 30]
+        translated = translate_ja(char, batch)
+        with _ja_lock:
+            JA_CACHE.update({f"{char['id']}|{t}": ja for t, ja in zip(batch, translated)})
+            JA_CACHE_FILE.write_text(json.dumps(JA_CACHE, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def warm_ja(char):
+    """In the background, translates this character's stock lines ahead of time so they play without a pause."""
+    if char["id"] in _ja_warmed or not client():
+        return
+    _ja_warmed.add(char["id"])
+    from voice import YELLS
+    state = storage.load()
+    preset = state["personality_overrides"].get(char["id"]) or char.get("personality", "cheerful")
+    lines = [line for stage in YELLS.values() for line in stage.get(preset, stage["tsundere"]) if "{app}" not in line]
+
+    def work():
+        try:
+            remember_ja(char, lines + [char["intro_line"]])
+        except Exception as e:
+            print("Japanese warm-up failed:", e)
+            _ja_warmed.discard(char["id"])
+
+    threading.Thread(target=work, daemon=True).start()
+
+
+class JaIn(BaseModel):
+    text: str
+
+
+@router.post("/ja")
+def to_japanese(body: JaIn):
+    """Japanese version of a spoken line, in the active character's voice. Empty if it can't be translated."""
+    state = storage.load()
+    char = get_character(state["active_character"])
+    text = body.text.strip()[:600]
+    key = f"{char['id']}|{text}"
+    warm_ja(char)
+    if key not in JA_CACHE and client() and text:
+        try:
+            remember_ja(char, [text])
+        except Exception as e:
+            print("Japanese translation failed:", e)
+    return {"ja": JA_CACHE.get(key, "")}
 
 
 # ---------------- Chat ----------------
@@ -146,6 +266,7 @@ def chat(body: ChatIn):
         "reply": data.get("reply", ""),
         "reply_ja": data.get("reply_ja", ""),
         "added_tasks": added,
+        "lesson": build_lesson(data.get("lesson")),
         "state": public_state(storage.load()),
     }
 

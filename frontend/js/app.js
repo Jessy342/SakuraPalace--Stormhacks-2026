@@ -35,6 +35,7 @@ const classOf = c => CLASSES[c.personality] || ['Unique', '✦'];
 // ======================= Speaking =======================
 let bubbleTimer = null;
 let typeTimer = null;
+let sayGen = 0; // the newest line wins; an older one that is still being prepared gives up
 function showBubble(text, sub = '') {
   $('bubble-name').textContent = activeChar().name;
   $('bubble-sub').textContent = sub;
@@ -52,19 +53,52 @@ function showBubble(text, sub = '') {
   }, 28);
 }
 
+const stripTags = text => text.replace(/\[[^\]]+\]\s*/g, '');
+
+/** Splits a long line into sentence-sized pieces, so each is shown and spoken on its own. Short lines stay whole. */
+function splitSpeech(text) {
+  const japanese = /[\u3040-\u30ff\u4e00-\u9fff]/.test(text);
+  const limit = japanese ? 60 : 150;
+  const pieces = text.match(/[^.!?…。！？]+[.!?…。！？]+["”』」)]*\s*|[^.!?…。！？]+$/g) || [text];
+  const out = [];
+  let cur = '';
+  for (const p of pieces) {
+    if (cur && (cur + p).length > limit) { out.push(cur.trim()); cur = ''; }
+    cur += p;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out.length ? out : [text];
+}
+
+/** Japanese version of a line (for sub mode). The server remembers translations, and so do we. */
+const jaMemo = new Map();
+async function toJa(text) {
+  const key = S.active_character + '|' + text;
+  if (!jaMemo.has(key)) {
+    try { jaMemo.set(key, (await post('/ja', { text })).ja || ''); } catch { return ''; }
+  }
+  return jaMemo.get(key);
+}
+
 async function say(text, { emotion = 'neutral', ja = '', expressive = false, seconds } = {}) {
   if (!text) return;
+  const my = ++sayGen;
   const char = activeChar();
+  // In sub mode EVERY line is spoken in Japanese with English subtitles, not just chat replies
+  if (S.settings.voice_mode === 'sub' && !ja) {
+    ja = await toJa(text);
+    if (my !== sayGen) return;
+  }
   const sub = S.settings.voice_mode === 'sub' && ja;
-  const shown = text.replace(/\[[^\]]+\]\s*/g, '');
-  showBubble(sub ? ja : shown, sub ? shown : '');
+  const shown = stripTags(text);
+  const parts = splitSpeech(sub ? ja : text);
+  const subs = sub ? splitSpeech(shown) : [];
+  const paired = subs.length === parts.length; // subtitles follow sentence by sentence when the counts line up
   character.setEmotion(emotion, seconds || Math.max(3, shown.length / 12));
-  const started = Date.now();
-  const minShow = 1500 + shown.length * 55; // keep subtitles readable even if audio is short/missing
-  await voice.speak(sub ? ja : text, { characterId: char.id, expressive, lang: sub ? 'ja' : 'en', gender: char.gender });
-  const wait = Math.max(2000, minShow - (Date.now() - started));
   clearTimeout(bubbleTimer);
-  bubbleTimer = setTimeout(() => $('bubble').classList.add('hidden'), wait);
+  const finished = await voice.speakParts(parts, { characterId: char.id, expressive, lang: sub ? 'ja' : 'en', gender: char.gender },
+    i => showBubble(stripTags(parts[i]), sub ? (paired ? subs[i] : shown) : ''));
+  if (finished && my === sayGen) bubbleTimer = setTimeout(() => $('bubble').classList.add('hidden'), 2200);
 }
 
 async function yell(stage, app = '', emotion = 'angry') {
@@ -99,10 +133,9 @@ character.onPoke = async zone => {
   character.setEmotion(spam ? 'angry' : zone === 'head' ? 'happy' : 'surprised', 2.5);
   // Don't talk over important lines (focus warnings) and don't stack voice lines when clicked fast
   if (focusActive && $('warning') && !$('warning').classList.contains('hidden')) return;
-  if (now - lastPokeLine < 2500 && !spam) return;
+  if (chatBusy || voice.isSpeaking() || now - lastPokeLine < 2500) return; // one voice line at a time
   if (spam) pokeTimes = [];
   lastPokeLine = now;
-  voice.stopSpeaking();
   try {
     const line = await post('/yell', { stage: spam ? 'poke_spam' : zone === 'head' ? 'headpat' : 'poke' });
     await say(line.tts_text, { emotion: spam ? 'angry' : zone === 'head' ? 'happy' : 'surprised', expressive: true });
@@ -157,11 +190,9 @@ function applyShift() {
   character.setShift(px);
 }
 
-/** Picks the backdrop: each full-screen menu has its own, the dressing room is a boutique, the lobby is your room. */
+/** The room you picked is the backdrop everywhere; in the dressing room a room you are previewing shows instead. */
 function applyEnv() {
-  const room = trying?.kind === 'background' ? trying.id : S.background;
-  environment.set(currentTab === 'gacha' ? 'convene' : currentTab === 'chars' ? 'archive'
-    : currentTab === 'dress' ? (dressCat === 'room' ? room : 'dressing') : S.background);
+  environment.set(trying?.kind === 'background' ? trying.id : S.background);
 }
 
 function openTab(name) {
@@ -266,31 +297,81 @@ function updatePoints(p) {
 }
 
 // ======================= Chat =======================
+let chatBusy = false; // one message at a time: wait for the reply before sending the next
+function setChatBusy(on) {
+  chatBusy = on;
+  $('chat-input').disabled = on;
+  $('mic-btn').disabled = on;
+  $('chat-form').querySelector('button[type=submit]').disabled = on;
+  $('chat-input').placeholder = on ? `${activeChar().name} is thinking…` : 'Press Enter to talk… (try: remind me to study at 5pm)';
+}
+
 $('chat-form').addEventListener('submit', async e => {
   e.preventDefault();
   const text = $('chat-input').value.trim();
-  if (!text) return;
+  if (!text || chatBusy) return;
   $('chat-input').value = '';
   await sendChat(text);
 });
 
 async function sendChat(text) {
+  if (chatBusy) return;
+  setChatBusy(true);
   addMsg('user', text);
   voice.stopSpeaking();
+  sayGen++;
   showBubble('…');
   try {
     const res = await post('/chat', { message: text, history: chatHistory });
-    chatHistory.push({ role: 'user', text }, { role: 'model', text: res.reply });
+    chatHistory.push({ role: 'user', text }, { role: 'model', text: res.lesson ? `${res.reply}\n\n${res.lesson.markdown}` : res.reply });
     addMsg('bot', res.reply);
     for (const t of res.added_tasks) addMsg('sys', `📝 New quest: ${t.title}${t.due ? ' (due ' + t.due + ')' : ''}`);
     if (res.added_tasks.length) voice.sfx('task_done');
     await setState(res.state);
+    if (res.lesson) showLesson(res.lesson);
     say(res.reply, { emotion: res.emotion, ja: res.reply_ja });
   } catch (err) { $('bubble').classList.add('hidden'); toastError(err); }
+  setChatBusy(false);
+}
+
+// ---- lessons: for bigger questions the Log opens with a written explanation and pictures ----
+function renderMarkdown(md) {
+  const lines = esc(md).split('\n');
+  let html = '', list = null;
+  const inline = t => t.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>').replace(/`(.+?)`/g, '<code>$1</code>');
+  for (const line of lines) {
+    const m = line.match(/^\s*([-*]|\d+\.)\s+(.*)/);
+    if (m) {
+      const tag = /\d/.test(m[1]) ? 'ol' : 'ul';
+      if (list !== tag) { if (list) html += `</${list}>`; html += `<${tag}>`; list = tag; }
+      html += `<li>${inline(m[2])}</li>`;
+      continue;
+    }
+    if (list) { html += `</${list}>`; list = null; }
+    const h = line.match(/^(#{1,4})\s+(.*)/);
+    if (h) html += `<h4>${inline(h[2])}</h4>`;
+    else if (line.trim()) html += `<p>${inline(line)}</p>`;
+  }
+  if (list) html += `</${list}>`;
+  return html;
+}
+
+function showLesson(lesson) {
+  const card = document.createElement('div');
+  card.className = 'lesson';
+  const safeUrl = u => /^https:\/\//.test(u || '') ? esc(u) : '';
+  card.innerHTML = `<div class="lesson-title">${esc(lesson.title)}</div>
+    ${lesson.images.length ? `<div class="lesson-images">${lesson.images.map(im => safeUrl(im.url)
+      ? `<a href="${safeUrl(im.link)}" target="_blank" rel="noopener"><img src="${safeUrl(im.url)}" alt=""><span>${esc(im.caption)}</span></a>` : '').join('')}</div>` : ''}
+    <div class="lesson-body">${renderMarkdown(lesson.markdown)}</div>`;
+  $('chat-log').appendChild(card);
+  if (currentTab !== 'chat') openTab('chat');
+  card.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 $('mic-btn').addEventListener('click', async () => {
   const btn = $('mic-btn');
+  if (chatBusy) return;
   if (!voice.isRecording()) {
     try {
       voice.stopSpeaking();
@@ -306,7 +387,7 @@ $('mic-btn').addEventListener('click', async () => {
       if (text) await sendChat(text);
       else addMsg('sys', "Didn't catch that. Try again?");
     } catch (e) { toastError(e); }
-    $('chat-input').placeholder = 'Press Enter to talk… (try: remind me to study at 5pm)';
+    if (!chatBusy) $('chat-input').placeholder = 'Press Enter to talk… (try: remind me to study at 5pm)';
   }
 });
 
@@ -624,7 +705,7 @@ async function doPull(count) {
     voice.stopSpeaking();
     const res = await post('/gacha/pull', { count, force_rarity: $('force-rarity').value || null, banner: bannerId });
     environment.paused = true;
-    await playCutscene(res.results, res.best_rarity).finally(() => { environment.paused = false; });
+    await playCutscene(res.results, res.best_rarity, { japanese: S.settings.voice_mode === 'sub' }).finally(() => { environment.paused = false; });
     await setState(res.state);
     const news = res.results.filter(r => r.new);
     addMsg('sys', `✨ Pulled: ${res.results.map(r => `${r.name} (${r.rarity})`).join(', ')}`);
@@ -789,7 +870,10 @@ $('save-personality').addEventListener('click', async () => {
   } catch (err) { toastError(err); }
 });
 document.querySelectorAll('input[name=vmode]').forEach(r => r.addEventListener('change', async () => {
+  voice.stopSpeaking();
   await setState(await post('/settings', { settings: { voice_mode: r.value } }));
+  const c = activeChar();
+  say(c.intro_line, { emotion: 'happy', ja: c.intro_line_ja }); // hear the change right away
 }));
 
 // ======================= One click handler for all the generated buttons =======================
@@ -891,6 +975,7 @@ $('reset-btn').addEventListener('click', async () => {
 async function boot() {
   try {
     elevenOn = (await api('/voice/status')).elevenlabs;
+    voice.setElevenLabs(elevenOn);
     await setState(await api('/state'));
   } catch (e) {
     console.error(e);

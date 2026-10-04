@@ -438,55 +438,6 @@ const SCENES = {
     },
   },
 
-  // ---------- Backgrounds for the menus ----------
-  // Dressing room: a boutique with a big mirror, clothes racks and vanity lights
-  dressing: {
-    name: 'Boutique', fx: ['sparkles'], lights: [[0.5, 0.36, 0.3, 'rgba(255,240,210,.3)']],
-    paint(g, w, h, R) {
-      const F = h * FLOOR;
-      wall(g, w, h, '#fbe3ee', '#f1c4d8', '#fff');
-      g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 3; for (let i = 0; i < 6; i++) g.strokeRect(w * (0.03 + i * 0.165), h * 0.07, w * 0.13, F - h * 0.16); // wall panels
-      // ornate mirror with light bulbs
-      g.fillStyle = '#c9a45c'; g.beginPath(); g.ellipse(w * 0.5, h * 0.36, w * 0.135, h * 0.33, 0, 0, TAU); g.fill();
-      g.fillStyle = vgrad(g, h * 0.05, h * 0.7, ['#f6fbff', '#cfe0f2']); g.beginPath(); g.ellipse(w * 0.5, h * 0.36, w * 0.122, h * 0.31, 0, 0, TAU); g.fill();
-      g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 6; g.beginPath(); g.moveTo(w * 0.43, h * 0.3); g.lineTo(w * 0.5, h * 0.12); g.stroke();
-      for (let i = 0; i < 18; i++) { const a = i * TAU / 18; disc(g, w * 0.5 + Math.cos(a) * w * 0.148, h * 0.36 + Math.sin(a) * h * 0.355, h * 0.012, '#fff6c9'); }
-      // clothes racks
-      for (const x0 of [0.04, 0.7]) {
-        box(g, w * x0, F - h * 0.4, w * 0.26, h * 0.012, '#c9a45c'); box(g, w * x0, F - h * 0.4, w * 0.006, h * 0.4, '#c9a45c'); box(g, w * (x0 + 0.254), F - h * 0.4, w * 0.006, h * 0.4, '#c9a45c');
-        for (let i = 0; i < 9; i++) { const c = ['#ff8fb8', '#8b7bff', '#6fd3ff', '#ffe27a', '#ff6f6f', '#7ee0b0', '#fff', '#2a2d3a', '#f0a43a'][i]; box(g, w * (x0 + 0.014 + i * 0.027), F - h * 0.385, w * 0.022, h * (0.2 + R() * 0.14), c, 6); }
-      }
-      // shoe shelf and hat stand
-      for (let r = 0; r < 2; r++) { box(g, w * 0.33, F - h * (0.06 + r * 0.09), w * 0.06, h * 0.01, '#c9a45c'); for (let i = 0; i < 3; i++) box(g, w * (0.335 + i * 0.019), F - h * (0.085 + r * 0.09), w * 0.014, h * 0.025, ['#e5484d', '#2a2d3a', '#ff8fb8'][i], 4); }
-      floor(g, w, h, '#f7e7ee', '#d9b6c6', 'tile', 'rgba(160,100,130,.2)');
-      // round pedestal the companion stands on
-      g.fillStyle = '#fff'; g.beginPath(); g.ellipse(w * 0.5, h * 0.9, w * 0.17, h * 0.06, 0, 0, TAU); g.fill();
-      g.strokeStyle = '#c9a45c'; g.lineWidth = 3; g.beginPath(); g.ellipse(w * 0.5, h * 0.9, w * 0.17, h * 0.06, 0, 0, TAU); g.stroke();
-    },
-  },
-  // Convene: a summoning gate floating in space
-  convene: {
-    name: 'Summoning Gate', fx: ['twinkle', 'ring', 'embers'], fullscreen: true,
-    paint(g, w, h, R) {
-      g.fillStyle = vgrad(g, 0, h, ['#070919', '#131a45', '#2b2466']); g.fillRect(0, 0, w, h);
-      glow(g, w * 0.66, h * 0.5, h * 0.8, 'rgba(90,120,255,.45)'); glow(g, w * 0.2, h * 0.8, h * 0.5, 'rgba(180,80,220,.25)');
-      stars(g, R, w, h, 260, 1);
-      g.strokeStyle = 'rgba(160,200,255,.22)'; g.lineWidth = 1; // constellations
-      for (let i = 0; i < 6; i++) { g.beginPath(); let x = R() * w, y = R() * h; g.moveTo(x, y); for (let k = 0; k < 4; k++) { x += (R() - 0.5) * w * 0.14; y += (R() - 0.5) * h * 0.2; g.lineTo(x, y); disc(g, x, y, 2, 'rgba(200,225,255,.7)'); } g.stroke(); }
-    },
-  },
-  // Characters: a quiet star archive
-  archive: {
-    name: 'Star Archive', fx: ['twinkle'], fullscreen: true,
-    paint(g, w, h, R) {
-      g.fillStyle = vgrad(g, 0, h, ['#1f2f7a', '#131a45', '#070919']); g.fillRect(0, 0, w, h);
-      glow(g, w * 0.85, 0, h * 0.9, 'rgba(110,150,255,.4)');
-      stars(g, R, w, h, 200, 1);
-      g.strokeStyle = 'rgba(140,170,255,.07)'; g.lineWidth = 1; g.beginPath();
-      for (let x = 0; x < w; x += w / 24) { g.moveTo(x, 0); g.lineTo(x, h); } for (let y = 0; y < h; y += w / 24) { g.moveTo(0, y); g.lineTo(w, y); }
-      g.stroke();
-    },
-  },
 };
 
 export const sceneName = id => SCENES[id]?.name || id;
@@ -548,9 +499,9 @@ export class Environment {
       if (name === 'petals') fx.petals = many(46, () => ({ x: r() * w, y: r() * h, r: 3 + r() * 5, s: 25 + r() * 45, a: r() * TAU, sp: 1 + r() * 2, d: 0.4 + r() * 0.6 }));
       if (name === 'motes' || name === 'embers') fx[name] = many(34, () => ({ x: r() * w, y: r() * h, r: 1 + r() * 1.8, s: 4 + r() * 12, p: r() * TAU }));
       if (name === 'rain' || name === 'rainwindow') fx[name] = many(110, () => ({ x: r() * w * 1.2, y: r() * h, l: 10 + r() * 16, s: 600 + r() * 500 }));
-      if (name === 'twinkle' || name === 'sparkles') fx[name] = many(40, () => ({ x: r() * w, y: r() * h * (name === 'twinkle' && !sc.fullscreen ? 0.6 : 1), p: r() * TAU, r: 0.8 + r() * 1.6 }));
+      if (name === 'twinkle' || name === 'sparkles') fx[name] = many(40, () => ({ x: r() * w, y: r() * h * (name === 'twinkle' ? 0.6 : 1), p: r() * TAU, r: 0.8 + r() * 1.6 }));
       if (name === 'spots') fx.spots = [0.2, 0.4, 0.6, 0.8].map((x, i) => ({ x, p: i * 1.7, c: ['255,122,217', '122,224,255', '255,226,122', '190,140,255'][i] }));
-      if (['waves', 'steam', 'shooting', 'fireworks', 'ring'].includes(name)) fx[name] = { list: [] };
+      if (['waves', 'steam', 'shooting', 'fireworks'].includes(name)) fx[name] = { list: [] };
     }
     this.draw(performance.now() / 1000);
   }
@@ -629,14 +580,6 @@ export class Environment {
         for (let i = 0; i < 28; i++) { const a = i * TAU / 28; g.beginPath(); g.arc(b.x + Math.cos(a) * rad, b.y + Math.sin(a) * rad + age * age * 30, 2.2, 0, TAU); g.fill(); }
       }
       g.globalAlpha = 1;
-    }
-    if (fx.ring) { // the summoning circle slowly turning
-      const cx = w * 0.66, cy = h * 0.52;
-      for (const [rad, speed, n, col] of [[0.44, 0.08, 48, 'rgba(160,200,255,.35)'], [0.36, -0.12, 24, 'rgba(255,230,160,.4)'], [0.26, 0.2, 12, 'rgba(200,170,255,.4)']]) {
-        g.strokeStyle = col; g.lineWidth = 1.5; g.beginPath(); g.arc(cx, cy, h * rad, 0, TAU); g.stroke();
-        g.fillStyle = col;
-        for (let i = 0; i < n; i++) { const a = i * TAU / n + t * speed; g.beginPath(); g.arc(cx + Math.cos(a) * h * rad, cy + Math.sin(a) * h * rad, i % 4 ? 1.5 : 3.5, 0, TAU); g.fill(); }
-      }
     }
   }
 }

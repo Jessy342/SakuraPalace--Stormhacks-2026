@@ -332,6 +332,7 @@ def do_pull(state, min_rarity=None, forced=None, featured=()):
         result["color"] = reward.get("color")
         result["title"] = reward.get("title")
         result["intro_line"] = reward.get("intro_line")
+        result["intro_line_ja"] = reward.get("intro_line_ja")
     return result
 
 

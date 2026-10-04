@@ -50,12 +50,20 @@ class TTSIn(BaseModel):
     character_id: str | None = None
     expressive: bool = False  # True = eleven_v3 with audio tags like [angry] [shouting] [laughs]
     lang: str = "en"          # "ja" = use the character's Japanese voice (sub mode)
+    prev: str = ""            # the sentence spoken just before / after this one, when a long reply is split up.
+    next: str = ""            # ElevenLabs uses them to keep the tone and speed steady between the pieces.
 
 
-def tts_payload(text, model, lang):
-    payload = {"text": text, "model_id": model}
-    if lang == "ja" and ("flash" in model or "turbo" in model):
-        payload["language_code"] = "ja"  # only the flash/turbo models accept a forced language
+def tts_payload(text, model, lang, prev="", nxt=""):
+    # A fixed stability keeps long lines from drifting faster and higher-pitched
+    payload = {"text": text, "model_id": model, "voice_settings": {"stability": 0.5, "similarity_boost": 0.8}}
+    if "flash" in model or "turbo" in model:  # (the expressive v3 model doesn't accept these extras)
+        if lang == "ja":
+            payload["language_code"] = "ja"
+        if prev:
+            payload["previous_text"] = prev[-300:]
+        if nxt:
+            payload["next_text"] = nxt[:300]
     return payload
 
 
@@ -71,13 +79,13 @@ def tts(body: TTSIn):
     voice = voice_for(char, body.lang)
     model = TTS_EXPRESSIVE_MODEL if body.expressive else TTS_MODEL
 
-    key = hashlib.sha1(f"{voice}|{model}|{body.lang}|{text}".encode()).hexdigest()
+    key = hashlib.sha1(f"{voice}|{model}|{body.lang}|{text}|{body.prev}|{body.next}|s2".encode()).hexdigest()
     cached = CACHE_DIR / f"{key}.mp3"
     if cached.exists():
         return FileResponse(cached, media_type="audio/mpeg")
 
     r = el_post(f"/text-to-speech/{voice}", params={"output_format": "mp3_44100_128"},
-                json=tts_payload(text, model, body.lang))
+                json=tts_payload(text, model, body.lang, body.prev, body.next))
     if r.status_code != 200 and body.expressive:
         # expressive model unavailable on this plan? retry with the fast model, tags stripped
         import re
