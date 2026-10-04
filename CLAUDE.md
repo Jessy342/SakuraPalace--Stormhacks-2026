@@ -34,6 +34,7 @@ frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. th
   js/viewer.js           small 3D viewer in the Characters screen (the picked character's model, drag to rotate)
   js/character.js        3D scene, VRM loading, procedural idle/emotion animation, blink, lip sync, placeholder chibi
   js/poses.js            poses for the VRM models as bone rotations: how each personality stands while idle (REST), the pose they strike when summoned (SIGNATURE), and little idle gestures (GESTURES). Check any new pose with a screenshot; signs differ for hanging vs raised arms
+  js/summonscene.js      the 3D build-up of a summon: lotus bud on water, sakura petals, shooting stars in rarity colours, bloom with a pillar of light, camera moves
   js/summon3d.js         the summon reveal in 3D: loads the pulled character's model, entrance (spin, drop, landing), signature pose, idle and camera move, plus the themed effects layer behind them
   js/accessories.js      accessories built from three.js shapes, attached to the head bone
   js/outfits.js          outfits = the real clothes of another VRoid model: the donor's body, clothes and shoes are bound to the wearer's bones (same skeleton in every VRoid model), the wearer keeps face and hair. Colour variants repaint the textures. Listed in shop.json `outfits` (model file + optional hue/saturate/brightness); worn via `state.outfit`. To add an outfit, add a VRoid model wearing it to models/ and a line in shop.json. Do not build clothes from primitive shapes: that was tried and looked bad

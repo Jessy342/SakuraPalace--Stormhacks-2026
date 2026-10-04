@@ -818,3 +818,5 @@ button.focus-pill { cursor: pointer; font: inherit; font-weight: 700; color: inh
 .d-hint { position: absolute; right: 10px; top: 8px; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase;
   color: rgba(40,20,70,.7); pointer-events: none; opacity: 0; transition: opacity .3s; }
 .d-art.live .d-hint { opacity: 1; }
+.cut-3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#cut-canvas { display: none; } /* the old flat backdrop; the 3D scene (summonscene.js) replaces it */
