@@ -496,11 +496,20 @@ body[data-view="full"] #hud, body[data-view="full"] .dock, body[data-view="full"
 .rv-gem { position: absolute; left: 62%; top: 50%; transform: translate(-50%, -50%); font-size: 34vh; color: var(--rc); text-shadow: 0 0 80px var(--rc); animation: rvin 1.6s ease-out both; }
 .rv-info { position: absolute; left: 4vw; top: 42%; }
 .rv-head { display: flex; align-items: center; gap: 22px; animation: rvfade .7s 1s both; }
-.rv-icon { width: 58px; height: 58px; flex: none; transform: rotate(45deg); display: grid; place-items: center;
-  background: rgba(10,10,24,.75); border: 1px solid rgba(255,255,255,.3); box-shadow: 0 0 0 4px rgba(10,10,24,.45), 0 0 22px color-mix(in srgb, var(--cc) 60%, transparent); }
-.rv-icon span { transform: rotate(-45deg); font-size: 1.5rem; color: var(--cc); text-shadow: 0 0 10px var(--cc); }
+/* the emblem: a glowing class crest inside layered diamonds, with a slowly turning outer frame */
+.rv-icon { position: relative; width: 78px; height: 78px; flex: none; display: grid; place-items: center; margin: 0 4px; }
+.rv-icon i { position: absolute; inset: 9px; transform: rotate(45deg); border-radius: 6px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--cc) 55%, #0a0a18), #0a0a18 70%); border: 1.500px solid color-mix(in srgb, var(--cc) 70%, #fff);
+  box-shadow: 0 0 26px color-mix(in srgb, var(--cc) 75%, transparent), inset 0 0 14px color-mix(in srgb, var(--cc) 50%, transparent); animation: rvpulse 2.4s ease-in-out infinite; }
+.rv-icon i + i { inset: 0; background: none; border: 1px solid rgba(255,241,201,.55); border-radius: 3px; box-shadow: none; animation: rvturn 14s linear infinite; }
+.rv-icon span { position: relative; display: grid; }
+.rv-icon svg.emblem { width: 36px; height: 36px; stroke: #fff; stroke-width: 1.600; filter: drop-shadow(0 0 6px var(--cc)) drop-shadow(0 0 2px #fff); }
+@keyframes rvpulse { 50% { box-shadow: 0 0 40px var(--cc), inset 0 0 20px color-mix(in srgb, var(--cc) 70%, transparent); } }
+@keyframes rvturn { from { transform: rotate(45deg); } to { transform: rotate(405deg); } }
+.rv-fx, .rv-stage, .rv-3d { position: absolute; inset: 0; width: 100%; height: 100%; }
+.rv-3d { animation: reveal 1.300s ease-out both; } /* the 3D model also starts as a dark silhouette and flashes into colour */
 .rv-name { position: relative; padding: 0 60px 8px 0; }
-.rv-name b { display: block; font-size: clamp(1.8rem, 2.8vw, 2.6rem); font-weight: 700; letter-spacing: .02em; }
+.rv-name b { display: block; font-size: clamp(1.7rem, 2.5vw, 2.3rem); font-weight: 500; letter-spacing: .02em; }
 .rv-name small { display: block; color: rgba(255,255,255,.72); font-size: .95rem; }
 .rv-name em { position: absolute; right: 0; top: -14px; padding: 1px 9px; border-radius: 4px; font: 700 .78rem/1.5 "M PLUS Rounded 1c", sans-serif; font-style: normal;
   color: #3a2a05; background: linear-gradient(180deg, #fff1c9, #e3b565); text-shadow: none; }
@@ -508,13 +517,16 @@ body[data-view="full"] #hud, body[data-view="full"] .dock, body[data-view="full"
   background: linear-gradient(90deg, rgba(255,255,255,.85), rgba(255,255,255,.1)); animation: rvline .8s 1.15s cubic-bezier(.2,.8,.2,1) both; }
 @keyframes rvline { from { transform: scaleX(0); } }
 @keyframes rvfade { from { opacity: 0; transform: translateX(-24px); } }
-.rv-stars { margin: 14px 0 0 80px; font-size: 2rem; letter-spacing: 8px; color: #ffe08a; text-shadow: 0 0 12px rgba(255,200,90,.95), 0 0 2px #fff; }
+.rv-stars { margin: 12px 0 0 108px; font-size: 2rem; letter-spacing: 8px; color: #ffe08a; text-shadow: 0 0 12px rgba(255,200,90,.95), 0 0 2px #fff; }
 .rv-stars span { display: inline-block; animation: starpop .4s backwards; }
 @keyframes starpop { from { opacity: 0; transform: scale(3.2) rotate(90deg); } }
-.rv-chips { display: flex; gap: 10px; margin: 18px 0 0 80px; animation: rvfade .6s 2.2s both; }
-.rv-chip { width: 58px; height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; font-size: 1.35rem; text-shadow: none;
-  color: #fff; background: linear-gradient(160deg, color-mix(in srgb, var(--rc) 55%, #1a1630), #15122a); border: 1px solid var(--gold); box-shadow: 0 4px 14px rgba(0,0,0,.5); }
-.rv-chip small { color: #fff; font-size: .62rem; font-weight: 700; line-height: 1.2; }
+.rv-chips { display: flex; gap: 10px; margin: 16px 0 0 108px; animation: rvfade .6s 2.2s both; }
+.rv-chip { position: relative; width: 62px; height: 62px; display: grid; place-items: center; border-radius: 5px; text-shadow: none;
+  background: linear-gradient(160deg, #fbfdff 0%, #cfd8f2 45%, #8f9cc9 100%); border-bottom: 3px solid #f0c765; box-shadow: 0 6px 16px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.8); overflow: hidden; }
+.rv-chip::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.9) 50%, transparent 60%); background-size: 300% 100%; animation: sweep 2.8s 2.6s ease-in-out infinite; }
+.rv-chip.bond { background: linear-gradient(160deg, #fff5fa 0%, #ffc9e0 50%, #d77aa8 100%); }
+.rv-chip svg { width: 38px; height: 38px; stroke: none; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+.rv-chip small { position: absolute; right: 3px; bottom: 1px; color: #1a1630; font-size: .68rem; font-weight: 800; }
 .rv-sub { position: absolute; left: 4vw; bottom: 11vh; max-width: 34vw; font-size: 1.15rem; line-height: 1.5; font-style: italic; padding-left: 14px;
   border-left: 2px solid var(--cc); animation: rvsub .8s 2.3s both; } /* kept on the left so it never covers the character */
 @keyframes rvsub { from { opacity: 0; transform: translateY(12px); } }
@@ -560,3 +572,7 @@ body[data-tab="dress"] #dialogue { bottom: 84px; } /* keep the speech box above 
 .next-event { margin-top: 8px; padding: 7px 10px; border-radius: 10px; font-size: .82rem; background: rgba(111,211,255,.12); border: 1px solid rgba(111,211,255,.4); }
 .next-event b { color: var(--cyan); margin-right: 4px; }
 .next-event span { float: right; color: var(--muted); }
+
+/* class emblems (used in the character list, the banner name plates and the summon reveal) */
+svg.emblem { width: 1.25em; height: 1.25em; vertical-align: -0.22em; stroke-width: 1.7; }
+.plate i svg.emblem, .c-filters i svg.emblem { width: 22px; height: 22px; }

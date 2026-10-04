@@ -31,6 +31,8 @@ frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. th
   js/environment.js      rooms behind the character, drawn with canvas shapes: each scene is painted once, then only small effects animate at 30fps (keep it that way: full-screen redraws and CSS backdrop-filter made the app lag on integrated graphics). One scene per background id in shop.json, plus 'dressing', 'convene' and 'archive' for the menus
   (Dressing Room = wardrobe + shop in one: locked items are tried on, then bought there. Teacher mode is hidden from the UI for now; its /api/teacher endpoints still exist.)
   js/character.js        3D scene, VRM loading, procedural idle/emotion animation, blink, lip sync, placeholder chibi
+  js/poses.js            poses for the VRM models as bone rotations: how each personality stands while idle (REST), the pose they strike when summoned (SIGNATURE), and little idle gestures (GESTURES). Check any new pose with a screenshot; signs differ for hanging vs raised arms
+  js/summon3d.js         the summon reveal in 3D: loads the pulled character's model, entrance (spin, drop, landing), signature pose, idle and camera move, plus the themed effects layer behind them
   js/accessories.js      accessories built from three.js shapes, attached to the head bone
   js/voice.js            speak() with lip-sync analyser, mic recording -> /api/stt, sound effects w/ beep fallback
   js/gacha.js            summon cutscene (gate, rarity tease, starfall, eruption, then a cinematic reveal: the character large on the right in front of their own `scene` from characters.json, slim info block on the left; summary cards)

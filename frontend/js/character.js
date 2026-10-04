@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { buildAccessory, DEFAULT_FACE } from './accessories.js';
+import { REST, GESTURES, DEFAULT, blend, writePose } from './poses.js';
 
 const EMOTIONS = ['happy', 'angry', 'sad', 'surprised', 'relaxed'];
 const MAX_YAW = 0.7;    // how far she can turn her head left/right (radians, ~40°)
@@ -79,6 +80,10 @@ export class Character {
     this.blushUntil = 0;
     this.waveUntil = 0;
     this.waveAmt = 0;
+    // Idle life: each personality has its own way of standing, and now and then they stretch, look around, fix their hair...
+    this.personality = 'cheerful';
+    this.gesture = null;      // { pose, start, seconds } while one is playing
+    this.nextGesture = 9;
     canvas.addEventListener('pointerdown', e => {
       const r = canvas.getBoundingClientRect();
       const ndc = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
@@ -399,6 +404,9 @@ export class Character {
     if (this.head) this.head.add(this.accGroup);
   }
 
+  /** tsundere | cheerful | sensei | chill | rival: decides how the character stands while idle. */
+  setPersonality(p) { this.personality = REST[p] ? p : 'cheerful'; }
+
   /** emotion: happy | angry | sad | surprised | relaxed | neutral */
   setEmotion(emotion, seconds = 4) {
     this.emotion = EMOTIONS.includes(emotion) ? emotion : 'neutral';
@@ -506,24 +514,43 @@ export class Character {
     const breathe = Math.sin(t * 1.6);
     const armDown = 1.32 - w.angry * 0.08 - w.happy * 0.2 + w.sad * 0.1;
     const elbow = 0.25 + w.angry * 0.9 + w.happy * 0.3;
-    set('leftUpperArm', 0, 0, -armDown + breathe * 0.02);
-    set('rightUpperArm', 0, 0, armDown - breathe * 0.02);
-    set('leftLowerArm', 0, -elbow, 0);
-    set('rightLowerArm', 0, elbow, 0);
-    if (this.waveAmt > 0.01) { // wave: raise the right arm and swing the forearm
-      const wv = this.waveAmt;
-      set('rightUpperArm', 0, 0, armDown * (1 - wv) - 1.0 * wv);
-      set('rightLowerArm', 0, elbow * (1 - wv) + 0.2 * wv, wv * (-0.6 + Math.sin(t * 12) * 0.45));
+
+    // Base stance: the personality's idle pose. Strong emotions and talking take over with the plain arms-down pose.
+    const emotional = Math.min(1, w.angry + w.happy + w.sad + w.surprised);
+    const react = { leftUpperArm: [0, 0, -armDown], rightUpperArm: [0, 0, armDown], leftLowerArm: [0, -elbow, 0], rightLowerArm: [0, elbow, 0], fingers: { left: 0.25 + w.angry * 0.7, right: 0.25 + w.angry * 0.7 } };
+    let pose = blend(REST[this.personality] || DEFAULT, react, emotional);
+
+    // Now and then, a little idle gesture (only while calm and quiet)
+    const busy = emotional > 0.15 || this.mouth > 0.05 || this.waveAmt > 0.05 || this.dragRotate;
+    if (!this.gesture && t > this.nextGesture && !busy) {
+      const [gPose, seconds] = GESTURES[Math.floor(Math.random() * GESTURES.length)];
+      this.gesture = { pose: gPose, start: t, seconds };
     }
-    const sway = Math.sin(t * 0.35); // slow weight shift from one leg to the other
-    set('hips', 0, sway * 0.05, sway * 0.02);
-    set('spine', 0.02 * breathe + w.angry * 0.08 + w.sad * 0.1, -sway * 0.03, -sway * 0.02);
-    set('chest', 0.015 * breathe, 0, 0);
+    if (this.gesture) {
+      const p = (t - this.gesture.start) / this.gesture.seconds;
+      if (p >= 1 || busy) { this.gesture = null; this.nextGesture = t + 7 + Math.random() * 9; }
+      else pose = blend(pose, { ...(REST[this.personality] || DEFAULT), ...this.gesture.pose }, Math.sin(Math.min(1, p * 2.2) * Math.PI / 2) * Math.sin(Math.min(1, (1 - p) * 2.2) * Math.PI / 2));
+    }
+
+    // Breathing, slow weight shift, talking nods and following the mouse are added on top
+    const sway = Math.sin(t * 0.35);
     const talkNod = this.mouth * 0.06 * Math.sin(t * 7);
     const { yaw, pitch } = this.look; // split the turn between neck (40%) and head (60%) so it looks natural
-    set('neck', w.sad * 0.15 + pitch * 0.4, yaw * 0.4, Math.sin(t * 0.8) * 0.03);
-    set('head', talkNod + w.sad * 0.15 - w.surprised * 0.1 + pitch * 0.6,
+    const add = (bone, x, y, z) => { pose[bone][0] += x; pose[bone][1] += y; pose[bone][2] += z; };
+    add('leftUpperArm', 0, 0, breathe * 0.02); add('rightUpperArm', 0, 0, -breathe * 0.02);
+    add('hips', 0, sway * 0.05, sway * 0.02);
+    add('spine', 0.02 * breathe + w.angry * 0.08 + w.sad * 0.1, -sway * 0.03, -sway * 0.02);
+    add('chest', 0.015 * breathe, 0, 0);
+    add('neck', w.sad * 0.15 + pitch * 0.4, yaw * 0.4, Math.sin(t * 0.8) * 0.03);
+    add('head', talkNod + w.sad * 0.15 - w.surprised * 0.1 + pitch * 0.6,
       yaw * 0.6 + Math.sin(t * 25) * 0.05 * w.angry, Math.sin(t * 0.7) * 0.05 + w.happy * 0.1);
+    if (this.waveAmt > 0.01) { // wave: raise the right arm and swing the forearm
+      const wv = this.waveAmt, up = pose.rightUpperArm, low = pose.rightLowerArm;
+      pose.rightUpperArm = [up[0] * (1 - wv), 0, up[2] * (1 - wv) - 1.0 * wv];
+      pose.rightLowerArm = [0, low[1] * (1 - wv) + 0.2 * wv, low[2] * (1 - wv) + wv * (-0.6 + Math.sin(t * 12) * 0.45)];
+      pose.fingers.right = Object.fromEntries(Object.entries(pose.fingers.right).map(([k, v]) => [k, v * (1 - wv)]));
+    }
+    writePose(this.vrm, pose);
 
     const em = this.vrm.expressionManager;
     if (em) {

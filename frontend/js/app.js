@@ -26,11 +26,15 @@ const activeChar = () => charById(S.active_character);
 const isDemo = () => !!S.settings.demo_mode;
 
 // Personality types double as the character "classes" shown in the menus (︎ keeps the symbols flat, not emoji)
+const emblem = paths => `<svg class="emblem" viewBox="0 0 24 24">${paths}</svg>`;
 const CLASSES = {
-  tsundere: ['Tsundere', '♥︎'], cheerful: ['Cheerful', '☀︎'], sensei: ['Sensei', '✎︎'],
-  chill: ['Chill', '❄︎'], rival: ['Rival', '⚔︎'],
+  tsundere: ['Tsundere', emblem('<path d="M12 20.5s-7.5-4.7-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.600-7.500 10.300-7.500 10.300z"/><path d="M12 10.800v4.400M9.800 13h4.400"/>')],
+  cheerful: ['Cheerful', emblem('<circle cx="12" cy="12" r="3.600"/><path d="M12 2.500v3M12 18.500v3M2.500 12h3M18.500 12h3M5.300 5.300l2.100 2.100M16.600 16.600l2.100 2.100M5.300 18.700l2.100-2.100M16.600 7.400l2.100-2.100"/>')],
+  sensei: ['Sensei', emblem('<path d="M12 8v12.500M12 8c-2-1.600-5-2-8-1.400v12.500c3-.6 6-.2 8 1.400M12 8c2-1.600 5-2 8-1.400v12.500c-3-.6-6-.2-8 1.400"/><path d="M12 1.500l.8 1.900 1.900.8-1.900.8-.8 1.900-.8-1.900-1.900-.8 1.900-.8z"/>')],
+  chill: ['Chill', emblem('<path d="M12 2.500v19M3.800 7.250l16.400 9.500M20.200 7.250L3.800 16.750M12 6l-2-2M12 6l2-2M12 18l-2 2M12 18l2 2M6.800 9l-2.700.700M6.800 9l.700-2.700M17.200 15l2.700-.700M17.200 15l-.700 2.700"/>')],
+  rival: ['Rival', emblem('<path d="M4 4l11 11M20 4L9 15M4 4v3M4 4h3M20 4v3M20 4h-3M13.500 16.500l3 3M10.500 16.500l-3 3M15.500 12.500l2.500 2.500M8.500 12.500L6 15"/>')],
 };
-const classOf = c => CLASSES[c.personality] || ['Unique', '✦'];
+const classOf = c => CLASSES[c.personality] || ['Unique', emblem('<path d="M12 2l2.200 7.800L22 12l-7.800 2.200L12 22l-2.200-7.800L2 12l7.800-2.200z"/>')];
 
 // ======================= Speaking =======================
 let bubbleTimer = null;
@@ -252,6 +256,7 @@ async function setState(newState) {
     $('model-hint').classList.toggle('hidden', ok);
     $('model-hint').textContent = `Placeholder shown: export ${char.name} from VRoid Studio as models/${char.model}`;
   }
+  character.setPersonality(S.personality_overrides[char.id] || char.personality); // how they stand while idle
   applyTry();
 }
 
@@ -787,14 +792,18 @@ async function doPull(count) {
     voice.stopSpeaking();
     const res = await post('/gacha/pull', { count, force_rarity: $('force-rarity').value || null, banner: bannerId });
     environment.paused = true;
+    character.paused = true; // the summon has its own 3D stage; rest the lobby while it plays
     await playCutscene(res.results, res.best_rarity, {
       japanese: S.settings.voice_mode === 'sub',
       // each character is revealed in front of their own signature scene, tinted with their colour
       details: r => {
         const c = r.type === 'character' ? charById(r.id) : null;
-        return { icon: c ? classOf(c)[1] : '◆', color: c?.color || '#9aa5b1', backdrop: environment.thumb(c?.scene || S.background, 1280, 720) };
+        return {
+          icon: c ? classOf(c)[1] : classOf({})[1], color: c?.color || '#9aa5b1', backdrop: environment.thumb(c?.scene || S.background, 1280, 720),
+          model: c ? `/models/${c.model}` : null, personality: c?.personality, // the real 3D model makes its entrance
+        };
       },
-    }).finally(() => { environment.paused = false; });
+    }).finally(() => { environment.paused = false; character.paused = FULL.includes(currentTab); });
     await setState(res.state);
     const news = res.results.filter(r => r.new);
     addMsg('sys', `✨ Pulled: ${res.results.map(r => `${r.name} (${r.rarity})`).join(', ')}`);
@@ -812,7 +821,7 @@ function renderChars() {
   const all = S.catalog.characters;
   const owned = id => S.owned_characters[id];
   $('chars-count').textContent = `${all.filter(c => owned(c.id)).length}/${all.length}`;
-  $('char-filters').innerHTML = [['all', 'All', '▦'], ...Object.entries(CLASSES).map(([k, v]) => [k, v[0], v[1]])].map(([k, label, icon]) =>
+  $('char-filters').innerHTML = [['all', 'All', emblem('<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>')], ...Object.entries(CLASSES).map(([k, v]) => [k, v[0], v[1]])].map(([k, label, icon]) =>
     `<button data-filter="${k}" class="${charFilter === k ? 'active' : ''}"><i>${icon}</i>${label}</button>`).join('');
   const list = all.filter(c => charFilter === 'all' || c.personality === charFilter);
   if (!charPick || !charById(charPick)) charPick = S.active_character;

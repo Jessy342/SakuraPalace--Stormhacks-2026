@@ -3,10 +3,12 @@
 //   2. TEASE     the gate climbs through the rarity colours, stopping at the best thing you pulled
 //   3. STARFALL  one shooting star per pull crashes into the gate, each in its own rarity colour
 //   4. ERUPTION  flash, shockwaves, screen shake and a pillar of light
-//   5. REVEAL    a cinematic shot of each notable character in front of their own scene: the character fills the
-//                right of the screen, with a slim name / stars / reward block on the left
+//   5. REVEAL    a cinematic shot of each notable character in front of their own scene: their real 3D model drops in
+//                spinning, lands with a shockwave, strikes a pose and idles, with themed effects behind them and a slim
+//                name / stars / reward block on the left. (Falls back to their picture if the model can't load.)
 //   6. SUMMARY   every pull as a card
 import { sfx, speak, stopSpeaking, riser, impact, chime } from './voice.js';
+import { SummonStage, startFx, discardModel } from './summon3d.js';
 
 export const RARITY_COLORS = {
   Common: '#9aa5b1', Rare: '#4ea8ff', Epic: '#b06bff', Legendary: '#ffb627', Mythic: '#ff3b5c', Unbound: 'rainbow',
@@ -36,6 +38,12 @@ export async function playCutscene(results, bestRarity, { japanese = false, deta
   el('cut-skip').onclick = e => { e.stopPropagation(); skipping = true; stopSpeaking(); };
   const top = rank(bestRarity);
   const shake = (cls = 'cut-shake') => { overlay.classList.remove('cut-shake', 'cut-quake'); void overlay.offsetWidth; overlay.classList.add(cls); };
+
+  // The first character's 3D model starts loading now, so it is ready by the time the stars have fallen
+  const firstReveal = (results.length === 1 ? results : results.filter(r => r.type === 'character' && (r.new || rank(r.rarity) >= 3)))[0];
+  const firstInfo = firstReveal && details(firstReveal);
+  let preloadStage = null;
+  const firstModel = firstInfo && firstInfo.model ? (preloadStage = new SummonStage()).load(firstInfo.model) : Promise.resolve(null);
 
   // 1. GATE
   const show = startShow(el('cut-canvas'));
@@ -71,8 +79,15 @@ export async function playCutscene(results, bestRarity, { japanese = false, deta
 
   // 5. REVEAL: always for a single pull; in a 10-pull, new characters and anything Legendary or better
   const reveals = results.length === 1 ? results : results.filter(r => r.type === 'character' && (r.new || rank(r.rarity) >= 3));
-  for (const r of reveals) {
+  const stage = preloadStage || new SummonStage();
+  // Models are loaded one step ahead (the first during the build-up above, the next while you look at the current one)
+  const prepare = r => { const d = r && details(r); return d && d.model ? stage.load(d.model) : Promise.resolve(null); };
+  const patience = p => Promise.race([p, new Promise(res => setTimeout(() => res(null), 12000))]);
+  let fx = null, coming = firstModel;
+  for (const [i, r] of reveals.entries()) {
     if (skipping) break;
+    const model = await patience(coming);
+    coming = prepare(reveals[i + 1]);
     content.innerHTML = '';
     show.setRarity(r.rarity);
     if (r.type === 'character' && rank(r.rarity) >= 4) { // the rarest get their rarity slammed on screen first
@@ -84,11 +99,17 @@ export async function playCutscene(results, bestRarity, { japanese = false, deta
       await wait(1000);
       content.innerHTML = '';
     }
-    content.appendChild(reveal(r, details(r)));
+    const d = details(r);
+    const shot = reveal(r, d, !!model);
+    content.appendChild(shot);
     show.erupt(0.6);
+    if (fx) fx.stop();
+    fx = startFx(shot.querySelector('.rv-fx'), d.personality, d.color || '#9aa5b1');
+    const landed = () => { if (skipping || !shot.isConnected) return; impact(0.35 + rank(r.rarity) * 0.1); shake(); fx.land(); };
+    if (model) stage.play(model, shot.querySelector('.rv-stage'), d, landed); // drops in, lands, strikes a pose, idles
     if (r.type === 'character') {
       const n = STARS[r.rarity];
-      setTimeout(() => { if (!skipping && content.isConnected) { impact(0.35 + rank(r.rarity) * 0.1); shake(); } }, 780);        // silhouette bursts into colour
+      if (!model) setTimeout(landed, 780); // (picture fallback: same beat as the 3D landing)
       for (let i = 0; i < n; i++) setTimeout(() => { if (!skipping) chime(i * 0.5, 0.06); }, 1500 + i * 130);                    // stars pop in
       if (r.new && r.intro_line) setTimeout(() => {
         if (skipping || !content.isConnected) return;
@@ -98,7 +119,11 @@ export async function playCutscene(results, bestRarity, { japanese = false, deta
     }
     await clickToContinue(overlay, 1800);
     stopSpeaking();
+    stage.clear();
   }
+  if (fx) fx.stop();
+  coming.then(discardModel); // a model that was loaded ahead but never shown
+  stage.dispose();
 
   // 6. SUMMARY
   if (results.length > 1) {
@@ -160,8 +185,13 @@ function card(r) {
   return c;
 }
 
-/** The cinematic reveal shot. d = { icon, color, backdrop } from app.js. */
-function reveal(r, d) {
+// little pictures for the reward chips
+const GEM = '<svg viewBox="0 0 24 24"><defs><linearGradient id="gemfill" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9fbff"/><stop offset=".5" stop-color="#6fd3ff"/><stop offset="1" stop-color="#5a6bff"/></linearGradient></defs>'
+  + '<path d="M12 2l7 7-7 13L5 9z" fill="url(#gemfill)" stroke="#fff" stroke-width=".8"/><path d="M5 9h14M12 2L9 9l3 13 3-13z" fill="none" stroke="rgba(255,255,255,.7)" stroke-width=".7"/></svg>';
+const HEART = '<svg viewBox="0 0 24 24"><path d="M12 20.500s-7.500-4.700-7.500-10.300A4.200 4.200 0 0 1 12 7.600a4.200 4.200 0 0 1 7.500 2.600c0 5.600-7.500 10.300-7.500 10.300z" fill="#ff7eb6" stroke="#fff" stroke-width=".8"/></svg>';
+
+/** The cinematic reveal shot. d = { icon, color, backdrop, ... } from app.js; live = the 3D model will be shown instead of the picture. */
+function reveal(r, d, live) {
   const s = document.createElement('div');
   const isChar = r.type === 'character';
   s.className = 'reveal ' + rarityClass(r) + (isChar ? '' : ' item');
@@ -170,18 +200,19 @@ function reveal(r, d) {
   const embers = Array.from({ length: 26 }, () =>
     `<i style="left:${(Math.random() * 100).toFixed(1)}%;--s:${(2 + Math.random() * 4).toFixed(1)}px;--d:${(5 + Math.random() * 7).toFixed(1)}s;animation-delay:-${(Math.random() * 10).toFixed(1)}s"></i>`).join('');
   const chips = [
-    r.refund ? `<div class="rv-chip" title="Points"><span class="gem">◆</span><small>+${r.refund}</small></div>` : '',
-    isChar ? `<div class="rv-chip" title="Bond"><span>♥</span><small>${r.new ? 'New' : 'Bond ' + r.bond}</small></div>` : '',
+    r.refund ? `<div class="rv-chip" title="Points">${GEM}<small>${r.refund}</small></div>` : '',
+    isChar ? `<div class="rv-chip bond" title="Bond">${HEART}<small>${r.new ? 'New' : 'Lv ' + r.bond}</small></div>` : '',
   ].join('');
   s.innerHTML = `
     <div class="rv-bg" style="background-image:url(${d.backdrop || ''})"></div>
     <div class="rv-grade"></div>
     <div class="rv-embers">${embers}</div>
-    ${isChar ? `<div class="rv-figure"><div class="initial">${r.name[0]}</div>${portraitImg(r.id)}</div>` : '<div class="rv-gem">◆</div>'}
+    <canvas class="rv-fx"></canvas>
+    ${!isChar ? '<div class="rv-gem">◆</div>' : live ? '<div class="rv-stage"></div>' : `<div class="rv-figure"><div class="initial">${r.name[0]}</div>${portraitImg(r.id)}</div>`}
     <div class="rv-flash"></div>
     <div class="rv-info">
       <div class="rv-head">
-        <div class="rv-icon"><span>${d.icon || '◆'}</span></div>
+        <div class="rv-icon"><i></i><i></i><span>${d.icon || '◆'}</span></div>
         <div class="rv-name">${r.new ? '<em>New</em>' : ''}<b class="${r.rarity === 'Unbound' ? 'rainbow-text' : ''}">${r.name}</b>${r.title ? `<small>${r.title}</small>` : ''}</div>
       </div>
       <div class="rv-stars">${starRow}</div>
