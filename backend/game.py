@@ -8,17 +8,18 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 import storage
+from config import DEV_PASSWORD
 from storage import CHARACTERS, SHOP, Transaction
 
 router = APIRouter(prefix="/api")
 
 # ---------------- Tuning (change numbers here) ----------------
 TASK_REWARDS = {  # difficulty -> (xp, points)
-    "easy": (15, 10),
-    "medium": (30, 25),
-    "hard": (60, 50),
+    "easy": (30, 50),
+    "medium": (60, 100),
+    "hard": (120, 200),
 }
-LEVEL_UP_BONUS = 160  # = one free gacha pull
+LEVEL_UP_BONUS = 320  # = two free summons
 
 PULL_COST = 160
 TEN_PULL_COST = 1440  # 10% discount
@@ -54,9 +55,8 @@ def add_xp(state, amount):
     return gained
 
 
-DAILY_GIFT_BASE = 50      # points on day 1 of a streak
-DAILY_GIFT_PER_DAY = 10   # extra points for each streak day, up to day 7
-DAILY_GIFT_MAX_DAYS = 7
+# Login streak: what each day in a row pays. Skipping a day starts again at day 1; after day 7 the week starts over.
+LOGIN_REWARDS = [20, 40, 80, 120, 200, 300, 500]
 
 
 def log_day(state, key, amount):
@@ -78,21 +78,39 @@ def week_summary(state):
     }
 
 
+ROTATION_SECONDS = 3600  # the limited banners change every hour
+
+
+def active_banners(now=None):
+    """The banners on offer right now: two limited ones that rotate every hour, plus the permanent standard banner."""
+    banners = CHARACTERS.get("banners", [])
+    rotating = [b for b in banners if b.get("rotating")]
+    fixed = [b for b in banners if not b.get("rotating")]
+    if len(rotating) <= 2:
+        return rotating + fixed
+    turn = int((now or time.time()) // ROTATION_SECONDS)
+    first = (turn * 2) % len(rotating)
+    return [rotating[first], rotating[(first + 1) % len(rotating)]] + fixed
+
+
 def public_state(state):
     return {
-        **state,
+        **{k: v for k, v in state.items() if k != "dev_backup"},
         "week": week_summary(state),
         "xp_to_next": xp_to_next(state["level"]),
+        "wheel_info": {"available": (state.get("wheel") or {}).get("day") != date.today().isoformat(), "slices": [s["label"] for s in WHEEL]},
         "catalog": {
             "characters": CHARACTERS["characters"],
             "accessories": SHOP["accessories"],
+            "outfits": SHOP.get("outfits", []),
             "backgrounds": SHOP["backgrounds"],
-            "banners": CHARACTERS.get("banners", []),
+            "banners": active_banners(),
         },
         "gacha": {
             "pull_cost": PULL_COST,
             "ten_pull_cost": TEN_PULL_COST,
             "pity_limit": PITY_LIMIT,
+            "rotates_at": (int(time.time() // ROTATION_SECONDS) + 1) * ROTATION_SECONDS,  # when the limited banners change (unix seconds)
             "rates": [{"rarity": r, "chance": c} for r, c in RATES],
         },
     }
@@ -109,6 +127,105 @@ def reset_state():
     return public_state(storage.load())
 
 
+# ---------------- Player name ----------------
+class PlayerIn(BaseModel):
+    name: str
+
+
+@router.post("/player")
+def set_player(body: PlayerIn):
+    """The name the companion calls you by (typed on the title screen)."""
+    name = " ".join(body.name.split())[:24]
+    with Transaction() as state:
+        state["player_name"] = name
+    return public_state(storage.load())
+
+
+# ---------------- Mini games ----------------
+MINIGAME_PLAY_CAP = 80   # most Sakura Petals one round of Petal Catch or Memory Match can pay
+RHYTHM_PLAY_CAP = 100    # Rhythm Tap pays a little more: it has to be unlocked by finishing a quest
+RHYTHM_TICKETS_MAX = 3   # unlocked rounds you can save up
+GAME_COOLDOWN = {"catch": 180, "memory": 180}  # seconds to wait after a round before that game can be played again
+
+
+def minigame_reward(game, score):
+    if game == "catch":   # score = petals caught (golden ones count 5, phones take 5 away)
+        return max(0, min(MINIGAME_PLAY_CAP, score))
+    if game == "memory":  # score = turns needed to find 6 pairs (6 is perfect)
+        return max(20, min(MINIGAME_PLAY_CAP, MINIGAME_PLAY_CAP - (max(6, score) - 6) * 5))
+    if game == "rhythm":  # score = 0..100, how well the notes were hit
+        return max(0, min(RHYTHM_PLAY_CAP, score))
+    raise HTTPException(400, "Unknown game")
+
+
+class MinigameIn(BaseModel):
+    game: str
+    score: int
+
+
+@router.post("/minigame")
+def minigame(body: MinigameIn):
+    """Pays out a finished mini game in Sakura Petals. Rhythm Tap uses up one unlocked round."""
+    reward = minigame_reward(body.game, body.score)
+    with Transaction() as state:
+        ready = state.setdefault("game_ready", {})
+        if time.time() < ready.get(body.game, 0) and not state.get("dev_mode"):
+            raise HTTPException(400, "That game is still resting. Try again in a moment!")
+        if body.game in GAME_COOLDOWN:
+            ready[body.game] = int(time.time()) + GAME_COOLDOWN[body.game]
+        if body.game == "rhythm":
+            if state.get("rhythm_tickets", 0) < 1:
+                raise HTTPException(400, "Finish a quest first to unlock Rhythm Tap")
+            state["rhythm_tickets"] -= 1
+        state["points"] += reward
+    return {"earned": reward, "state": public_state(storage.load())}
+
+
+# ---------------- Daily wheel (one free spin a day) ----------------
+WHEEL = [  # in the order they sit on the wheel; weight = how likely
+    {"label": "10", "points": 10, "weight": 22},
+    {"label": "100", "points": 100, "weight": 10},
+    {"label": "25", "points": 25, "weight": 22},
+    {"label": "500", "points": 500, "weight": 2},
+    {"label": "50", "points": 50, "weight": 20},
+    {"label": "Free Wish", "wish": 1, "weight": 4},
+    {"label": "75", "points": 75, "weight": 14},
+    {"label": "200", "points": 200, "weight": 6},
+]
+
+
+@router.post("/wheel/spin")
+def wheel_spin():
+    """The free daily spin: 10 to 500 Sakura Petals, or (rarely) a free single summon."""
+    today = date.today().isoformat()
+    with Transaction() as state:
+        spun = state.setdefault("wheel", {"day": None})
+        if spun.get("day") == today and not state.get("dev_mode"):  # (Dev Mode can spin again, for demos)
+            raise HTTPException(400, "You already used today's free spin. Come back tomorrow!")
+        spun["day"] = today
+        index = random.choices(range(len(WHEEL)), weights=[s["weight"] for s in WHEEL])[0]
+        prize = WHEEL[index]
+        state["points"] += prize.get("points", 0)
+        state["free_wishes"] = state.get("free_wishes", 0) + prize.get("wish", 0)
+    return {"index": index, "label": prize["label"], "points": prize.get("points", 0), "wish": prize.get("wish", 0),
+            "state": public_state(storage.load())}
+
+
+# ---------------- Dev Mode ----------------
+class DevIn(BaseModel):
+    on: bool
+    password: str = ""
+
+
+@router.post("/dev")
+def dev_mode(body: DevIn):
+    """Switches Dev Mode on (needs the password, case sensitive) or off."""
+    if body.on and body.password != DEV_PASSWORD:
+        raise HTTPException(403, "Wrong password")
+    storage.set_dev_mode(body.on)
+    return public_state(storage.load())
+
+
 # ---------------- Tasks ----------------
 class TaskIn(BaseModel):
     title: str
@@ -116,7 +233,7 @@ class TaskIn(BaseModel):
     due: str | None = None  # ISO date/time string, optional
 
 
-def create_task(state, title, difficulty="medium", due=None):
+def create_task(state, title, difficulty="medium", due=None, source="user"):
     if difficulty not in TASK_REWARDS:
         difficulty = "medium"
     task = {
@@ -126,6 +243,7 @@ def create_task(state, title, difficulty="medium", due=None):
         "due": due,
         "done": False,
         "created": time.time(),
+        "source": source,  # "user" = you added it, "ai" = your companion suggested it
     }
     state["tasks"].append(task)
     return task
@@ -153,6 +271,7 @@ def complete_task(task_id: str):
         xp, pts = TASK_REWARDS[task["difficulty"]]
         state["points"] += pts
         state["stats"]["tasks_done"] += 1
+        state["rhythm_tickets"] = min(RHYTHM_TICKETS_MAX, state.get("rhythm_tickets", 0) + 1)  # a quest done unlocks a round of Rhythm Tap
         log_day(state, "tasks", 1)
         levels = add_xp(state, xp)
     return {
@@ -177,11 +296,12 @@ def claim_daily():
             login["streak"] = login.get("streak", 0) + 1 if login.get("last_day") == yesterday else 1
             login["best"] = max(login.get("best", 0), login["streak"])
             login["last_day"] = today.isoformat()
-            gift = DAILY_GIFT_BASE + DAILY_GIFT_PER_DAY * (min(login["streak"], DAILY_GIFT_MAX_DAYS) - 1)
+            gift = LOGIN_REWARDS[(login["streak"] - 1) % len(LOGIN_REWARDS)]
             state["points"] += gift
             claimed = True
         streak = login["streak"]
-    return {"claimed": claimed, "gift": gift, "streak": streak, "state": public_state(storage.load())}
+    return {"claimed": claimed, "gift": gift, "streak": streak, "day": (streak - 1) % len(LOGIN_REWARDS) + 1, "rewards": LOGIN_REWARDS,
+            "state": public_state(storage.load())}
 
 
 @router.delete("/tasks/{task_id}")
@@ -268,22 +388,25 @@ def delete_note(note_id: str):
 
 # ---------------- Shop ----------------
 class BuyIn(BaseModel):
-    kind: str  # "accessory" or "background"
+    kind: str  # "accessory", "background" or "outfit"
     id: str
 
 
 @router.post("/shop/buy")
 def buy(body: BuyIn):
-    catalog = SHOP["accessories"] if body.kind == "accessory" else SHOP["backgrounds"]
+    kinds = {"accessory": ("accessories", "owned_accessories"), "background": ("backgrounds", "owned_backgrounds"), "outfit": ("outfits", "owned_outfits")}
+    if body.kind not in kinds:
+        raise HTTPException(400, "Unknown kind")
+    catalog = SHOP.get(kinds[body.kind][0], [])
     item = next((i for i in catalog if i["id"] == body.id), None)
     if not item:
         raise HTTPException(404, "Item not found")
-    owned_key = "owned_accessories" if body.kind == "accessory" else "owned_backgrounds"
+    owned_key = kinds[body.kind][1]
     with Transaction() as state:
         if item["id"] in state[owned_key]:
             raise HTTPException(400, "You already own this")
         if state["points"] < item["price"]:
-            raise HTTPException(400, "Not enough points")
+            raise HTTPException(400, "Not enough Sakura Petals")
         state["points"] -= item["price"]
         state[owned_key].append(item["id"])
     return public_state(storage.load())
@@ -306,6 +429,10 @@ def equip(body: EquipIn):
                 eq.append(body.id)
             if not body.on and body.id in eq:
                 eq.remove(body.id)
+        elif body.kind == "outfit":
+            if body.id not in state["owned_outfits"]:
+                raise HTTPException(400, "Not owned")
+            state["outfit"] = body.id if body.on else ""
         elif body.kind == "background":
             if body.id not in state["owned_backgrounds"]:
                 raise HTTPException(400, "Not owned")
@@ -422,11 +549,15 @@ def pull(body: PullIn):
     if body.count not in (1, 10):
         raise HTTPException(400, "Pull 1 or 10")
     cost = PULL_COST if body.count == 1 else TEN_PULL_COST
+    free = False
     banner = next((b for b in CHARACTERS.get("banners", []) if b["id"] == body.banner), None)
     featured = tuple(banner["featured"]) if banner else ()
     with Transaction() as state:
+        if body.count == 1 and state.get("free_wishes", 0) > 0:  # a free wish from the daily wheel
+            state["free_wishes"] -= 1
+            cost, free = 0, True
         if state["points"] < cost:
-            raise HTTPException(400, f"Not enough points ({cost} needed)")
+            raise HTTPException(400, f"Not enough Sakura Petals ({cost} needed)")
         forced = body.force_rarity if (state["settings"].get("demo_mode") and body.force_rarity in RARITY_ORDER) else None
         state["points"] -= cost
         results = []

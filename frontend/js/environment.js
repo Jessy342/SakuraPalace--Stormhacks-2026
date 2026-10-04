@@ -1,6 +1,10 @@
-// The living room behind the companion. Every room is drawn with canvas shapes (no image files).
-// For speed, a room is painted ONCE into a hidden picture; each frame only re-draws that picture
-// plus a few small moving effects (petals, rain, lamp glow, spotlights...), at 30 frames per second.
+// The room behind the companion.
+// Each room is a painted picture (frontend/assets/backgrounds/<id>.webp, made by tools/make_backgrounds.py).
+// Depth comes from three layers that slide by different amounts as the mouse moves: the picture, small effects
+// just behind the character (petals, rain, fireflies, light shafts...) and big soft out-of-focus bits that drift
+// IN FRONT of the character on a second canvas.
+// If a picture is missing, the room is drawn with simple canvas shapes instead (the painters below).
+// For speed the picture is prepared ONCE into a hidden canvas; each frame only re-draws that plus the effects, at 30fps.
 
 const TAU = Math.PI * 2;
 export const FLOOR = 0.74; // where the floor starts, as a fraction of the screen height
@@ -428,6 +432,27 @@ const SCENES = {
       g.fillStyle = '#2f7a5a'; for (let i = 0; i < 7; i++) { g.save(); g.translate(w * 0.16, h * 0.28); g.rotate(-2.6 + i * 0.75); g.beginPath(); g.ellipse(w * 0.06, 0, w * 0.07, h * 0.022, 0, 0, TAU); g.fill(); g.restore(); }
     },
   },
+  // Dressing room: a soft, glowing backdrop in the character's own colour
+  soft: {
+    name: 'Soft Light', fx: ['twinkle', 'motes'],
+    paint(g, w, h, R, tint) {
+      const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+      const mix = (a, b, t) => { const x = rgb(a), y = rgb(b); return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',')})`; };
+      const c = /^#[0-9a-f]{6}$/i.test(tint || '') ? tint : '#ff9ac4';
+      g.fillStyle = vgrad(g, 0, h, [mix(c, '#141034', 0.78), mix(c, '#2c2166', 0.5), mix(c, '#ffffff', 0.3)]); g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 16; i++) glow(g, R() * w, R() * h * 0.85, h * (0.08 + R() * 0.2), mix(c, '#ffffff', 0.45), 0.22); // soft blobs of light
+      stars(g, R, w, h, 90, 0.7);
+      glow(g, w * 0.5, h * 0.45, h * 0.75, mix(c, '#ffffff', 0.6), 0.35);                                               // glow behind the character
+      const y = h * FLOOR;
+      g.fillStyle = vgrad(g, y, h, ['rgba(255,255,255,.22)', 'rgba(255,255,255,0)']); g.fillRect(0, y, w, h - y);          // a glossy floor
+      g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(0, y, w, 1.5);
+      g.fillStyle = mix(c, '#ffffff', 0.7); g.globalAlpha = 0.5; g.beginPath(); g.ellipse(w * 0.5, h * 0.9, w * 0.18, h * 0.05, 0, 0, TAU); g.fill(); g.globalAlpha = 1;
+    },
+  },
+  // (simple stand-ins for the newer rooms, only seen if their picture is missing)
+  underwater: { name: 'Coral Kingdom', fx: ['bubbles'], paint(g, w, h) { g.fillStyle = vgrad(g, 0, h, ['#7fe3ff', '#1f7fc4', '#0b2a5c']); g.fillRect(0, 0, w, h); floor(g, w, h, '#d9c79a', '#8a7a5a', 'plain'); } },
+  forest: { name: 'Enchanted Forest', fx: ['fireflies'], paint(g, w, h) { g.fillStyle = vgrad(g, 0, h, ['#bfe8a8', '#3f8a5a', '#12331f']); g.fillRect(0, 0, w, h); hills(g, w, h, h * 0.6, 40, 'rgba(20,70,40,.7)', 2); floor(g, w, h, '#4f8a4a', '#1f3f24', 'plain'); } },
+  cave: { name: 'Crystal Cave', fx: ['sparkles'], paint(g, w, h) { g.fillStyle = vgrad(g, 0, h, ['#1a1440', '#3a2a7a', '#0c0a22']); g.fillRect(0, 0, w, h); glow(g, w * 0.3, h * 0.5, h * 0.5, 'rgba(120,160,255,.6)'); glow(g, w * 0.75, h * 0.4, h * 0.4, 'rgba(190,120,255,.5)'); floor(g, w, h, '#2a2450', '#0c0a22', 'plain'); } },
   galaxy: {
     name: 'Galaxy Dream', fx: ['twinkle', 'shooting'],
     paint(g, w, h, R) {
@@ -442,16 +467,56 @@ const SCENES = {
 
 export const sceneName = id => SCENES[id]?.name || id;
 
+const PICTURE = id => `assets/backgrounds/${id}.webp`;
+const NO_PICTURE = new Set(['soft']); // drawn in the character's colour, so it can't be a fixed picture
+// Effects that go with each picture: [behind the character], and what drifts in front of the character
+const ROOM = [['motes'], 'bokeh'];
+// The Makoto Shinkai-style rooms (picture only; a plain gradient stands in if the picture is missing)
+for (const [id, name, top, bottom] of [['summer_sky', 'Summer Sky Hill', '#3f8fe0', '#bfe6a8'], ['train_crossing', 'Sunset Crossing', '#ff9a6b', '#5a4a7a'],
+  ['comet_lake', 'Comet Lake', '#1a1f5c', '#5a3f8a'], ['rain_garden', 'Garden in the Rain', '#8fb89a', '#3f6a55'], ['city_stairs', 'City Stairway', '#7fc0f0', '#e9c9a0'],
+  ['twilight_station', 'Twilight Station', '#3a3f8a', '#e08fb0'], ['tokyo_rain', 'Tokyo After Rain', '#2a1f5a', '#b0508a'], ['sky_island', 'Island Above the Clouds', '#9fd0ff', '#ffe0b0']]) {
+  SCENES[id] = { name, fx: [], paint(g, w, h) { g.fillStyle = vgrad(g, 0, h, [top, bottom]); g.fillRect(0, 0, w, h); } };
+}
+const PICTURE_FX = {
+  summer_sky: [['sparkles'], 'bokeh'], train_crossing: [['motes', 'rays'], 'bokeh'], comet_lake: [['twinkle', 'shooting'], 'fireflies'], rain_garden: [['rain'], 'rain'],
+  city_stairs: [['motes', 'rays'], 'bokeh'], twilight_station: [['twinkle'], 'fireflies'], tokyo_rain: [['rain'], 'rain'], sky_island: [['rays', 'motes'], 'bokeh'],
+  bedroom: ROOM, bedroom_modern: ROOM, bedroom_study: ROOM, bedroom_gamer: [['sparkles'], 'bokeh'], bedroom_penthouse: [['twinkle'], 'bokeh'],
+  sakura: [['petals', 'twinkle'], 'petals'], courtyard: [['petals', 'rays'], 'petals'], rooftop: [['petals'], 'petals'],
+  classroom: [['motes', 'rays'], 'bokeh'], cafe: [['motes'], 'bokeh'], library: [['embers', 'twinkle'], 'bokeh'],
+  stage: [['spots', 'sparkles'], 'bokeh'], balcony: [['twinkle', 'shooting'], 'fireflies'], festival: [['embers', 'fireworks'], 'bokeh'],
+  night_city: [['rain'], 'rain'], beach: [['sparkles'], 'bokeh'], galaxy: [['twinkle', 'shooting'], 'fireflies'],
+  underwater: [['bubbles', 'rays'], 'bubbles'], forest: [['fireflies', 'rays'], 'fireflies'], cave: [['sparkles', 'motes'], 'bokeh'],
+};
+
+/** Draws a picture so it fills the area, keeping the ground (lower part) in view when it has to crop. */
+function drawCover(g, img, w, h) {
+  const scale = Math.max(w / img.width, h / img.height);
+  const dw = img.width * scale, dh = img.height * scale;
+  g.drawImage(img, (w - dw) / 2, (h - dh) * 0.72, dw, dh);
+}
+
 export class Environment {
-  constructor(canvas) {
+  /** canvas: behind the character. frontCanvas: in front of the character (for the out-of-focus foreground). */
+  constructor(canvas, frontCanvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.buf = document.createElement('canvas'); // the room, painted once
+    this.front = frontCanvas;
+    this.fctx = frontCanvas ? frontCanvas.getContext('2d') : null;
+    this.buf = document.createElement('canvas'); // the room, prepared once
     this.scene = 'sakura';
+    this.tint = null;
     this.low = false;      // performance mode: fewer effects, lower resolution
     this.paused = false;
     this.mx = 0; this.my = 0; this.tx = 0; this.ty = 0;
     this.thumbs = {};
+    this.pictures = {};    // id -> { img, ready }
+    this.onPicture = null; // called when a room's picture finishes loading
+    // a soft white dot, reused for glows (much cheaper than drawing a gradient every time)
+    this.dot = document.createElement('canvas');
+    this.dot.width = this.dot.height = 64;
+    const dg = this.dot.getContext('2d'), gr = dg.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.4, 'rgba(255,255,255,.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    dg.fillStyle = gr; dg.fillRect(0, 0, 64, 64);
     this.build();
     addEventListener('resize', () => this.build());
     addEventListener('pointermove', e => { this.tx = e.clientX / innerWidth * 2 - 1; this.ty = e.clientY / innerHeight * 2 - 1; });
@@ -465,64 +530,162 @@ export class Environment {
     requestAnimationFrame(loop);
   }
 
-  set(scene) {
+  /** tint: a colour for scenes that take one (the soft dressing-room backdrop uses the character's colour). */
+  set(scene, tint = null) {
     if (!SCENES[scene]) scene = 'sakura';
-    if (scene === this.scene) return;
+    if (scene === this.scene && tint === this.tint) return;
     this.scene = scene;
+    this.tint = tint;
     this.build();
   }
 
   setQuality(low) { this.low = low; this.build(); }
 
-  /** Small picture of a room, for the dressing room tiles. */
-  thumb(id, w = 240, h = 150) {
-    if (!SCENES[id]) return '';
-    if (!this.thumbs[id]) {
-      const c = document.createElement('canvas'); c.width = w; c.height = h;
-      SCENES[id].paint(c.getContext('2d'), w, h, rng(7));
-      this.thumbs[id] = c.toDataURL('image/jpeg', 0.8);
+  /** The room's painted picture if it has loaded, otherwise null (and starts loading it). */
+  picture(id) {
+    if (NO_PICTURE.has(id)) return null;
+    let p = this.pictures[id];
+    if (!p) {
+      p = this.pictures[id] = { img: new Image(), ready: false };
+      p.img.onload = () => {
+        p.ready = true;
+        for (const k of Object.keys(this.thumbs)) if (k.startsWith(id + '@')) delete this.thumbs[k];
+        if (id === this.scene) this.build();
+        if (this.onPicture) this.onPicture(id);
+      };
+      p.img.src = PICTURE(id);
     }
-    return this.thumbs[id];
+    return p.ready ? p.img : null;
   }
 
-  /** Paints the current room into the hidden picture and prepares its moving effects. */
+  /** Loads the pictures of these rooms in the background, one after another. */
+  preload(ids) {
+    const next = i => { if (i >= ids.length) return; const p = this.pictures[ids[i]] || (this.picture(ids[i]), this.pictures[ids[i]]);
+      if (!p || p.ready) return next(i + 1); p.img.addEventListener('load', () => next(i + 1)); p.img.addEventListener('error', () => next(i + 1)); };
+    next(0);
+  }
+
+  /** Picture of a room at any size: small for the dressing room tiles, large as the backdrop of a summon reveal. */
+  thumb(id, w = 240, h = 150) {
+    if (!SCENES[id]) return '';
+    const pic = this.picture(id);
+    const key = `${id}@${w}x${h}`;
+    if (!this.thumbs[key]) {
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      if (pic) drawCover(c.getContext('2d'), pic, w, h);
+      else SCENES[id].paint(c.getContext('2d'), w, h, rng(7));
+      this.thumbs[key] = c.toDataURL('image/jpeg', 0.85);
+    }
+    return this.thumbs[key];
+  }
+
+  /** Prepares the current room in the hidden canvas and sets up its moving effects. */
   build() {
-    const scale = Math.min(1, (this.low ? 960 : 1440) / innerWidth); // big screens don't need a pixel-perfect backdrop
+    const scale = Math.min(1, (this.low ? 1100 : 1920) / innerWidth);
     const w = this.w = this.canvas.width = this.buf.width = Math.round(innerWidth * scale);
     const h = this.h = this.canvas.height = this.buf.height = Math.round(innerHeight * scale);
     const sc = SCENES[this.scene];
-    sc.paint(this.buf.getContext('2d'), w, h, rng(7));
+    const g = this.buf.getContext('2d');
+    const pic = this.picture(this.scene);
+    if (pic) {
+      drawCover(g, pic, w, h);
+      g.fillStyle = vgrad(g, h * 0.55, h, ['rgba(8,6,24,0)', 'rgba(8,6,24,.34)']); g.fillRect(0, h * 0.55, w, h * 0.45); // settles the character onto the ground
+    } else sc.paint(g, w, h, rng(7), this.tint);
+    const [back, frontKind] = pic && PICTURE_FX[this.scene] ? PICTURE_FX[this.scene] : [sc.fx || [], null];
+    this.lights = pic ? [] : sc.lights || [];
     const many = (n, f) => Array.from({ length: this.low ? Math.ceil(n / 3) : n }, f);
     const r = Math.random;
     const fx = this.fx = {};
-    for (const name of sc.fx || []) {
+    for (const name of back) {
       if (name === 'petals') fx.petals = many(46, () => ({ x: r() * w, y: r() * h, r: 3 + r() * 5, s: 25 + r() * 45, a: r() * TAU, sp: 1 + r() * 2, d: 0.4 + r() * 0.6 }));
       if (name === 'motes' || name === 'embers') fx[name] = many(34, () => ({ x: r() * w, y: r() * h, r: 1 + r() * 1.8, s: 4 + r() * 12, p: r() * TAU }));
       if (name === 'rain' || name === 'rainwindow') fx[name] = many(110, () => ({ x: r() * w * 1.2, y: r() * h, l: 10 + r() * 16, s: 600 + r() * 500 }));
       if (name === 'twinkle' || name === 'sparkles') fx[name] = many(40, () => ({ x: r() * w, y: r() * h * (name === 'twinkle' ? 0.6 : 1), p: r() * TAU, r: 0.8 + r() * 1.6 }));
+      if (name === 'bubbles') fx.bubbles = many(36, () => ({ x: r() * w, y: r() * h, r: 2 + r() * 6, s: 18 + r() * 40, p: r() * TAU }));
+      if (name === 'fireflies') fx.fireflies = many(30, () => ({ x: r() * w, y: h * (0.25 + r() * 0.7), p: r() * TAU, sp: 0.3 + r() * 0.7, r: 5 + r() * 8 }));
+      if (name === 'rays') fx.rays = [0.18, 0.4, 0.62, 0.82].map((x, i) => ({ x, p: i * 1.9, wide: 0.05 + r() * 0.06 }));
       if (name === 'spots') fx.spots = [0.2, 0.4, 0.6, 0.8].map((x, i) => ({ x, p: i * 1.7, c: ['255,122,217', '122,224,255', '255,226,122', '190,140,255'][i] }));
       if (['waves', 'steam', 'shooting', 'fireworks'].includes(name)) fx[name] = { list: [] };
     }
+    // the out-of-focus foreground, on the canvas in front of the character
+    this.frontKind = frontKind;
+    if (this.front) {
+      const fs = Math.min(1, 960 / innerWidth);
+      this.fw = this.front.width = Math.round(innerWidth * fs);
+      this.fh = this.front.height = Math.round(innerHeight * fs);
+      const count = { bokeh: 9, petals: 7, rain: 26, bubbles: 8, fireflies: 9 }[frontKind] || 0;
+      this.frontBits = Array.from({ length: this.low ? Math.ceil(count / 2) : count }, () => ({ x: r(), y: r(), s: 0.5 + r(), v: 0.5 + r(), p: r() * TAU }));
+      if (!count) this.fctx.clearRect(0, 0, this.fw, this.fh);
+    }
+    this.applyTheme();
     this.draw(performance.now() / 1000);
   }
 
-  draw(t) {
-    const { ctx: g, w, h, fx } = this;
-    this.mx += (this.tx - this.mx) * 0.08; this.my += (this.ty - this.my) * 0.08;
-    // the painted room, slightly oversized so it can slide a little with the mouse (depth)
-    const m = w * 0.012;
-    g.drawImage(this.buf, -m - this.mx * m, -m * h / w - this.my * m * 0.5, w + m * 2, h + m * 2 * h / w);
-    const sc = SCENES[this.scene];
-    for (const [x, y, rad, color] of sc.lights || []) glow(g, w * x, h * y, h * rad, color, 0.75 + 0.25 * Math.sin(t * 2.3 + x * 9)); // lamps breathe
+  /** Gives the UI panels a dark shade of the room's own colour, so menus feel like part of the scene instead of black boxes. */
+  applyTheme() {
+    const c = document.createElement('canvas'); c.width = c.height = 8;
+    const g = c.getContext('2d');
+    g.drawImage(this.buf, 0, 0, 8, 8);
+    const d = g.getImageData(0, 0, 8, 8).data;
+    let R = 0, G = 0, B = 0;
+    for (let i = 0; i < d.length; i += 4) { R += d[i]; G += d[i + 1]; B += d[i + 2]; }
+    const n = d.length / 4, base = [30, 20, 66]; // a deep violet, so even grey rooms get a coloured panel
+    let rgb = [R / n, G / n, B / n].map((v, i) => v * 0.42 + base[i] * 0.58);
+    const light = 0.3 * rgb[0] + 0.59 * rgb[1] + 0.11 * rgb[2];
+    if (light > 62) rgb = rgb.map(v => v * 62 / light); // keep it dark enough for white text
+    rgb = rgb.map(Math.round);
+    const root = document.documentElement.style;
+    root.setProperty('--panel', `rgba(${rgb.join(',')},.9)`);
+    root.setProperty('--panel-solid', `rgb(${rgb.join(',')})`);
+    root.setProperty('--panel-soft', `rgba(${rgb.join(',')},.72)`);
+    if (this.onTheme) this.onTheme([R / n, G / n, B / n]); // the room's average colour, for lighting the character
+  }
 
+  draw(t) {
+    const { ctx: g, w, h } = this;
+    const fx = this.calm ? {} : this.fx; // calm: just the picture (the summon screen has its own small effects)
+    this.mx += (this.tx - this.mx) * 0.08; this.my += (this.ty - this.my) * 0.08;
+    // the room, slightly oversized so it can slide with the mouse and breathe in and out very slowly
+    const m = w * (0.02 + 0.004 * Math.sin(t * 0.22));
+    g.drawImage(this.buf, -m - this.mx * m * 0.8, -m * h / w - this.my * m * 0.4, w + m * 2, h + m * 2 * h / w);
+    for (const [x, y, rad, color] of this.lights) glow(g, w * x, h * y, h * rad, color, 0.75 + 0.25 * Math.sin(t * 2.3 + x * 9)); // lamps breathe
+    const ox = -this.mx * w * 0.012; // the effects layer slides a little more than the picture
+
+    if (fx.rays) { // shafts of light falling across the scene
+      g.globalCompositeOperation = 'lighter';
+      for (const ray of fx.rays) {
+        const x0 = w * ray.x + ox, a = 0.1 + 0.07 * Math.sin(t * 0.5 + ray.p), spread = w * ray.wide;
+        const gr = g.createLinearGradient(0, 0, 0, h * 0.95); gr.addColorStop(0, `rgba(255,246,214,${a})`); gr.addColorStop(1, 'rgba(255,246,214,0)');
+        g.fillStyle = gr; g.beginPath(); g.moveTo(x0 - spread * 0.4, 0); g.lineTo(x0 + spread * 0.4, 0); g.lineTo(x0 + spread - w * 0.16, h * 0.95); g.lineTo(x0 - spread - w * 0.16, h * 0.95); g.fill();
+      }
+      g.globalCompositeOperation = 'source-over';
+    }
     if (fx.petals) for (const p of fx.petals) {
-      const y = (p.y + t * p.s) % (h + 40) - 20, x = (p.x + Math.sin(t * 0.7 + p.a) * 40 + t * 18 * p.d) % (w + 40) - 20;
+      const y = (p.y + t * p.s) % (h + 40) - 20, x = (p.x + Math.sin(t * 0.7 + p.a) * 40 + t * 18 * p.d) % (w + 40) - 20 + ox;
       g.save(); g.translate(x, y); g.rotate(p.a + t * p.sp); g.globalAlpha = 0.55 + 0.4 * p.d; g.fillStyle = p.d > 0.7 ? '#fff0f6' : '#ffc4dc';
       g.beginPath(); g.ellipse(0, 0, p.r, p.r * 0.5 * Math.abs(Math.cos(t * p.sp + p.a)) + 1, 0, 0, TAU); g.fill(); g.restore();
     }
     for (const name of ['motes', 'embers']) if (fx[name]) for (const p of fx[name]) {
       g.globalAlpha = 0.25 + 0.5 * Math.abs(Math.sin(t * 0.7 + p.p)); g.fillStyle = name === 'embers' ? '#ffd98f' : '#fff3c9';
-      g.beginPath(); g.arc(p.x + Math.sin(t * 0.3 + p.p) * 30, (p.y - t * p.s * (name === 'embers' ? 2 : 1) + h * 1000) % h, p.r, 0, TAU); g.fill();
+      g.beginPath(); g.arc(p.x + Math.sin(t * 0.3 + p.p) * 30 + ox, (p.y - t * p.s * (name === 'embers' ? 2 : 1) + h * 1000) % h, p.r, 0, TAU); g.fill();
+    }
+    if (fx.bubbles) { // bubbles wobbling up to the surface
+      g.strokeStyle = 'rgba(220,245,255,.6)'; g.lineWidth = 1;
+      for (const p of fx.bubbles) {
+        const x = p.x + Math.sin(t * 0.9 + p.p) * 10 + ox, y = (p.y - t * p.s + h * 1000) % (h + 20) - 10;
+        g.globalAlpha = 0.7; g.beginPath(); g.arc(x, y, p.r, 0, TAU); g.stroke();
+        g.fillStyle = 'rgba(255,255,255,.7)'; g.beginPath(); g.arc(x - p.r * 0.35, y - p.r * 0.35, p.r * 0.22, 0, TAU); g.fill();
+      }
+    }
+    if (fx.fireflies) { // drifting lights that pulse
+      g.globalCompositeOperation = 'lighter';
+      for (const p of fx.fireflies) {
+        const x = p.x + Math.sin(t * p.sp + p.p) * 40 + ox, y = p.y + Math.cos(t * p.sp * 0.8 + p.p) * 26;
+        g.globalAlpha = 0.25 + 0.75 * Math.max(0, Math.sin(t * 1.4 + p.p));
+        g.drawImage(this.dot, x - p.r, y - p.r, p.r * 2, p.r * 2);
+        g.fillStyle = '#eaff9a'; g.beginPath(); g.arc(x, y, 1.4, 0, TAU); g.fill();
+      }
+      g.globalCompositeOperation = 'source-over';
     }
     if (fx.rain || fx.rainwindow) {
       const list = fx.rain || fx.rainwindow;
@@ -535,15 +698,15 @@ export class Environment {
     for (const name of ['twinkle', 'sparkles']) if (fx[name]) for (const p of fx[name]) {
       const a = Math.max(0, Math.sin(t * 1.6 + p.p));
       g.globalAlpha = a; g.fillStyle = '#fff';
-      if (name === 'sparkles') { const s = p.r * 3 * a; g.fillRect(p.x - s, p.y - 0.6, s * 2, 1.2); g.fillRect(p.x - 0.6, p.y - s, 1.2, s * 2); }
+      if (name === 'sparkles') { const sz = p.r * 3 * a; g.fillRect(p.x - sz, p.y - 0.6, sz * 2, 1.2); g.fillRect(p.x - 0.6, p.y - sz, 1.2, sz * 2); }
       else { g.beginPath(); g.arc(p.x, p.y, p.r, 0, TAU); g.fill(); }
     }
     g.globalAlpha = 1;
     if (fx.spots) { // stage spotlights sweeping from the rig
       g.globalCompositeOperation = 'lighter';
-      for (const s of fx.spots) {
-        const x0 = w * s.x, x1 = x0 + Math.sin(t * 0.8 + s.p) * w * 0.22, spread = w * 0.07;
-        const gr = g.createLinearGradient(0, h * 0.08, 0, h * 0.95); gr.addColorStop(0, `rgba(${s.c},.42)`); gr.addColorStop(1, `rgba(${s.c},0)`);
+      for (const sp of fx.spots) {
+        const x0 = w * sp.x, x1 = x0 + Math.sin(t * 0.8 + sp.p) * w * 0.22, spread = w * 0.07;
+        const gr = g.createLinearGradient(0, h * 0.08, 0, h * 0.95); gr.addColorStop(0, `rgba(${sp.c},.42)`); gr.addColorStop(1, `rgba(${sp.c},0)`);
         g.fillStyle = gr; g.beginPath(); g.moveTo(x0 - 6, h * 0.08); g.lineTo(x0 + 6, h * 0.08); g.lineTo(x1 + spread, h * 0.95); g.lineTo(x1 - spread, h * 0.95); g.fill();
       }
       g.globalCompositeOperation = 'source-over';
@@ -561,13 +724,13 @@ export class Environment {
       g.stroke();
     }
     if (fx.shooting) {
-      const s = fx.shooting;
-      if (!s.star && Math.random() < 0.006) s.star = { x: (0.3 + Math.random() * 0.7) * w, y: Math.random() * 0.25 * h, life: 1 };
-      if (s.star) {
-        const p = s.star; p.x -= 16; p.y += 7; p.life -= 0.035;
+      const sh = fx.shooting;
+      if (!sh.star && Math.random() < 0.006) sh.star = { x: (0.3 + Math.random() * 0.7) * w, y: Math.random() * 0.25 * h, life: 1 };
+      if (sh.star) {
+        const p = sh.star; p.x -= 16; p.y += 7; p.life -= 0.035;
         const gr = g.createLinearGradient(p.x, p.y, p.x + 150, p.y - 64); gr.addColorStop(0, `rgba(255,255,255,${Math.max(0, p.life)})`); gr.addColorStop(1, 'rgba(255,255,255,0)');
         g.strokeStyle = gr; g.lineWidth = 2; g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x + 150, p.y - 64); g.stroke();
-        if (p.life <= 0) s.star = null;
+        if (p.life <= 0) sh.star = null;
       }
     }
     if (fx.fireworks) {
@@ -581,5 +744,39 @@ export class Environment {
       }
       g.globalAlpha = 1;
     }
+    // the character (and the shadow under their feet) slide together with the room, so they stay planted on its ground
+    if (this.follow) {
+      const tr = `translate(${(-this.mx * innerWidth * 0.016).toFixed(1)}px, ${(-this.my * innerWidth * 0.008).toFixed(1)}px)`;
+      if (tr !== this.lastShift) { this.lastShift = tr; for (const el of this.follow) el.style.transform = tr; }
+    }
+    this.drawFront(t);
+  }
+
+  /** The foreground: a few big, soft, out-of-focus things passing between you and the character. */
+  drawFront(t) {
+    const g = this.fctx;
+    if (!g || !this.frontKind || !this.frontBits.length) return;
+    const w = this.fw, h = this.fh, kind = this.frontKind;
+    g.clearRect(0, 0, w, h);
+    const ox = -this.mx * w * 0.035, oy = -this.my * h * 0.015; // slides the most: it is the closest layer
+    for (const b of this.frontBits) {
+      if (kind === 'bokeh' || kind === 'fireflies') {
+        const rad = (kind === 'bokeh' ? 34 : 12) * (0.6 + b.s), x = ((b.x * w + t * 6 * b.v) % (w + rad * 2)) - rad + ox, y = ((b.y * h - t * 4 * b.v + h * 100) % (h + rad * 2)) - rad + oy;
+        g.globalAlpha = kind === 'bokeh' ? 0.1 + 0.07 * Math.sin(t * 0.6 + b.p) : 0.3 + 0.6 * Math.max(0, Math.sin(t * 1.2 + b.p));
+        g.drawImage(this.dot, x - rad, y - rad, rad * 2, rad * 2);
+      } else if (kind === 'petals') {
+        const rad = 9 + b.s * 9, x = ((b.x * w + t * 60 * b.v) % (w + 80)) - 40 + ox, y = ((b.y * h + t * 90 * b.v) % (h + 80)) - 40 + oy;
+        g.save(); g.translate(x, y); g.rotate(b.p + t * 1.6 * b.v); g.globalAlpha = 0.5; g.fillStyle = '#ffd3e6';
+        g.beginPath(); g.ellipse(0, 0, rad, rad * (0.35 + 0.3 * Math.abs(Math.cos(t * 2 * b.v + b.p))), 0, 0, TAU); g.fill(); g.restore();
+      } else if (kind === 'rain') {
+        const x = ((b.x * w * 1.3 - t * 260 * b.v + w * 100) % (w * 1.3)) + ox, y = ((b.y * h + t * 1500 * b.v) % (h + 120)) - 60;
+        g.globalAlpha = 0.28; g.strokeStyle = '#cfe0ff'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y); g.lineTo(x - 14, y + 80); g.stroke();
+      } else if (kind === 'bubbles') {
+        const rad = 8 + b.s * 12, x = b.x * w + Math.sin(t * 0.8 + b.p) * 18 + ox, y = ((b.y * h - t * 70 * b.v + h * 100) % (h + 80)) - 40 + oy;
+        g.globalAlpha = 0.45; g.strokeStyle = '#e6f8ff'; g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, rad, 0, TAU); g.stroke();
+        g.fillStyle = 'rgba(255,255,255,.6)'; g.beginPath(); g.arc(x - rad * 0.35, y - rad * 0.35, rad * 0.2, 0, TAU); g.fill();
+      }
+    }
+    g.globalAlpha = 1;
   }
 }

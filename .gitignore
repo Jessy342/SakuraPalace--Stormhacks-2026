@@ -17,3 +17,10 @@ backend/data/ja_cache.json
 # OS junk
 .DS_Store
 Thumbs.db
+
+# working notes for the team and its AI sessions: kept on each computer, not in the repository
+CLAUDE.md
+AGENTS.md
+TEAM_PLAN.md
+.mcp.json
+Claude outputs/

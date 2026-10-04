@@ -30,6 +30,10 @@ DEFAULT_MALE_VOICE = os.getenv("DEFAULT_MALE_VOICE", "JBFqnCBsd6RMkjVDRZzb")
 
 PORT = int(os.getenv("PORT", "8765"))
 
+# Password for Dev Mode (Options screen). Case sensitive. It only keeps judges and testers from switching it on by accident:
+# it is not a secret, since this file is in the public repository.
+DEV_PASSWORD = os.getenv("DEV_PASSWORD", "Stormhacks")
+
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 SFX_DIR.mkdir(parents=True, exist_ok=True)

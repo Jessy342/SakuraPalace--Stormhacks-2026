@@ -2,11 +2,20 @@
 import { api, post } from './api.js';
 import { Character } from './character.js';
 import { accessoryThumbs } from './accessories.js';
+import { tintFilter } from './outfits.js';
 import { Environment } from './environment.js';
 import * as voice from './voice.js';
-import { playCutscene, stars, portrait, portraitImg } from './gacha.js';
+import { playCutscene, stars, portrait, portraitImg, LOTUS } from './gacha.js';
+import { preloadSummonArt } from './summonscene.js';
+import * as vfx from './vfx.js';
+import { ModelViewer } from './viewer.js';
+import { runTitle, skipTitle } from './title.js';
+import { playGame, closeGame, gameOpen } from './minigames.js';
+import { initJourney } from './journey.js';
 
 const $ = id => document.getElementById(id);
+/** Escapes text for HTML and draws the points symbol (written ◆ in messages) as the lotus. */
+const rich = text => esc(text).replaceAll('◆', LOTUS);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 let S = null;            // full game state from the backend
@@ -17,20 +26,27 @@ let lastEventId = 0;
 let lastYellAt = 0;
 let elevenOn = false;
 const character = new Character($('stage'), voice.mouthLevel);
-const environment = new Environment($('env'));
+const environment = new Environment($('env'), $('envfx'));
 window.character = character; // handy for debugging in DevTools (F12)
 window.environment = environment;
+environment.follow = [$('stage'), $('floor')];              // they slide with the room, so the character stays planted on its ground
+environment.onTheme = rgb => character.setRoomLight(rgb);  // and is lit in the room's colour
+environment.applyTheme();
 
 const charById = id => S.catalog.characters.find(c => c.id === id);
 const activeChar = () => charById(S.active_character);
 const isDemo = () => !!S.settings.demo_mode;
 
 // Personality types double as the character "classes" shown in the menus (︎ keeps the symbols flat, not emoji)
+const emblem = paths => `<svg class="emblem" viewBox="0 0 24 24">${paths}</svg>`;
 const CLASSES = {
-  tsundere: ['Tsundere', '♥︎'], cheerful: ['Cheerful', '☀︎'], sensei: ['Sensei', '✎︎'],
-  chill: ['Chill', '❄︎'], rival: ['Rival', '⚔︎'],
+  tsundere: ['Tsundere', emblem('<path d="M12 20.5s-7.5-4.7-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.600-7.500 10.300-7.500 10.300z"/><path d="M12 10.800v4.400M9.800 13h4.400"/>')],
+  cheerful: ['Cheerful', emblem('<circle cx="12" cy="12" r="3.600"/><path d="M12 2.500v3M12 18.500v3M2.500 12h3M18.500 12h3M5.300 5.300l2.100 2.100M16.600 16.600l2.100 2.100M5.300 18.700l2.100-2.100M16.600 7.400l2.100-2.100"/>')],
+  sensei: ['Sensei', emblem('<path d="M12 8v12.500M12 8c-2-1.600-5-2-8-1.400v12.500c3-.6 6-.2 8 1.400M12 8c2-1.600 5-2 8-1.400v12.500c-3-.6-6-.2-8 1.400"/><path d="M12 1.500l.8 1.900 1.900.8-1.900.8-.8 1.900-.8-1.900-1.900-.8 1.900-.8z"/>')],
+  chill: ['Chill', emblem('<path d="M12 2.500v19M3.800 7.250l16.400 9.500M20.200 7.250L3.800 16.750M12 6l-2-2M12 6l2-2M12 18l-2 2M12 18l2 2M6.800 9l-2.700.700M6.800 9l.700-2.700M17.200 15l2.700-.700M17.200 15l-.700 2.700"/>')],
+  rival: ['Rival', emblem('<path d="M4 4l11 11M20 4L9 15M4 4v3M4 4h3M20 4v3M20 4h-3M13.500 16.500l3 3M10.500 16.500l-3 3M15.500 12.500l2.500 2.500M8.500 12.500L6 15"/>')],
 };
-const classOf = c => CLASSES[c.personality] || ['Unique', '✦'];
+const classOf = c => CLASSES[c.personality] || ['Unique', emblem('<path d="M12 2l2.200 7.800L22 12l-7.800 2.200L12 22l-2.200-7.800L2 12l7.800-2.200z"/>')];
 
 // ======================= Speaking =======================
 let bubbleTimer = null;
@@ -121,6 +137,9 @@ $('ui-sounds').addEventListener('change', () => {
   try { localStorage.setItem('uiSounds', uiSounds ? 'on' : 'off'); } catch { /* storage blocked */ }
 });
 
+// a little sparkle wherever you click
+document.addEventListener('pointerdown', e => { if (!e.target.closest?.('#cutscene')) vfx.clickSpark(e.clientX, e.clientY); }, true);
+
 // ======================= Poking =======================
 let pokeTimes = [];
 let lastPokeLine = 0;
@@ -145,30 +164,30 @@ character.onPoke = async zone => {
 function floater(text, cls = '') {
   const f = document.createElement('div');
   f.className = 'floater ' + cls;
-  f.textContent = text;
+  f.innerHTML = rich(text);
   f.style.left = (Math.random() * 80 - 40) + 'px';
   $('floaters').appendChild(f);
   setTimeout(() => f.remove(), 1900);
 }
 
 /** Small notice at the top of the screen. */
-function toast(text) {
+function toast(text, html = null) {
   const t = document.createElement('div');
-  t.className = 'toast';
-  t.textContent = text;
+  t.className = 'toast' + (html ? ' card' : '');
+  t.innerHTML = html || rich(text);
   $('toasts').appendChild(t);
   while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
   setTimeout(() => t.remove(), 4600);
 }
 
 /** Adds a line to the Log. System lines also pop up as a notice. */
-function addMsg(role, text) {
+function addMsg(role, text, quiet = false) {
   const m = document.createElement('div');
   m.className = 'msg ' + role;
-  m.textContent = text;
+  m.innerHTML = rich(text);
   $('chat-log').appendChild(m);
   $('chat-log').scrollTop = 1e9;
-  if (role === 'sys') toast(text);
+  if (role === 'sys' && !quiet) toast(text);
 }
 
 function toastError(e) { addMsg('sys', '⚠ ' + (e.message || e)); }
@@ -185,38 +204,57 @@ function wipe() {
 }
 
 function applyShift() {
-  const px = document.body.dataset.view === 'drawer' ? $('drawer').offsetWidth + 16 : 0;
+  const px = document.body.dataset.view === 'drawer' ? $('drawer').offsetWidth + 16 : 0; // (the dressing room keeps the character centred)
   document.body.style.setProperty('--shift', px + 'px');
   character.setShift(px);
 }
 
-/** The room you picked is the backdrop everywhere; in the dressing room a room you are previewing shows instead. */
+/** Picks the backdrop: your room in the lobby and menus, each banner's themed room on Convene, and in the
+ *  dressing room a soft glow in the character's colour (or the room you are looking at in the Rooms list). */
 function applyEnv() {
-  environment.set(trying?.kind === 'background' ? trying.id : S.background);
+  environment.calm = currentTab === 'gacha';
+  if (currentTab === 'gacha') {
+    const banners = S.catalog.banners || [];
+    environment.set((banners.find(b => b.id === bannerId) || banners[0])?.scene || S.background);
+  } else if (currentTab === 'dress') {
+    if (dressCat === 'room') environment.set(picked?.kind === 'background' ? picked.id : S.background);
+    else environment.set('soft', activeChar().color);
+  } else environment.set(S.background);
 }
 
 function openTab(name) {
   if (name === currentTab) name = null; // pressing the same button again closes the menu
+  if (name === 'dress') dressReturn = currentTab && currentTab !== 'dress' ? currentTab : null;
   const isFull = FULL.includes(name);
   if (isFull || FULL.includes(currentTab)) wipe();
   currentTab = name;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + name));
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-  document.body.dataset.view = !name ? 'lobby' : isFull ? 'full' : 'drawer';
+  document.body.dataset.view = !name ? 'lobby' : isFull ? 'full' : name === 'dress' ? 'dress' : 'drawer';
   document.body.dataset.tab = name || '';
   character.paused = isFull;
-  if (name !== 'dress' && trying) { trying = null; applyTry(); renderDress(); } // stop trying things on when leaving
-  if (name && !isFull) $('drawer-title').textContent = $('tab-' + name).dataset.title;
+  if (picked) { picked = null; applyTry(); } // stop previewing things when leaving or re-entering
+  if (name && !isFull && name !== 'dress') $('drawer-title').textContent = $('tab-' + name).dataset.title;
   $('rates-pop').classList.add('hidden');
   applyShift();
   character.setDressing(name === 'dress');
   if (name !== 'dress') setFrame('full');
   if (name === 'chat') $('chat-log').scrollTop = 1e9;
-  if (name === 'chars') { charPick = S.active_character; renderChars(); }
+  if (name === 'chars') { // the cards pop in only when the screen opens, not on every update
+    charPick = S.active_character; langPick = null; renderChars();
+    $('collection').classList.add('intro'); setTimeout(() => $('collection').classList.remove('intro'), 900);
+  }
   if (name === 'dress') renderDress();
+  if (name === 'journey') journey.opened();
+  if (name !== 'chars' && viewer) viewer.stop();
   applyEnv();
 }
-const closeTab = () => openTab(null);
+let dressReturn = null; // the menu the dressing room was opened from
+const closeTab = () => {
+  const back = currentTab === 'dress' ? dressReturn : null;
+  dressReturn = null;
+  openTab(back);
+};
 
 document.querySelectorAll('#tabs button').forEach(btn => btn.addEventListener('click', () => openTab(btn.dataset.tab)));
 addEventListener('resize', applyShift);
@@ -225,12 +263,18 @@ $('rates-btn').addEventListener('click', () => $('rates-pop').classList.toggle('
 addEventListener('keydown', e => {
   if (!S || !$('cutscene').classList.contains('hidden') || e.ctrlKey || e.altKey || e.metaKey) return;
   const typing = e.target.matches?.('input, textarea, select');
+  if (gameOpen()) { if (e.key === 'Escape') closeGame(); return; } // a mini game is being played
   if (e.key === 'Escape') {
     if (typing) e.target.blur();
     if (currentTab) closeTab();
     return;
   }
   if (typing) return;
+  if (!$('confirm').classList.contains('hidden')) return; // a confirmation window is open
+  if (currentTab === 'chars' || (currentTab === 'dress' && ['outfit', 'head', 'face', 'room'].includes(dressCat))) {
+    if (e.key.startsWith('Arrow')) { e.preventDefault(); gridMove(e.key); return; }
+    if (e.key === 'Enter') { e.preventDefault(); gridEnter(); return; }
+  }
   if (e.key === 'Enter' || e.key === '/') {
     if (FULL.includes(currentTab)) return;
     e.preventDefault();
@@ -241,6 +285,46 @@ addEventListener('keydown', e => {
   if (btn) { voice.uiClick(); openTab(btn.dataset.tab); }
 });
 
+/** Arrow keys: move the selection through the character cards or the dressing room tiles. */
+function gridMove(key) {
+  const chars = currentTab === 'chars';
+  const cells = [...document.querySelectorAll(chars ? '#collection .ccard' : '#dress-grid .tile')];
+  if (!cells.length) return;
+  const cols = cells.filter(c => c.offsetTop === cells[0].offsetTop).length || 1;
+  let i = cells.findIndex(c => (chars ? c.dataset.pick === charPick : picked && c.dataset.item === `${picked.kind}:${picked.id}`));
+  if (i < 0) i = 0;
+  else i += { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[key];
+  if (i < 0 || i >= cells.length) return;
+  voice.uiClick();
+  cells[i].click();
+  document.querySelector(chars ? `#collection .ccard[data-pick="${charPick}"]` : '#dress-grid .tile.trying')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+/** Enter: make the picked character your companion, or wear / use the picked item (buying stays a deliberate click). */
+function gridEnter() {
+  if (currentTab === 'chars') { $('char-detail').querySelector('[data-char]')?.click(); return; }
+  if (!picked) return;
+  if (ownsItem(picked.kind, picked.id)) $('dress-action').querySelector('[data-apply]:not(:disabled)')?.click();
+  else toast('Not owned yet: click Buy to get it.');
+}
+
+/** A small themed window asking to confirm. The ✓ and ✕ unlock after `seconds` (a countdown is shown). Resolves true / false. */
+function confirmAfter(title, text, seconds = 5) {
+  return new Promise(resolve => {
+    const yes = $('confirm-yes'), no = $('confirm-no');
+    $('confirm-title').textContent = title;
+    $('confirm-text').textContent = text;
+    $('confirm').classList.remove('hidden');
+    let left = seconds;
+    const show = () => { yes.disabled = no.disabled = left > 0; $('confirm-count').textContent = left > 0 ? left : ''; $('confirm-count').classList.toggle('done', left <= 0); };
+    show();
+    const timer = setInterval(() => { left--; show(); if (left <= 0) clearInterval(timer); }, 1000);
+    const done = answer => { clearInterval(timer); $('confirm').classList.add('hidden'); yes.onclick = no.onclick = null; resolve(answer); };
+    yes.onclick = () => done(true);
+    no.onclick = () => done(false);
+  });
+}
+
 // ======================= Rendering =======================
 async function setState(newState) {
   S = newState;
@@ -248,11 +332,11 @@ async function setState(newState) {
   const char = activeChar();
   if (loadedModelFor !== char.id) {
     loadedModelFor = char.id;
-    character.setStance(char.idle);
     const ok = await character.load(`/models/${char.model}`, char.color);
     $('model-hint').classList.toggle('hidden', ok);
     $('model-hint').textContent = `Placeholder shown: export ${char.name} from VRoid Studio as models/${char.model}`;
   }
+  character.setPersonality(S.personality_overrides[char.id] || char.personality); // how they stand while idle
   applyTry();
 }
 
@@ -261,13 +345,12 @@ function render() {
   // HUD
   $('hud-char').textContent = char.name;
   $('hud-title').textContent = char.title || '';
-  $('hud-avatar-fallback').textContent = char.name[0];
   const av = $('hud-avatar');
   if (av.dataset.id !== char.id) {
     av.dataset.id = char.id;
     av.style.display = '';
-    av.onerror = () => { av.style.display = 'none'; };
-    av.onload = () => { $('hud-avatar-fallback').textContent = ''; }; // the letter is only for characters without a picture
+    $('hud-avatar-fallback').textContent = '';
+    av.onerror = () => { av.style.display = 'none'; $('hud-avatar-fallback').textContent = char.name[0]; }; // the letter is only for characters without a picture
     av.src = portrait(char.id, true);
   }
   $('hud-level').textContent = S.level;
@@ -282,12 +365,16 @@ function render() {
   renderChars();
   renderDress();
   renderOptions();
+  journey.render();
 }
+
+/** How the lotus count is written: an infinity sign in Dev Mode. */
+const pointsText = p => (S?.dev_mode ? '∞' : p);
 
 function updatePoints(p) {
   const el = $('hud-points');
-  el.textContent = p;
-  $('gacha-points').textContent = p;
+  el.textContent = pointsText(p);
+  $('gacha-points').textContent = pointsText(p);
   if (lastPoints !== null && p !== lastPoints) {
     const box = el.parentElement;
     box.classList.remove('flash-red', 'flash-green');
@@ -326,7 +413,7 @@ async function sendChat(text) {
     const res = await post('/chat', { message: text, history: chatHistory });
     chatHistory.push({ role: 'user', text }, { role: 'model', text: res.lesson ? `${res.reply}\n\n${res.lesson.markdown}` : res.reply });
     addMsg('bot', res.reply);
-    for (const t of res.added_tasks) addMsg('sys', `📝 New quest: ${t.title}${t.due ? ' (due ' + t.due + ')' : ''}`);
+    for (const t of res.added_tasks) addMsg('sys', t.source === 'ai' ? `✦ ${activeChar().name} gave you a quest: ${t.title}` : `📝 New quest: ${t.title}${t.due ? ' (due ' + t.due + ')' : ''}`);
     if (res.added_tasks.length) voice.sfx('task_done');
     await setState(res.state);
     for (const ev of res.added_events || []) addMsg('sys', `🗓 Scheduled: ${ev.title} · ${whenLabel(ev.start)}`);
@@ -445,8 +532,7 @@ function renderWeek() {
   const html = `
     <div><b>${streak}</b><small>day streak</small></div>
     <div><b>${h ? h + 'h ' : ''}${m}m</b><small>focused (week)</small></div>
-    <div><b>${w.tasks}</b><small>quests (week)</small></div>
-    <div><b>${S.stats.pomodoros || 0}</b><small>pomodoros</small></div>`;
+    <div><b>${w.tasks}</b><small>quests (week)</small></div>`;
   $('week-card').innerHTML = html;
   $('tracker-week').innerHTML = html;
   $('hud-streak').textContent = streak;
@@ -454,7 +540,7 @@ function renderWeek() {
 }
 
 const questRow = (t, withDelete) => `
-  <li><span class="diff ${t.difficulty}">${t.difficulty}</span>
+  <li><span class="diff ${t.difficulty}">${t.difficulty}</span>${t.source === 'ai' ? '<span class="ai-tag" title="Suggested by your companion">✦</span>' : ''}
     <span class="t">${esc(t.title)}${t.due ? `<span class="due ${dueInfo(t.due).cls}">${esc(dueInfo(t.due).label)}</span>` : ''}</span>
     <button data-done="${t.id}" title="Complete">✓</button>${withDelete ? `<button class="ghost" data-del="${t.id}" title="Delete">✕</button>` : ''}</li>`;
 
@@ -528,6 +614,17 @@ $('note-form').addEventListener('submit', async e => {
   } catch (err) { toastError(err); }
 });
 
+// Every so often the companion reminds you about quests that are overdue or due today / tomorrow
+let lastReminder = Date.now();
+setInterval(() => {
+  if (!S || chatBusy || voice.isSpeaking() || currentTab || focusActive || Date.now() - lastReminder < 30 * 60000) return;
+  const line = reminderLine();
+  if (!line) return;
+  lastReminder = Date.now();
+  addMsg('sys', '⏰ ' + line);
+  say(line, { emotion: line.includes('overdue') ? 'angry' : 'surprised' });
+}, 60000);
+
 /** When a scheduled session starts, the companion says so (once). Sessions missed while the app was closed are just marked. */
 async function checkEvents() {
   if (!S) return;
@@ -547,13 +644,18 @@ async function checkEvents() {
 }
 setInterval(checkEvents, 20000);
 
-async function completeTask(id) {
+async function completeTask(id, from) {
   const res = await post(`/tasks/${id}/complete`);
+  journey.questDone(S.tasks.find(t => t.id === id)); // a goal's starter quest: its progress note is rewritten
   voice.sfx('task_done');
   floater(`+${res.xp_gained} XP  +${res.points_gained} ◆`);
+  const [x, y] = vfx.at(from); // the reward bursts out of the button you pressed and flies to your points
+  vfx.burst(x, y, '#ffd27a', 36);
+  vfx.flyTo(x, y, $('hud-points').parentElement, LOTUS, 7);
   await setState(res.state);
   if (res.levels_gained) {
     voice.sfx('level_up');
+    vfx.levelUp(res.state.level);
     floater(`LEVEL UP! +${res.level_bonus} ◆`, 'big');
     yell('levelup', '', 'surprised');
   } else {
@@ -578,32 +680,53 @@ $('plan-btn').addEventListener('click', async () => {
 
 // ======================= Focus =======================
 let focusActive = false;
+let focusSynced = false; // true once the first status check has caught up with past events
 let pomoChoice = 25; // 0 = free session, 25 / 50 = pomodoro minutes
 try { const saved = localStorage.getItem('pomoChoice'); if (saved !== null) pomoChoice = +saved; } catch { /* storage blocked */ }
-const BREAK_FOR = { 25: 5, 50: 10 };
+const breakFor = m => ({ 25: 5, 50: 10 }[m] || Math.max(1, Math.round(m / 5)));
+let pomoCustom = false; // true when the Custom length is selected
+try { pomoCustom = localStorage.getItem('pomoCustom') === '1'; } catch { /* storage blocked */ }
 const fmt = sec => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 
 function pomoHint(m) {
-  return m ? `${m} min work, then a ${BREAK_FOR[m]} min break. The timer pauses while you're distracted. Earn 2 points + 1 XP per focused minute, plus a bonus for every finished round.`
-    : 'Free session: counts up until you end it. Earn 2 points + 1 XP per focused minute.';
+  return m ? `${m} min work, then a ${breakFor(m)} min break. The timer pauses while you're distracted. Earn 5 Sakura Petals + 2 XP per focused minute, plus a bonus for every finished round.`
+    : 'Free session: counts up until you end it. Earn 5 Sakura Petals + 2 XP per focused minute.';
 }
 
 function renderPomoPicker() {
   document.querySelectorAll('#pomo-picker button').forEach(b => {
-    b.classList.toggle('active', +b.dataset.pomo === pomoChoice);
+    if (!b.dataset.step) b.classList.toggle('active', b.dataset.pomo === 'custom' ? pomoCustom : !pomoCustom && +b.dataset.pomo === pomoChoice);
     b.disabled = focusActive;
   });
   $('pomo-picker').classList.toggle('locked', focusActive);
+  $('pomo-custom').classList.toggle('hidden', !pomoCustom);
+  $('pomo-minutes').disabled = focusActive;
+  if (pomoCustom && document.activeElement !== $('pomo-minutes')) $('pomo-minutes').value = pomoChoice || 15;
   $('focus-hint').textContent = pomoHint(pomoChoice);
 }
 
 $('pomo-picker').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b || focusActive) return;
-  pomoChoice = +b.dataset.pomo;
-  try { localStorage.setItem('pomoChoice', pomoChoice); } catch { /* storage blocked */ }
+  if (b.dataset.step) { // the − and + next to the custom minutes
+    const box = $('pomo-minutes');
+    box.value = Math.max(1, Math.min(180, (Math.round(+box.value) || 0) + +b.dataset.step));
+    box.dispatchEvent(new Event('input'));
+    return;
+  }
+  pomoCustom = b.dataset.pomo === 'custom';
+  pomoChoice = pomoCustom ? Math.max(1, Math.min(180, +$('pomo-minutes').value || 15)) : +b.dataset.pomo;
+  try { localStorage.setItem('pomoChoice', pomoChoice); localStorage.setItem('pomoCustom', pomoCustom ? '1' : '0'); } catch { /* storage blocked */ }
   renderPomoPicker();
   $('focus-timer').textContent = pomoChoice ? fmt(isDemo() ? 30 : pomoChoice * 60) : '00:00';
+});
+
+$('pomo-minutes').addEventListener('input', () => {
+  if (!pomoCustom || focusActive) return;
+  pomoChoice = Math.max(1, Math.min(180, Math.round(+$('pomo-minutes').value) || 1));
+  try { localStorage.setItem('pomoChoice', pomoChoice); } catch { /* storage blocked */ }
+  $('focus-hint').textContent = pomoHint(pomoChoice);
+  $('focus-timer').textContent = fmt(isDemo() ? 30 : pomoChoice * 60);
 });
 
 function renderFocusSettings() {
@@ -643,19 +766,27 @@ $('focus-toggle').addEventListener('click', async () => {
       say(pomoChoice ? `Focus mode on. ${pomoChoice} minutes, then you get a break. I'm watching you.`
         : `Focus mode on. I'm watching you.`, { emotion: 'relaxed' });
     } else {
+      if (!await confirmAfter('End focus session?', 'You keep what you have earned so far, but the current round will not count.')) return;
       const res = await post('/focus/stop');
       $('warning').classList.add('hidden');
       await setState(res.state);
       floater(`+${res.points_gained} ◆  +${res.xp_gained} XP`);
       const rounds = res.pomodoros ? ` Finished ${res.pomodoros} pomodoro${res.pomodoros > 1 ? 's' : ''} (+${res.pomodoro_bonus} bonus).` : '';
-      addMsg('sys', `Focus session done: ${res.minutes} min focused, earned ${res.points_gained} points, lost ${res.points_lost}.${rounds}`);
-      if (res.levels_gained) { voice.sfx('level_up'); yell('levelup', '', 'surprised'); }
+      addMsg('sys', `Focus session done: ${res.minutes} min focused, earned ${res.points_gained} Sakura Petals, lost ${res.points_lost}.${rounds}`);
+      if (res.levels_gained) { voice.sfx('level_up'); vfx.levelUp(res.state.level); yell('levelup', '', 'surprised'); }
     }
   } catch (err) { toastError(err); }
 });
 
-$('sim-on').addEventListener('click', () => post('/focus/simulate', { name: 'YouTube', on: true }));
-$('sim-app').addEventListener('click', () => post('/focus/simulate', { name: 'discord.exe', kind: 'app', on: true }));
+// Distractions only count during a focus session, so simulating one starts a (free) session if none is running
+async function simulate(body) {
+  try {
+    const res = await post('/focus/simulate', body);
+    if (res.started_session) addMsg('sys', 'Started a focus session to show the distraction. The warning appears in a second.');
+  } catch (err) { toastError(err); }
+}
+$('sim-on').addEventListener('click', () => simulate({ name: 'YouTube', on: true }));
+$('sim-app').addEventListener('click', () => simulate({ name: 'discord.exe', kind: 'app', on: true }));
 $('open-taskmgr').addEventListener('click', async () => {
   try {
     const res = await post('/focus/taskmanager');
@@ -674,6 +805,7 @@ async function pollFocus() {
     const st = await api('/focus/status?since=' + lastEventId);
     const wasActive = focusActive;
     focusActive = st.active;
+    lockGames();
     if (wasActive !== focusActive) renderPomoPicker();
     const pomo = st.active && st.pomodoro;
     const onBreak = pomo && st.phase === 'break';
@@ -691,7 +823,7 @@ async function pollFocus() {
     const pill = $('hud-focus');
     pill.className = 'pill focus-pill ' + (!st.active ? 'off' : onBreak ? 'break' : st.stage === 'ok' ? 'on' : st.stage);
     pill.textContent = !st.active ? 'Focus off' : onBreak ? `☕ Break ${shown}` : st.stage === 'ok' ? `${pomo ? '🍅' : 'Focusing'} ${shown}`
-      : st.stage === 'warning' ? `⚠ ${st.offender}` : `▼ Losing points`;
+      : st.stage === 'warning' ? `⚠ ${st.offender}` : `▼ Losing petals`;
     $('focus-status').textContent = !st.active ? 'Not focusing' : onBreak ? 'Relax! Distractions are allowed on breaks.'
       : st.stage === 'ok' ? 'Focused ✓' : st.offender_kind === 'app'
         ? `${st.offender} is still running! Timer paused until you end it in Task Manager.`
@@ -705,8 +837,8 @@ async function pollFocus() {
       banner.classList.remove('hidden');
       banner.classList.toggle('soft', st.stage === 'warning');
       $('warn-text').textContent = st.stage === 'warning'
-        ? `Close ${st.offender} within ${Math.max(0, t.grace - st.distracted_for)}s or you start losing points!`
-        : `Losing points! ${st.offender} gets force-closed in ${Math.max(0, t.force - st.distracted_for)}s`;
+        ? `Close ${st.offender} within ${Math.max(0, t.grace - st.distracted_for)}s or you start losing Sakura Petals!`
+        : `Losing Sakura Petals! ${st.offender} gets force-closed in ${Math.max(0, t.force - st.distracted_for)}s`;
       // Apps like Discord keep running in the system tray after you close the window,
       // so the session stays paused until the process is really gone.
       const isApp = st.offender_kind === 'app';
@@ -718,8 +850,9 @@ async function pollFocus() {
 
     for (const ev of st.events) {
       lastEventId = Math.max(lastEventId, ev.id);
-      handleFocusEvent(ev);
+      if (focusSynced) handleFocusEvent(ev); // (the first check only catches up: old warnings must not replay when the app opens)
     }
+    focusSynced = true;
   } catch { /* backend restarting */ }
   setTimeout(pollFocus, 1000);
 }
@@ -742,7 +875,7 @@ function handleFocusEvent(ev) {
   } else if (ev.type === 'break_start') {
     voice.sfx('level_up');
     floater(`🍅 Round done! +${ev.points} ◆`, 'big');
-    addMsg('sys', `🍅 Pomodoro finished! +${ev.points} bonus points. Break: ${ev.app}.`);
+    addMsg('sys', `🍅 Pomodoro finished! +${ev.points} bonus Sakura Petals. Break: ${ev.app}.`);
     lastYellAt = now;
     yell('break_start', ev.app, 'happy');
   } else if (ev.type === 'break_over') {
@@ -759,17 +892,19 @@ function renderGacha() {
   const g = S.gacha;
   const banners = S.catalog.banners || [];
   const b = banners.find(x => x.id === bannerId) || banners[0];
-  $('pull1').innerHTML = `<span class="gem">◆</span>×${g.pull_cost}&nbsp;&nbsp; Convene ×1`;
-  $('pull10').innerHTML = `<span class="gem">◆</span>×${g.ten_pull_cost}&nbsp;&nbsp; Convene ×10`;
-  $('pull1').disabled = S.points < g.pull_cost;
+  $('pull1').innerHTML = S.free_wishes > 0 ? `FREE WISH (${S.free_wishes})&nbsp;&nbsp; SUMMON ×1` : `${LOTUS}×${g.pull_cost}&nbsp;&nbsp; SUMMON ×1`;
+  $('pull10').innerHTML = `${LOTUS}×${g.ten_pull_cost}&nbsp;&nbsp; SUMMON ×10`;
+  $('pull1').disabled = S.points < g.pull_cost && !(S.free_wishes > 0);
   $('pull10').disabled = S.points < g.ten_pull_cost;
   $('pity-limit').textContent = g.pity_limit;
   $('pity-text').textContent = `Pity: ${S.pity.since_legendary} / ${g.pity_limit}`;
+  if (bannerId && !banners.some(x => x.id === bannerId)) { bannerId = null; shownBanner = null; } // that banner rotated out
   $('force-row').classList.toggle('hidden', !isDemo());
   $('rates').innerHTML = g.rates.slice().reverse().map(r =>
     `<tr class="r-${r.rarity}"><td class="rarity-label">${r.rarity}</td><td>${(r.chance * 100).toFixed(1)}%</td></tr>`).join('');
   if (!b || shownBanner === b.id) return; // only redraw the art when the banner changes (it animates in)
   shownBanner = bannerId = b.id;
+  applyEnv(); // each banner has its own themed backdrop
   $('banner-list').innerHTML = banners.map(x => `
     <button class="bthumb ${x.id === b.id ? 'active' : ''}" data-banner="${x.id}" title="${esc(x.name)}">
       ${x.tag ? `<span class="tag">${esc(x.tag)}</span>` : ''}${x.featured.map(id => portraitImg(id, true)).join('')}</button>`).join('');
@@ -778,9 +913,23 @@ function renderGacha() {
   $('banner-glyph').textContent = b.name;
   $('banner-art').innerHTML = b.featured.map((id, i) => {
     const c = charById(id);
-    return `<div class="art a${i} r-${c.rarity}"><div class="initial">${esc(c.name[0])}</div>${portraitImg(id)}
+    // a few glints around each character, in their own colour (the room's own particles are switched off on this screen)
+    const glints = Array.from({ length: 5 }, (_, k) => `<i style="left:${8 + ((k * 37 + i * 23) % 80)}%;top:${6 + ((k * 29 + i * 17) % 52)}%;animation-delay:${(k * 0.9 + i * 0.4).toFixed(1)}s"></i>`).join('');
+    return `<div class="art a${i} r-${c.rarity}" style="--cc:${c.color}"><div class="initial">${esc(c.name[0])}</div><div class="art-body">${portraitImg(id)}</div><div class="art-fx">${glints}</div>
       <div class="plate"><i>${classOf(c)[1]}</i><div><b>${esc(c.name)}</b><div class="stars">${stars(c.rarity)}</div></div></div></div>`;
   }).join('');
+}
+
+/** After a summon: one tidy card with the new companions' faces and what the rest turned into. */
+function summonSummary(results) {
+  const news = results.filter(r => r.new);
+  const best = results.filter(r => r.type === 'character' && !r.new);
+  const gained = results.reduce((sum, r) => sum + (r.refund || 0), 0);
+  addMsg('sys', `✨ Summoned: ${results.map(r => `${r.name} (${r.rarity})`).join(', ')}`, true); // the full list goes in the Log only
+  toast('', `<div class="st-title">✦ Summon complete</div>
+    ${news.length ? `<div class="st-row">${news.map(n => `<span class="st-char r-${n.rarity}">${portraitImg(n.id, true)}<b>${esc(n.name)}</b><small>NEW</small></span>`).join('')}</div>` : ''}
+    <div class="st-sub">${[news.length ? 'Meet them in Characters (C)' : '', best.length ? `${best.length} already with you` : '', gained ? `+${gained} ${LOTUS}` : ''].filter(Boolean).join(' · ') || 'Better luck next time'}</div>`);
+  if (news.length) { vfx.confetti(90); vfx.burst(innerWidth / 2, innerHeight * 0.3, '#ff8fc4', 50); }
 }
 
 async function doPull(count) {
@@ -788,25 +937,44 @@ async function doPull(count) {
     voice.stopSpeaking();
     const res = await post('/gacha/pull', { count, force_rarity: $('force-rarity').value || null, banner: bannerId });
     environment.paused = true;
-    await playCutscene(res.results, res.best_rarity, { japanese: S.settings.voice_mode === 'sub' }).finally(() => { environment.paused = false; });
+    character.paused = true; // the summon has its own 3D stage; rest the lobby while it plays
+    await playCutscene(res.results, res.best_rarity, {
+      japanese: S.settings.voice_mode === 'sub',
+      // each character is revealed in front of their own signature scene, tinted with their colour
+      details: r => {
+        const c = r.type === 'character' ? charById(r.id) : null;
+        return {
+          icon: c ? classOf(c)[1] : classOf({})[1], color: c?.color || '#9aa5b1', backdrop: environment.thumb(c?.scene || S.background, 1280, 720),
+          model: c ? `/models/${c.model}` : null, personality: c?.personality, // the real 3D model makes its entrance
+        };
+      },
+    }).finally(() => { environment.paused = false; character.paused = FULL.includes(currentTab); });
     await setState(res.state);
     const news = res.results.filter(r => r.new);
-    addMsg('sys', `✨ Pulled: ${res.results.map(r => `${r.name} (${r.rarity})`).join(', ')}`);
-    if (news.length) addMsg('sys', `New character! Meet ${news.map(n => n.name).join(' and ')} in Characters (C).`);
+    summonSummary(res.results);
   } catch (err) { toastError(err); }
 }
+// The limited banners change every hour: show the countdown, and fetch the new ones when it runs out
+setInterval(async () => {
+  if (!S) return;
+  const left = Math.round(S.gacha.rotates_at - Date.now() / 1000);
+  if (left <= 0) { try { shownBanner = null; await setState(await api('/state')); } catch { /* try again next second */ } return; }
+  if (currentTab === 'gacha') $('banner-rotate').textContent = `New banners in ${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`;
+}, 1000);
+
 $('pull1').addEventListener('click', () => doPull(1));
 $('pull10').addEventListener('click', () => doPull(10));
 
 // ======================= Characters (data bank) =======================
 let charFilter = 'all';
 let charPick = null;
+let langPick = null; // 'en' or 'ja': the voice chosen for the picked character (needed before they can become your companion)
 
 function renderChars() {
   const all = S.catalog.characters;
   const owned = id => S.owned_characters[id];
   $('chars-count').textContent = `${all.filter(c => owned(c.id)).length}/${all.length}`;
-  $('char-filters').innerHTML = [['all', 'All', '▦'], ...Object.entries(CLASSES).map(([k, v]) => [k, v[0], v[1]])].map(([k, label, icon]) =>
+  $('char-filters').innerHTML = [['all', 'All', emblem('<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>')], ...Object.entries(CLASSES).map(([k, v]) => [k, v[0], v[1]])].map(([k, label, icon]) =>
     `<button data-filter="${k}" class="${charFilter === k ? 'active' : ''}"><i>${icon}</i>${label}</button>`).join('');
   const list = all.filter(c => charFilter === 'all' || c.personality === charFilter);
   if (!charPick || !charById(charPick)) charPick = S.active_character;
@@ -815,31 +983,37 @@ function renderChars() {
       <div class="initial">${esc(c.name[0])}</div>${portraitImg(c.id, true)}
       <span class="cls" title="${classOf(c)[0]}">${classOf(c)[1]}</span>
       ${c.id === S.active_character ? '<span class="tag">Companion</span>' : ''}
-      ${owned(c.id) ? '' : '<div class="notidx">Not Indexed</div>'}
+      ${owned(c.id) ? '' : '<div class="notidx">Not Collected</div>'}
       <div class="cname">${esc(c.name)}</div><div class="stars">${stars(c.rarity)}</div>
     </div>`).join('') || '<small>No characters of this type yet.</small>';
   renderCharDetail();
 }
+
+let viewer = null; // the 3D model in the detail panel (made the first time the Characters screen opens)
 
 function renderCharDetail() {
   const c = charById(charPick);
   const own = S.owned_characters[c.id];
   const isActive = c.id === S.active_character;
   const voices = [c.voice_id && 'English', c.voice_id_ja && 'Japanese'].filter(Boolean).join(' + ') || 'Default voice';
+  const lang = isActive ? (S.settings.voice_mode === 'sub' ? 'ja' : 'en') : langPick; // the current companion shows the language in use
   $('char-detail').innerHTML = `
-    <div class="d-art r-${c.rarity} ${own ? '' : 'locked'}"><div class="initial">${esc(c.name[0])}</div>${portraitImg(c.id)}</div>
+    <div class="d-art r-${c.rarity} ${own ? '' : 'locked'}"><div class="initial">${esc(c.name[0])}</div>${portraitImg(c.id)}${own ? '<span class="d-hint">Drag to rotate</span>' : ''}</div>
     <div class="rarity-label r-${c.rarity} ${c.rarity === 'Unbound' ? 'rainbow-text' : ''}">${c.rarity.toUpperCase()}</div>
     <h2>${esc(c.name)}</h2>
     <div class="d-title">${esc(c.title || '')}</div>
     <div class="stars">${stars(c.rarity)}</div>
-    <div class="d-meta"><span>${classOf(c)[1]} ${classOf(c)[0]}</span>${own ? `<span>Bond ${own.bond}/6</span>` : ''}<span>Voice: ${voices}</span></div>
+    <div class="d-meta"><span>${classOf(c)[1]} ${classOf(c)[0]}</span><span>Voice: ${voices}</span></div>
     ${own ? `<p class="d-line">“${esc(c.intro_line)}”</p>
-      <div class="row"><button data-preview="en" data-id="${c.id}">▶ English</button><button data-preview="ja" data-id="${c.id}">▶ Japanese</button></div>`
-      : '<p class="d-line">You have not met this character yet. Convene to bring them to your room.</p>'}
+      <div class="lang-pick"><small>${isActive ? 'Speaks to you in' : 'Choose how they speak to you'}</small><div class="row">
+        <button data-lang="en" class="${lang === 'en' ? 'active' : ''}">▶ English</button><button data-lang="ja" class="${lang === 'ja' ? 'active' : ''}">▶ Japanese</button></div></div>`
+      : '<p class="d-line">You have not met this character yet. Summon to bring them to your room.</p>'}
     <div class="spacer"></div>
-    ${!own ? '<button class="primary big" data-open="gacha">Go to Convene</button>'
-      : isActive ? '<button class="big" disabled>Current companion</button><button class="primary big" data-open="dress">Customize</button>'
-      : `<button class="primary big" data-char="${c.id}">Set as companion</button>`}`;
+    ${!own ? '<button class="primary big" data-open="gacha">Go to Summon</button>'
+      : isActive ? '<div class="d-buttons"><button class="big" disabled>Current companion</button><button class="primary big" data-open="dress">Customize</button></div>'
+      : `<button class="primary big" data-char="${c.id}" ${lang ? '' : 'disabled'}>${lang ? 'Set as companion' : 'Pick English or Japanese first'}</button>`}`;
+  // characters you own are shown as their real 3D model (the picture stays until it has loaded)
+  if (currentTab === 'chars' && own) (viewer ||= new ModelViewer()).show($('char-detail').querySelector('.d-art'), c.id, `/models/${c.model}`, S.personality_overrides[c.id] || c.personality);
 }
 
 /** Plays a character's intro line in their English or Japanese voice. */
@@ -851,52 +1025,70 @@ function previewVoice(id, lang) {
 }
 
 // ======================= Dressing Room (wardrobe + shop in one) =======================
-// Like a dress-up game: pick a category, click a tile to wear it. Locked items show their price;
-// clicking one tries it on the character (or previews the room) and a Buy button appears.
-let dressCat = 'head';   // head | face | room | persona | voice
-let trying = null;       // { kind: 'accessory' | 'background', id } being previewed but not owned yet
+// Laid out like a character screen in a game: categories and the picked item on the left, the list of items
+// on the right, the character in the middle on a soft backdrop of their own colour.
+// Clicking an item in the list previews it on the character; the button on the left wears, takes off or buys it.
+let dressCat = 'outfit'; // outfit | head | face | room | persona | voice
+let picked = null;       // { kind: 'accessory' | 'background', id }: the item selected in the list
 let accThumbs = null;    // little pictures of the accessories, made the first time the dressing room opens
+const CAT_NAMES = { outfit: 'Outfits', head: 'Headwear', face: 'Eyewear', room: 'Backgrounds', persona: 'Personality', voice: 'Voice' };
 
-const ownsItem = (kind, id) => (kind === 'accessory' ? S.owned_accessories : S.owned_backgrounds).includes(id);
-const findItem = (kind, id) => (kind === 'accessory' ? S.catalog.accessories : S.catalog.backgrounds).find(x => x.id === id);
+const OWNED = { accessory: 'owned_accessories', background: 'owned_backgrounds', outfit: 'owned_outfits' };
+const CATALOG = { accessory: 'accessories', background: 'backgrounds', outfit: 'outfits' };
+const ownsItem = (kind, id) => S[OWNED[kind]].includes(id) || ownClothes(kind, id);
+const findItem = (kind, id) => S.catalog[CATALOG[kind]].find(x => x.id === id);
+/** Is this outfit the current companion's own default clothes? Those are free for them (and only for them). */
+const ownClothes = (kind, id) => kind === 'outfit' && findItem(kind, id)?.default_for === S.active_character;
+const isOn = (kind, id) => (kind === 'accessory' ? S.equipped_accessories.includes(id) : kind === 'outfit' ? S.outfit === id || (!S.outfit && ownClothes(kind, id)) : S.background === id);
+const thumbOf = (kind, id) => (kind === 'outfit' ? portrait(findItem(kind, id).portrait) : kind === 'accessory'
+  ? (accThumbs ||= accessoryThumbs(S.catalog.accessories.map(a => a.id)))[id] : environment.thumb(id));
 
-/** Shows what is equipped, plus the item being tried on. */
+/** Shows what is equipped, plus the picked item as a preview. */
 function applyTry() {
-  character.setAccessories(trying?.kind === 'accessory' ? [...S.equipped_accessories, trying.id] : S.equipped_accessories);
+  const preview = picked?.kind === 'accessory' && !S.equipped_accessories.includes(picked.id) ? [picked.id] : [];
+  character.setAccessories([...S.equipped_accessories, ...preview]);
+  const outfit = findItem('outfit', picked?.kind === 'outfit' ? picked.id : S.outfit);
+  character.setOutfit(outfit && outfit.for === activeChar().gender && outfit.default_for !== S.active_character ? outfit : null); // clothes only fit a body of the same build
   applyEnv();
 }
 
-function tile(kind, it, img) {
-  const owned = ownsItem(kind, it.id);
-  const on = kind === 'accessory' ? S.equipped_accessories.includes(it.id) : S.background === it.id;
-  const badge = on ? (kind === 'accessory' ? '✓ Wearing' : '✓ In use') : owned ? 'Owned' : `◆ ${it.price}`;
-  return `<button class="tile ${kind === 'accessory' ? 'acc' : ''} ${on ? 'worn' : ''} ${owned ? '' : 'locked'} ${trying?.id === it.id ? 'trying' : ''}"
-    data-item="${kind}:${it.id}" title="${esc(it.name)}"><img src="${img}" alt="" draggable="false">
+function tile(kind, it) {
+  const owned = ownsItem(kind, it.id), on = isOn(kind, it.id);
+  const badge = on ? (kind !== 'background' ? '✓ Wearing' : '✓ In use') : owned ? (S[OWNED[kind]].includes(it.id) ? 'Owned' : 'Free') : `${LOTUS} ${it.price}`;
+  return `<button class="tile ${kind !== 'background' ? 'acc' : ''} ${on ? 'worn' : ''} ${owned ? '' : 'locked'} ${picked?.id === it.id ? 'trying' : ''}"
+    data-item="${kind}:${it.id}" title="${esc(it.name)}"><img src="${thumbOf(kind, it.id)}" alt="" draggable="false"${kind === 'outfit' ? ` class="fit" style="filter:${tintFilter(it)}"` : ''}>
     <span class="badge">${badge}</span><span class="tname">${esc(it.name)}</span></button>`;
 }
 
 function renderDress() {
   document.querySelectorAll('#dress-cats button').forEach(b => b.classList.toggle('active', b.dataset.cat === dressCat));
-  const items = ['head', 'face', 'room'].includes(dressCat);
+  $('dress-cat-title').textContent = CAT_NAMES[dressCat];
+  $('dress-points').textContent = pointsText(S.points);
+  const items = ['outfit', 'head', 'face', 'room'].includes(dressCat);
   $('dress-grid').classList.toggle('hidden', !items);
   $('dress-action').classList.toggle('hidden', !items);
   $('dress-persona').classList.toggle('hidden', dressCat !== 'persona');
   $('dress-voice').classList.toggle('hidden', dressCat !== 'voice');
   if (currentTab === 'dress' && items) { // (skip the picture work while the dressing room is closed)
-    if (dressCat === 'room') {
-      $('dress-grid').innerHTML = S.catalog.backgrounds.map(b => tile('background', b, environment.thumb(b.id))).join('');
+    const kind = dressCat === 'room' ? 'background' : dressCat === 'outfit' ? 'outfit' : 'accessory';
+    const all = kind === 'accessory' ? S.catalog.accessories.filter(a => (a.slot || 'head') === dressCat)
+      : kind === 'outfit' ? S.catalog.outfits.filter(o => o.for === activeChar().gender) : S.catalog[CATALOG[kind]];
+    const groups = [...new Set(all.map(it => it.group))];
+    const list = all.map((it, i) => ({ it, i })).sort((x, y) => groups.indexOf(x.it.group) - groups.indexOf(y.it.group) || x.it.price - y.it.price || x.i - y.i).map(x => x.it);
+    // outfits are listed under headings (Casual, School, Formal, Dress-up)
+    $('dress-grid').innerHTML = list.map((it, i) => (it.group && it.group !== list[i - 1]?.group ? `<div class="grid-head">${esc(it.group)}</div>` : '') + tile(kind, it)).join('');
+    const it = picked && findItem(picked.kind, picked.id);
+    if (it) {
+      const owned = ownsItem(picked.kind, it.id), on = isOn(picked.kind, it.id), short = it.price - S.points;
+      const mine = ownClothes(picked.kind, it.id) && !S.outfit || (ownClothes(picked.kind, it.id) && !S.owned_outfits.includes(it.id)); // their own default clothes
+      const label = !owned ? (short > 0 ? `Need ${short} more ${LOTUS}` : `Buy · ${LOTUS} ${it.price}`)
+        : mine ? (on ? 'Wearing' : 'Wear') : picked.kind !== 'background' ? (on ? 'Take off' : 'Wear') : (on ? 'In use' : 'Use this background');
+      $('dress-action').innerHTML = `<img class="${picked.kind !== 'background' ? 'acc' : ''} ${picked.kind === 'outfit' ? 'fit' : ''}" src="${thumbOf(picked.kind, it.id)}" alt=""${picked.kind === 'outfit' ? ` style="filter:${tintFilter(it)}"` : ''}>
+        <div class="what"><small>${on ? (picked.kind !== 'background' ? 'Wearing' : 'In use') : owned ? (mine ? `${esc(activeChar().name.split(' ')[0])}'s own outfit · free` : 'Owned') : 'Previewing · not owned'}</small><b>${esc(it.name)}</b></div>
+        <button class="primary big" data-apply ${(!owned && short > 0) || (owned && on && (picked.kind === 'background' || mine)) ? 'disabled' : ''}>${label}</button>`;
     } else {
-      accThumbs ||= accessoryThumbs(S.catalog.accessories.map(a => a.id));
-      $('dress-grid').innerHTML = S.catalog.accessories.filter(a => (a.slot || 'head') === dressCat)
-        .map(a => tile('accessory', a, accThumbs[a.id])).join('');
+      $('dress-action').innerHTML = `<div class="what">Pick an item on the right to see it on ${esc(activeChar().name)}.<br>Items with a price can be previewed first, then bought here.</div>`;
     }
-    const it = trying && findItem(trying.kind, trying.id);
-    const short = it ? it.price - S.points : 0;
-    $('dress-action').innerHTML = it
-      ? `<div class="what">${trying.kind === 'accessory' ? 'Trying on' : 'Previewing'}<b>${esc(it.name)}</b></div>
-         <button class="primary big" data-buyitem ${short > 0 ? 'disabled' : ''}>${short > 0 ? `Need ${short} more ◆` : `Buy · ◆ ${it.price}`}</button>`
-      : `<div class="what">Click an item to ${dressCat === 'room' ? 'use' : 'wear'} it. Items with a price can be tried first, then bought right here.</div>
-         <div class="pill hud-points"><span class="gem">◆</span><b>${S.points}</b></div>`;
   }
   const char = activeChar();
   const p = S.personality_overrides[char.id] || char.personality;
@@ -909,30 +1101,49 @@ function renderDress() {
   document.querySelectorAll('input[name=vmode]').forEach(r => { r.checked = r.value === S.settings.voice_mode; });
 }
 
-async function clickItem(kind, id) {
-  if (ownsItem(kind, id)) {
-    trying = null;
-    if (kind === 'accessory') {
-      const on = !S.equipped_accessories.includes(id);
-      await setState(await post('/equip', { kind, id, on }));
-      if (on) character.setEmotion('happy', 3);
-    } else {
-      await setState(await post('/equip', { kind, id }));
-    }
-  } else { // not owned: try it on (click again to take it off)
-    trying = trying?.id === id ? null : { kind, id };
-    applyTry();
-    renderDress();
-  }
+environment.onPicture = () => { if (currentTab === 'dress' && dressCat === 'room') renderDress(); };
+
+/** Clicking an item in the list selects it and previews it. */
+function clickItem(kind, id) {
+  picked = { kind, id };
+  applyTry();
+  renderDress();
 }
 
-async function buyTrying() {
-  const { kind, id } = trying;
-  await setState(await post('/shop/buy', { kind, id }));
-  trying = null;
-  voice.sfx('task_done');
-  await setState(await post('/equip', { kind, id, on: true })); // wear / use it right away
-  say('Ooh, thank you! I love it!', { emotion: 'happy' });
+// What the companion says when something new is put on: [English, Japanese]
+const WEAR_LINES = [['Sugoi! I love it!', 'すごい！これ、気に入った！'], ['Super! Nice pick!', '最高！いいセンスだね！'], ['Ooh, how do I look?', 'ねえ、どう？似合う？'],
+  ['Perfect fit!', 'ぴったり！'], ['Not bad at all!', 'なかなかいいね！'], ['Yay, this one is great!', 'やった、これすごくいい！']];
+const ROOM_LINES = [['Wow, what a view!', 'わあ、いい景色！'], ['Sugoi! I like it here!', 'すごい！ここ、気に入った！'], ['Ooh, nice place!', 'おお、いい場所だね！']];
+
+/** A brief happy reaction to a new item: a small gesture, a sparkle and a short line. */
+function reactToItem(kind) {
+  const lines = kind === 'background' ? ROOM_LINES : WEAR_LINES;
+  const [text, ja] = lines[Math.floor(Math.random() * lines.length)];
+  character.react();
+  vfx.burst(innerWidth / 2, innerHeight * 0.42, '#ffd27a', 22);
+  say(text, { emotion: 'happy', ja, seconds: 3 });
+}
+
+/** The button under the picked item: buy it if it isn't owned, otherwise wear / take off / use it. */
+async function applyPicked() {
+  const { kind, id } = picked;
+  if (ownClothes(kind, id) && S.outfit !== id) { // back into their own clothes: take off whatever else is on
+    if (S.outfit) { await setState(await post('/equip', { kind, id: S.outfit, on: false })); reactToItem(kind); }
+  } else if (!ownsItem(kind, id)) {
+    await setState(await post('/shop/buy', { kind, id }));
+    voice.sfx('task_done');
+    vfx.burst(innerWidth / 2, innerHeight * 0.4, '#ff8fc4', 60);
+    await setState(await post('/equip', { kind, id, on: true })); // wear / use it right away
+    reactToItem(kind);
+  } else if (kind !== 'background') {
+    const on = !isOn(kind, id);
+    await setState(await post('/equip', { kind, id, on }));
+    if (on) reactToItem(kind);
+  } else {
+    const changed = !isOn(kind, id);
+    await setState(await post('/equip', { kind, id }));
+    if (changed) reactToItem(kind);
+  }
 }
 
 function setFrame(view) {
@@ -961,12 +1172,12 @@ document.querySelectorAll('input[name=vmode]').forEach(r => r.addEventListener('
 
 // ======================= One click handler for all the generated buttons =======================
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-item],[data-buyitem],[data-cat],[data-turn],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del],[data-delevent],[data-delnote],[data-sub]');
+  const t = e.target.closest('[data-item],[data-apply],[data-cat],[data-lang],[data-turn],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del],[data-delevent],[data-delnote],[data-sub]');
   if (!t || t.disabled) return;
   const d = t.dataset;
   try {
     if (d.done) {
-      await completeTask(d.done);
+      await completeTask(d.done, t);
     } else if (d.delevent) {
       await setState(await api(`/events/${d.delevent}`, { method: 'DELETE' }));
     } else if (d.delnote) {
@@ -977,25 +1188,33 @@ document.addEventListener('click', async e => {
       await setState(await api(`/tasks/${d.del}`, { method: 'DELETE' }));
     } else if (d.item) {
       const [kind, id] = d.item.split(':');
-      await clickItem(kind, id);
-    } else if ('buyitem' in d) {
-      await buyTrying();
+      clickItem(kind, id);
+    } else if ('apply' in d) {
+      await applyPicked();
     } else if (d.cat) {
       dressCat = d.cat;
-      trying = null;
+      picked = null;
       applyTry();
       renderDress();
     } else if (d.turn) {
       character.turn(+d.turn);
+    } else if (d.lang) { // English / Japanese in the Characters screen: hear it, and choose it
+      previewVoice(charPick, d.lang);
+      if (charPick === S.active_character) await setState(await post('/settings', { settings: { voice_mode: d.lang === 'ja' ? 'sub' : 'dub' } }));
+      else { langPick = d.lang; renderCharDetail(); }
     } else if (d.char) {
+      if (langPick) await post('/settings', { settings: { voice_mode: langPick === 'ja' ? 'sub' : 'dub' } }); // they speak in the language you chose
       await setState(await post('/equip', { kind: 'character', id: d.char }));
       const c = activeChar();
-      closeTab();
-      character.wave(2.5);
+      openTab(null);
+      vfx.burst(innerWidth / 2, innerHeight * 0.45, c.color, 70);
       say(c.intro_line, { emotion: 'happy', ja: c.intro_line_ja });
     } else if (d.pick) {
       charPick = d.pick;
-      renderChars();
+      langPick = null;
+      document.querySelectorAll('#collection .ccard').forEach(c => c.classList.toggle('selected', c.dataset.pick === d.pick));
+      renderCharDetail();
+      $('char-detail').animate([{ opacity: 0.35, transform: 'translateX(10px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'ease-out' });
     } else if (d.filter) {
       charFilter = d.filter;
       renderChars();
@@ -1016,9 +1235,41 @@ document.addEventListener('click', async e => {
 
 // ======================= Options =======================
 function renderOptions() {
-  $('sys-status').innerHTML = `<small>ElevenLabs voice: ${elevenOn ? '✅ connected' : '❌ no key (using browser voice)'}<br>
+  if (document.activeElement !== $('player-name')) $('player-name').value = S.player_name || '';
+  const spin = S.wheel_info.available, rounds = S.rhythm_tickets || 0;
+  $('wheel-status').textContent = spin ? 'Your free spin is ready! 10 to 500 Sakura Petals, or a rare Free Wish.' : 'Spun today. Come back tomorrow for another free spin!';
+  document.querySelector('[data-game="wheel"]').classList.toggle('ready', spin);
+  document.querySelector('[data-game="wheel"]').classList.toggle('locked', !spin);
+  $('rhythm-status').textContent = rounds ? `Tap the notes to the beat. ${rounds} round${rounds > 1 ? 's' : ''} unlocked.` : 'Locked: finish a quest to unlock a round.';
+  document.querySelector('[data-game="rhythm"]').classList.toggle('locked', !rounds);
+  showCooldowns();
+  $('hud-dev').classList.toggle('hidden', !S.dev_mode);
+  $('dev-form').classList.toggle('hidden', !!S.dev_mode);
+  $('dev-off').classList.toggle('hidden', !S.dev_mode);
+  $('dev-status').textContent = S.dev_mode ? 'Dev Mode is ON: every character, outfit, accessory and background is unlocked and Sakura Petals are unlimited. Turning it off brings back your real progress.'
+    : 'Unlocks every character and item with unlimited Sakura Petals. Enter the password to turn it on.';
+  $('sys-status').innerHTML = `<small>${elevenOn ? '' : 'ElevenLabs voice: ❌ no key (using browser voice)<br>'}
     Quests done: ${S.stats.tasks_done} · Pulls: ${S.stats.pulls} · Distractions caught: ${S.stats.distractions}</small>`;
 }
+
+$('dev-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    const res = await post('/dev', { on: true, password: $('dev-password').value });
+    $('dev-password').value = '';
+    document.activeElement?.blur();
+    await setState(res);
+    vfx.confetti(80);
+    addMsg('sys', 'Dev Mode on: everything is unlocked.');
+  } catch (err) { $('dev-password').value = ''; toastError(err); }
+});
+$('dev-off').addEventListener('click', async () => {
+  try {
+    loadedModelFor = null; // the companion may change back
+    await setState(await post('/dev', { on: false }));
+    addMsg('sys', 'Dev Mode off: your real progress is back.');
+  } catch (err) { toastError(err); }
+});
 
 // Performance mode: lower resolution and fewer effects, for laptops without a dedicated graphics card
 let perfMode = false;
@@ -1032,6 +1283,17 @@ function setPerfMode(on) {
 }
 $('perf-mode').addEventListener('change', () => setPerfMode($('perf-mode').checked));
 if (perfMode) setPerfMode(true);
+
+// A running frames-per-second count (window.__fps), so slowness can be checked from the log
+(function countFrames() {
+  let frames = 0, since = performance.now();
+  const tick = now => {
+    frames++;
+    if (now - since >= 2000) { window.__fps = Math.round(frames * 1000 / (now - since)); frames = 0; since = now; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+})();
 
 /** Counts frames for a few seconds; if the app is running slowly, turns performance mode on by itself. */
 function watchFrameRate() {
@@ -1060,6 +1322,109 @@ $('reset-btn').addEventListener('click', async () => {
   await setState(await post('/reset'));
 });
 
+// ======================= Journey (goals, ideas, feed) =======================
+const journey = initJourney({
+  post: (path, body, method) => (method ? api(path, { method }) : post(path, body)),
+  state: () => S,
+  setState: s => setState(s),
+  sendChat: text => sendChat(text),
+  say: (text, opts) => say(text, opts),
+  addMsg: (role, text) => addMsg(role, text),
+  petals: n => { floater(`+${n} ◆`); vfx.flyTo(innerWidth - 220, innerHeight * 0.4, $('hud-points').parentElement, LOTUS, 3); },
+  goalDone: (reward, goal) => { // finishing a goal is a big moment
+    voice.sfx('level_up');
+    vfx.confetti(180);
+    floater(`🎯 Goal reached! +${reward.xp} XP  +${reward.points} ◆`, 'big');
+    vfx.flyTo(innerWidth / 2, innerHeight * 0.4, $('hud-points').parentElement, LOTUS, 14);
+    if (reward.levels) vfx.levelUp(S.level);
+    addMsg('sys', `🎯 Goal reached: ${goal?.title || ''} (+${reward.xp} XP, +${reward.points} ◆)`);
+    character.react();
+    say(`You did it${S.player_name ? ', ' + S.player_name : ''}! "${goal?.title || 'Your goal'}" is done. I'm so proud of you!`, { emotion: 'happy', expressive: true });
+  },
+});
+
+// ======================= Mini games =======================
+/** Mini games are a break-time thing: while a focus session runs they are put away completely. */
+function lockGames() {
+  document.querySelector('#tabs [data-tab="games"]').classList.toggle('hidden', focusActive);
+  if (focusActive && currentTab === 'games') closeTab();
+  if (focusActive && gameOpen()) closeGame();
+}
+/** Petal Catch and Memory Match rest for a few minutes after a round: the cards count down to when they can be played again. */
+const coolLeft = id => (S?.dev_mode ? 0 : Math.max(0, Math.ceil((S?.game_ready?.[id] || 0) - Date.now() / 1000)));
+function showCooldowns() {
+  for (const id of ['catch', 'memory']) {
+    const card = document.querySelector(`[data-game="${id}"]`), left = coolLeft(id);
+    card.classList.toggle('locked', left > 0);
+    card.querySelector('em').textContent = left > 0 ? `again in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : 'up to 80';
+  }
+}
+setInterval(() => { if (currentTab === 'games') showCooldowns(); }, 1000);
+
+/** Puts the player's name into a spoken line, after any [tone] tags: "[happy] Good morning!" -> "[happy] Jo! Good morning!" */
+const withName = text => (S?.player_name ? text.replace(/^((?:\[[^\]]+\]\s*)*)/, `$1${S.player_name}! `) : text);
+
+async function startGame(id) {
+  if (focusActive) return addMsg('sys', '🎮 Mini games are put away during a focus session.');
+  if (coolLeft(id) > 0) return addMsg('sys', `🎮 That game is resting. You can play it again in ${Math.floor(coolLeft(id) / 60)}:${String(coolLeft(id) % 60).padStart(2, '0')}.`);
+  if (id === 'rhythm' && !(S.rhythm_tickets > 0)) { say('Finish a quest first, then we can play Rhythm Tap!', { emotion: 'happy' }); return addMsg('sys', '🎵 Rhythm Tap is locked: finish a quest to unlock a round.'); }
+  if (id === 'wheel' && !S.wheel_info.available) return addMsg('sys', '🎡 You already used today\'s free spin. Come back tomorrow!');
+  voice.stopSpeaking();
+  character.paused = true; environment.paused = true; // rest the lobby while the game runs
+  const score = await playGame(id, { portraits: S.catalog.characters.map(c => portrait(c.id)), slices: S.wheel_info.slices, spin: () => post('/wheel/spin') });
+  environment.paused = false; character.paused = FULL.includes(currentTab);
+  if (score === null) { if (id === 'wheel') setState(await api('/state')); return; } // (closed mid-spin: the prize was still given)
+  const who = S.player_name ? `, ${S.player_name}` : '';
+  try {
+    if (id === 'wheel') { // the prize was already given when the wheel was spun
+      await setState(score.state);
+      voice.sfx(score.wish || score.points >= 200 ? 'level_up' : 'task_done');
+      if (score.wish) {
+        vfx.confetti(120);
+        floater('🎟 Free Wish!', 'big');
+        addMsg('sys', '🎡 Daily spin: a Free Wish! Your next single Summon is free.');
+        say(`No way${who}! A free wish! Go summon someone!`, { emotion: 'surprised' });
+      } else {
+        floater(`🎡 +${score.points} ◆`, 'big');
+        vfx.flyTo(innerWidth / 2, innerHeight * 0.45, $('hud-points').parentElement, LOTUS, 10);
+        addMsg('sys', `🎡 Daily spin: +${score.points} ◆`);
+        say(score.points >= 200 ? `Sugoi${who}! ${score.points} Sakura Petals from one spin!` : `${score.points} Sakura Petals${who}. Spin again tomorrow!`, { emotion: 'happy' });
+      }
+      character.react();
+      return;
+    }
+    const res = await post('/minigame', { game: id, score });
+    await setState(res.state);
+    if (res.earned > 0) {
+      voice.sfx('task_done');
+      floater(`+${res.earned} ◆`, 'big');
+      vfx.flyTo(innerWidth / 2, innerHeight * 0.45, $('hud-points').parentElement, LOTUS, 10);
+      character.react();
+      say(res.earned >= 60 ? `Sugoi${who}! ${res.earned} Sakura Petals!` : `Nice one${who}! That's ${res.earned} Sakura Petals.`, { emotion: 'happy' });
+    } else say('No petals that time. Try again!', { emotion: 'sad' });
+  } catch (err) { toastError(err); }
+}
+
+/** The 7-day login streak card, shown when today's gift is claimed. Click anywhere (or wait) to close it. */
+function showStreak(daily) {
+  $('streak-days').innerHTML = daily.rewards.map((r, i) => `<div class="streak-day ${i + 1 < daily.day ? 'done' : i + 1 === daily.day ? 'today' : ''}"><small>Day ${i + 1}</small><b>${r}</b></div>`).join('');
+  $('streak-text').innerHTML = rich(`Day ${daily.day}: +${daily.gift} ◆`);
+  $('streak').classList.remove('hidden');
+  const close = () => $('streak').classList.add('hidden');
+  $('streak').onclick = close;
+  setTimeout(close, 6000);
+}
+document.querySelectorAll('[data-game]').forEach(b => b.addEventListener('click', () => startGame(b.dataset.game)));
+$('mg-close').addEventListener('click', closeGame);
+$('player-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    await setState(await post('/player', { name: $('player-name').value }));
+    document.activeElement?.blur();
+    addMsg('sys', S.player_name ? `Got it: I'll call you ${S.player_name}.` : 'Name cleared.');
+  } catch (err) { toastError(err); }
+});
+
 // ======================= Start =======================
 async function boot() {
   try {
@@ -1073,43 +1438,83 @@ async function boot() {
   }
   renderPomoPicker();
   pollFocus();
+  setTimeout(() => environment.preload(S.catalog.backgrounds.map(b => b.id)), 2500); // room pictures, for the dressing room and summons
   if (elevenOn) voice.preloadSfx(['task_done', 'level_up', 'warning', 'gacha_charge', 'gacha_meteor',
     'reveal_common', 'reveal_epic', 'reveal_gold', 'reveal_unbound']);
   // Daily login gift (once per calendar day)
   let daily = null;
   try { daily = await post('/daily'); await setState(daily.state); } catch (e) { console.warn(e); }
 
-  const c = activeChar();
-  addMsg('bot', `${c.intro_line}`);
-  showBubble(c.intro_line);
-  if (daily?.claimed) addMsg('sys', `🎁 Daily gift: +${daily.gift} ◆ (day ${daily.streak} streak${daily.streak >= 7 ? ', max bonus!' : ''})`);
   const reminder = reminderLine();
-  if (reminder) addMsg('sys', '⏰ ' + reminder);
-  character.wave(3);
+  if (daily?.claimed) addMsg('sys', `🎁 Daily gift: +${daily.gift} ◆ (day ${daily.streak} streak${daily.streak >= 7 ? ', max bonus!' : ''})`, true);
+  if (reminder) addMsg('sys', '⏰ ' + reminder, true);
   setTimeout(watchFrameRate, 2500); // once the model has settled in
+  setTimeout(preloadSummonArt, 4000); // the summon scene's painted pictures
   setTimeout(checkEvents, 8000);
 
-  // Browsers block sound until the first click or key press, so greet out loud on the first interaction.
-  let greeted = false;
+  // The companion greets you out loud (by name) every time you come in; the gift and reminders only the first time.
+  let firstGreeting = true;
   const greet = async () => {
-    if (greeted) return;
-    greeted = true;
+    const first = firstGreeting;
+    firstGreeting = false;
+    const c = activeChar();
     if (Date.now() - lastPokeLine < 500) await new Promise(r => setTimeout(r, 3500)); // let the poke reaction finish
-    character.wave(2.5);
     const h = new Date().getHours();
     const stage = h >= 5 && h < 11 ? 'greet_morning' : h < 17 && h >= 11 ? 'greet_afternoon' : h >= 17 && h < 22 ? 'greet_evening' : 'greet_night';
+    character.wave(3);
     try {
-      const line = await post('/yell', { stage });
-      await say(line.tts_text, { emotion: stage === 'greet_night' ? 'surprised' : 'happy', expressive: true });
-    } catch { await say(c.intro_line, { emotion: 'happy' }); }
+      const line = withName((await post('/yell', { stage })).tts_text);
+      addMsg('bot', stripTags(line)); // the Log shows the greeting that was actually spoken
+      await say(line, { emotion: stage === 'greet_night' ? 'surprised' : 'happy', expressive: true });
+    } catch {
+      addMsg('bot', withName(c.intro_line));
+      await say(withName(c.intro_line), { emotion: 'happy' });
+    }
+    if (!first) return;
     if (daily?.claimed) {
+      showStreak(daily);
       voice.sfx('task_done');
       floater(`🎁 +${daily.gift} ◆`, 'big');
-      await say(`Here's your daily gift: ${daily.gift} points! ${daily.streak > 1 ? `That's a ${daily.streak} day streak!` : 'Come back tomorrow for more!'}`, { emotion: 'happy' });
+      vfx.flyTo(innerWidth / 2, innerHeight * 0.4, $('hud-points').parentElement, LOTUS, 10);
+      await say(`Login streak, day ${daily.day}: ${daily.gift} Sakura Petals! ${daily.day < 7 ? 'Come back tomorrow for more!' : 'That is the big one!'}`, { emotion: 'happy' });
+      if (S.wheel_info.available) await say('Your free daily spin is ready in Mini Games, too!', { emotion: 'happy' });
     }
     if (reminder) await say(reminder, { emotion: reminder.includes('overdue') ? 'angry' : 'surprised' });
+    journey.daily(); // today's ideas (said out loud), goal notes and feed
   };
-  document.addEventListener('pointerdown', greet, { once: true });
-  document.addEventListener('keydown', greet, { once: true });
+
+  // The title screen: wait there until the player enters (and tells us their name the first time), then greet.
+  const mainMenu = async () => {
+    voice.stopSpeaking();
+    $('bubble').classList.add('hidden');
+    character.paused = true; environment.paused = true; // the lobby rests behind the title
+    await runTitle({
+      name: S.player_name || '', saveName: async name => setState(await post('/player', { name })), click: () => voice.uiClick(),
+      options: {
+        get: () => ({ voice: S.settings.voice_mode, sounds: uiSounds, perf: perfMode }),
+        set: async (key, value) => {
+          if (key === 'voice') await setState(await post('/settings', { settings: { voice_mode: value } }));
+          else if (key === 'sounds') { $('ui-sounds').checked = value; $('ui-sounds').dispatchEvent(new Event('change')); }
+          else if (key === 'perf') setPerfMode(value);
+        },
+      },
+    });
+    environment.paused = false; character.paused = FULL.includes(currentTab);
+    document.body.classList.add('arrive');
+    setTimeout(() => document.body.classList.remove('arrive'), 1600);
+    voice.sfx('task_done', 0.5);
+    setTimeout(greet, 900);
+  };
+  $('to-title').addEventListener('click', () => { if (currentTab) openTab(null); mainMenu(); });
+
+  if (new URLSearchParams(location.search).has('notitle')) { // (automated tests) straight into the lobby
+    skipTitle();
+    showBubble(activeChar().intro_line);
+    // Browsers block sound until the first click or key press, so greet out loud on the first interaction.
+    let greeted = false;
+    const once = () => { if (!greeted) { greeted = true; greet(); } };
+    document.addEventListener('pointerdown', once, { once: true });
+    document.addEventListener('keydown', once, { once: true });
+  } else mainMenu();
 }
 boot();

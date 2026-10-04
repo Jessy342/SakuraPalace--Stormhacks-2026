@@ -4,29 +4,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { buildAccessory, DEFAULT_FACE } from './accessories.js';
+import { REST, GESTURES, REACTIONS, DEFAULT, blend, writePose } from './poses.js';
+import { wearModelOutfit } from './outfits.js';
 
 const EMOTIONS = ['happy', 'angry', 'sad', 'surprised', 'relaxed'];
 const MAX_YAW = 0.7;    // how far she can turn her head left/right (radians, ~40°)
 const MAX_PITCH = 0.35; // how far she can look up/down (~20°)
 const IDLE_LOOK_BACK = 4; // seconds without mouse movement before she looks back at you
-
-// Idle gestures: every so often, when she's calm and quiet, she does a little something on her own.
-const IDLE_LENGTH = { stretch: 3.4, lookAround: 4.2, hairTouch: 3.2, handsBehind: 4.5, headTilt: 2.8, yawn: 3.4, handOnHip: 3.8 };
-const IDLE_GAP = [7, 16]; // seconds between gestures (random in this range)
-// Signature idle stances: the always-on "standing around" loop (like Mario's bob or Sonic's foot tap).
-// Each character picks one with "idle" in characters.json. Arm poses are for VRM normalized bones (right side; left is mirrored).
-export const ARMS = {
-  crossed: { upper: [-0.3, 0.45, 1.12], lower: [0, 1.75, 1.05], leftUpper: [-0.42, 0.45, 1.12], leftLower: [0, 1.6, 1.05] }, // arms folded across the chest (left forearm in front)
-  clasped: { upper: [-0.15, 0.35, 1.2], lower: [0, 1.2, 0.5] },      // hands held together in front
-  behind: { upper: [0.45, 0, 1.3], lower: [0, 0, 0.5] },          // hands clasped behind the back
-  pockets: { upper: [0.25, -0.15, 1.2], lower: [0, 1.2, 0.7] },     // thumbs hooked in the pockets
-};
-const mirror = ([x, y, z]) => [x, -y, -z];
-const armPose = name => {
-  const a = ARMS[name];
-  return { rightUpperArm: a.upper, rightLowerArm: a.lower, leftUpperArm: mirror(a.leftUpper || a.upper), leftLowerArm: mirror(a.leftLower || a.lower) };
-};
-const smooth = (a, b, x) => { const k = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return k * k * (3 - 2 * k); };
 
 export class Character {
   constructor(canvas, getMouthLevel) {
@@ -36,7 +20,8 @@ export class Character {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
 
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    this.ambient = new THREE.AmbientLight(0xffffff, 0.9);
+    this.scene.add(this.ambient);
     const key = new THREE.DirectionalLight(0xffffff, 2.3);
     key.position.set(1, 2, 3);
     this.scene.add(key);
@@ -59,6 +44,10 @@ export class Character {
     this.accGroup = new THREE.Group();
     this.equipped = [];
     this.face = DEFAULT_FACE; // eye positions in accessory space (used by glasses)
+    this.outfitId = '';
+    this.outfit = null;
+    this.outfitTurn = 0;
+    this.worn = null;
 
     // View: menus cover the right side of the screen, so the character slides over to stay centred in what's left.
     this.shift = 0; this.shiftTarget = 0;
@@ -87,7 +76,7 @@ export class Character {
         if (Math.abs(dx) > 4) this.drag.moved = true;
         if (this.drag.moved) { this.spin = this.spinTarget = this.drag.spin + dx * 0.012; canvas.style.cursor = 'grabbing'; return; }
       }
-      if (e.target === canvas) canvas.style.cursor = this.hitTest(this.cursor) ? 'pointer' : this.dragRotate ? 'grab' : '';
+      if (e.target === canvas) canvas.style.cursor = this.hitTest(this.cursor) ? 'var(--hand)' : this.dragRotate ? 'grab' : '';
     });
 
     // Poking: click her body for a reaction, click her head for a headpat.
@@ -97,24 +86,30 @@ export class Character {
     this.blushUntil = 0;
     this.waveUntil = 0;
     this.waveAmt = 0;
-    this.idle = null;     // the idle gesture playing now: { name, start, dir }
-    this.idleAmt = 0;     // fades gestures in/out when she gets interrupted
-    this.nextIdle = 6;
-    this.gesture = null;  // this frame's gesture pose (see idlePose)
-    this.stanceName = 'polite'; // signature idle loop (see stancePose)
-    this.stanceAmt = 1;   // eases off while she shows a strong emotion
-    this.stance = null;
+    // Idle life: each personality has its own way of standing, and now and then they stretch, look around, fix their hair...
+    this.personality = 'cheerful';
+    this.gesture = null;      // { pose, start, seconds } while one is playing
+    this.nextGesture = 9;
+    this.talk = 0;            // 0..1, eases in while she is speaking
     canvas.addEventListener('pointerdown', e => {
       const r = canvas.getBoundingClientRect();
       const ndc = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
-      if (this.dragRotate) { this.drag = { x: e.clientX, spin: this.spin, moved: false, ndc }; return; } // poke on release if it wasn't a drag
-      this.poke(ndc);
+      this.drag = { x: e.clientX, spin: this.spin, moved: false, ndc }; // drag to turn them; a plain click pokes (on release)
     });
     window.addEventListener('pointerup', () => {
       const d = this.drag;
       this.drag = null;
       if (d && !d.moved) this.poke(d.ndc);
     });
+    // Scroll wheel / touchpad over the character: up and down zooms in toward the face, sideways (or Shift + scroll) turns them.
+    // A touchpad pinch arrives as Ctrl + scroll and zooms too.
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const unit = e.deltaMode === 1 ? 32 : 1; // (a mouse wheel that reports lines instead of pixels)
+      const sideways = e.shiftKey ? e.deltaY : e.deltaX, upDown = e.shiftKey ? 0 : e.deltaY;
+      if (Math.abs(sideways) > Math.abs(upDown) && !e.ctrlKey) this.spinTarget += sideways * unit * 0.004;
+      else this.zoomTarget = Math.max(0, Math.min(1, this.zoomTarget - upDown * unit * (e.ctrlKey ? 0.012 : 0.0016)));
+    }, { passive: false });
     document.addEventListener('pointerleave', () => { this.cursor = null; });
     document.addEventListener('mouseout', e => { if (!e.relatedTarget) this.cursor = null; });
 
@@ -156,6 +151,7 @@ export class Character {
     const p = Math.round(this.shift);
     this.camera.setViewOffset(w + p, h, p, 0, w, h);
     this.camera.updateProjectionMatrix();
+    this.placeShadow();
   }
 
   frameCamera() {
@@ -166,9 +162,47 @@ export class Character {
     const y = THREE.MathUtils.lerp(span * 0.39, h - 0.16, z);
     this.camera.position.set(0, y, THREE.MathUtils.lerp(fullDist, faceDist, z));
     this.camera.lookAt(0, y, 0);
+    this.placeShadow();
+  }
+
+  /** Tells the page where the feet are on screen, so the shadow on the ground sits right under them. */
+  placeShadow() {
+    this.camera.updateMatrixWorld();
+    const p = new THREE.Vector3(0, 0, 0).project(this.camera);
+    const css = document.documentElement.style;
+    css.setProperty('--feet-x', ((p.x + 1) / 2 * innerWidth).toFixed(1) + 'px');
+    css.setProperty('--feet-y', ((1 - p.y) / 2 * innerHeight).toFixed(1) + 'px');
+  }
+
+  /** Tints the light on the character with the room's colour ([r, g, b] 0-255), so they look lit by the scene. */
+  setRoomLight(rgb) {
+    const max = Math.max(...rgb, 1);
+    this.ambient.color.setRGB(...rgb.map(v => 0.68 + 0.32 * v / max));
+  }
+
+  /** Wears an outfit: { id, model, hue, saturate, brightness } from the shop list, or null for the model's own clothes. */
+  setOutfit(outfit) {
+    if ((outfit?.id || '') === this.outfitId) return;
+    this.outfitId = outfit?.id || '';
+    this.outfit = outfit || null;
+    this.applyOutfit();
+  }
+
+  async applyOutfit() {
+    const turn = ++this.outfitTurn; // if the outfit changes again while this one is loading, the newer one wins
+    if (this.worn) { this.worn.remove(); this.worn = null; }
+    const vrm = this.vrm, o = this.outfit;
+    if (!vrm || !o) return;
+    const tint = o.hue || o.saturate != null || o.brightness != null || o.contrast != null ? o : null;
+    try {
+      const worn = await wearModelOutfit(vrm, `/models/${o.model}`, tint);
+      if (turn !== this.outfitTurn || vrm !== this.vrm) worn.remove();
+      else this.worn = worn;
+    } catch (e) { console.warn('[outfit] could not load', o.model, e.message); }
   }
 
   clear() {
+    this.worn = null; // (its pieces are thrown away with the model)
     if (this.root) {
       this.scene.remove(this.root);
       if (this.vrm) VRMUtils.deepDispose(this.vrm.scene);
@@ -218,6 +252,7 @@ export class Character {
     }
     this.frameCamera();
     this.attachAccessories();
+    this.applyOutfit();
     return ok;
   }
 
@@ -233,10 +268,36 @@ export class Character {
       return p.applyQuaternion(this.accBasis.clone().invert());
     };
     const a = toAcc(l), b = toAcc(r);
-    const eyeX = Math.abs(a.x - b.x) / 2;
-    if (!(eyeX > 0.01 && eyeX < 0.1)) return DEFAULT_FACE; // weird rig, keep the defaults
-    // eye bones sit inside the eyeball, so push the frames forward to the face surface
-    return { eyeX, eyeY: (a.y + b.y) / 2, frontZ: Math.max(a.z, b.z) + 0.035 };
+    // Where the eyes really are: the eye bones sit near the middle of the head and deep inside it, so the
+    // irises of the face mesh are measured instead (their centre and size), and the depth of the face is found
+    // by pointing a ray at the bridge of the nose.
+    vrm.scene.updateMatrixWorld(true);
+    const undo = this.accBasis.clone().invert();
+    let eyeX = 0.031, eyeY = (a.y + b.y) / 2, lens = 0.026;
+    let iris = null;
+    vrm.scene.traverse(o => { if (o.isMesh && /EyeIris/.test([].concat(o.material)[0]?.name || '')) iris = o; });
+    if (iris) {
+      const pos = iris.geometry.attributes.position, box = new THREE.Box3(), p = new THREE.Vector3();
+      for (let k = 0; k < pos.count; k++) {
+        p.fromBufferAttribute(pos, k).applyMatrix4(iris.matrixWorld);
+        this.head.worldToLocal(p).applyQuaternion(undo);
+        if (p.x > 0.005) box.expandByPoint(p); // one eye is enough: the face is symmetrical
+      }
+      if (!box.isEmpty()) {
+        eyeX = (box.min.x + box.max.x) / 2;
+        eyeY = (box.min.y + box.max.y) / 2;
+        lens = Math.max(box.max.x - box.min.x, box.max.y - box.min.y) * 0.5 * 1.45; // a lens a bit bigger than the iris
+      }
+    }
+    let frontZ = Math.max(a.z, b.z) + 0.07;
+    const toWorld = p => this.head.localToWorld(p.applyQuaternion(this.accBasis));
+    const from = toWorld(new THREE.Vector3(0, eyeY, 0.4)), to = toWorld(new THREE.Vector3(0, eyeY, 0));
+    const ray = new THREE.Raycaster(from, to.sub(from).normalize(), 0, 1);
+    const faces = [];
+    vrm.scene.traverse(o => { if (o.isMesh && /^Face/.test(o.name)) faces.push(o); });
+    const hit = ray.intersectObjects(faces, false)[0];
+    if (hit) frontZ = this.head.worldToLocal(hit.point.clone()).applyQuaternion(undo).z + 0.004;
+    return { eyeX, eyeY, frontZ, r: lens };
   }
 
   /** Chibi anime schoolgirl built from simple shapes, shown until a real VRoid .vrm model is added. */
@@ -424,6 +485,9 @@ export class Character {
     if (this.head) this.head.add(this.accGroup);
   }
 
+  /** tsundere | cheerful | sensei | chill | rival: decides how the character stands while idle. */
+  setPersonality(p) { this.personality = REST[p] ? p : 'cheerful'; }
+
   /** emotion: happy | angry | sad | surprised | relaxed | neutral */
   setEmotion(emotion, seconds = 4) {
     this.emotion = EMOTIONS.includes(emotion) ? emotion : 'neutral';
@@ -455,23 +519,17 @@ export class Character {
     if (Math.abs(this.zoomTarget - this.zoom) > 0.002) { this.zoom += (this.zoomTarget - this.zoom) * Math.min(1, dt * 5); this.frameCamera(); }
     if (!this.drag) this.spin += (this.spinTarget - this.spin) * Math.min(1, dt * 6);
 
-    this.updateIdle(t, dt);
-    const w = this.weights;
-    const strongEmotion = Math.max(w.happy, w.angry, w.sad, w.surprised);
-    this.stanceAmt += ((1 - strongEmotion * 0.85) - this.stanceAmt) * Math.min(1, dt * 5);
-    this.stance = this.stancePose(t);
     this.updateLook(dt, t);
+    const w = this.weights;
     if (this.root) {
-      // whole-body motion: happy bounce, surprised hop, angry shake
-      this.root.position.y = Math.abs(Math.sin(t * 6)) * 0.04 * w.happy + Math.max(0, Math.sin(t * 9)) * 0.03 * w.surprised;
+      // whole-body motion: only an angry shake (the happy bounce and surprised hop looked jumpy while she talks)
+      this.root.position.y = 0;
       this.root.position.x = Math.sin(t * 40) * 0.01 * w.angry;
       this.root.rotation.y = Math.sin(t * 0.5) * 0.06 + this.spin;
       // squish when poked: quick squash and stretch that settles in ~0.6s
       const since = t - this.pokeAt;
       const squish = since < 0.6 ? Math.sin(since * 22) * Math.exp(-since * 7) * 0.12 : 0;
       this.root.scale.set(1 + squish * 0.6, 1 - squish, 1 + squish * 0.6);
-      if (this.gesture) this.root.position.y += this.gesture.rise * this.gesture.k;
-      this.root.position.y -= this.stance.drop; // knees bending in the idle bob
     }
     this.blush += ((t < this.blushUntil ? 1 : 0) - this.blush) * Math.min(1, dt * 5);
     this.waveAmt += ((t < this.waveUntil ? 1 : 0) - this.waveAmt) * Math.min(1, dt * 6);
@@ -484,178 +542,36 @@ export class Character {
 
   /** Returns 'head', 'body' or null for a point on screen (normalized device coords). */
   hitTest(ndc) {
-    if (!this.root) return null;
+    // Checked on every mouse move, so it has to be cheap: test the cursor against a ball around the head and a box
+    // around the body. (Testing against the real 3D mesh took ~150ms per mouse move and made the whole app stutter.)
+    if (!this.root || !this.head) return null;
     this.raycaster.setFromCamera(ndc, this.camera);
-    const hit = this.raycaster.intersectObject(this.root, true).find(h => h.object.visible);
-    if (!hit) return null;
-    const headPos = new THREE.Vector3();
-    if (this.head) this.head.getWorldPosition(headPos);
-    // VRM head bones sit at the base of the skull; the chibi anchor sits in the middle of its big head
-    const headStart = this.vrm ? headPos.y - 0.02 : headPos.y - 0.32;
-    return hit.point.y >= headStart ? 'head' : 'body';
+    const ray = this.raycaster.ray;
+    const head = this._hitHead || (this._hitHead = new THREE.Vector3());
+    this.head.getWorldPosition(head);
+    const ball = this._hitBall || (this._hitBall = new THREE.Sphere());
+    const body = this._hitBody || (this._hitBody = new THREE.Box3());
+    if (this.vrm) { // the head bone sits at the base of the skull
+      ball.center.set(head.x, head.y + 0.09, head.z); ball.radius = 0.17;
+      body.min.set(head.x - 0.27, 0, head.z - 0.2); body.max.set(head.x + 0.27, head.y, head.z + 0.2);
+    } else {        // the placeholder chibi has a big head, and its anchor is in the middle of it
+      ball.center.copy(head); ball.radius = 0.34;
+      body.min.set(head.x - 0.26, 0, head.z - 0.2); body.max.set(head.x + 0.26, head.y - 0.3, head.z + 0.2);
+    }
+    if (ray.intersectsSphere(ball)) return 'head';
+    return ray.intersectsBox(body) ? 'body' : null;
+  }
+
+  /** A quick happy reaction (trying on something new): a little gesture, played even while talking. */
+  react() {
+    const [pose, seconds] = REACTIONS[Math.floor(Math.random() * REACTIONS.length)];
+    this.gesture = { pose, start: this.clock.elapsedTime, seconds, force: true };
+    this.setEmotion('happy', seconds + 1);
   }
 
   /** Waves hello with her right arm for a few seconds. */
   wave(seconds = 2.5) {
     this.waveUntil = this.clock.elapsedTime + seconds;
-  }
-
-  /** Picks the signature idle loop: a name from "idle" in characters.json. */
-  setStance(name) { this.stanceName = name || 'polite'; }
-
-  /** The always-on idle loop for the current stance. Same shape as idlePose, plus knee bob, foot tap and drop. */
-  stancePose(t) {
-    const k = this.stanceAmt;
-    const st = { k, arms: {}, add: {}, bob: { left: 0, right: 0 }, tap: 0, drop: 0, ph: { armX: 0 } };
-    const knees = (left, right = left) => { st.bob.left = left * k; st.bob.right = right * k; };
-    switch (this.stanceName) {
-      case 'tsundere': { // arms crossed, chin up, looking a bit away, impatient foot tapping now and then
-        const c = t % 7, tapping = smooth(0, 0.3, c) * (1 - smooth(2.6, 3, c));
-        st.arms = armPose('crossed');
-        st.tap = Math.max(0, Math.sin(t * 9)) * 0.4 * tapping * k;
-        st.add = { hips: [0, 0, 0.04], spine: [0, 0, -0.03], head: [-0.06, -0.12, 0.05] };
-        st.ph.armX = -1.2;
-        break;
-      }
-      case 'stoic': // arms crossed, still and unimpressed
-        st.arms = armPose('crossed');
-        st.add = { chest: [-0.03, 0, 0], head: [0.05, 0, 0] };
-        st.ph.armX = -1.2;
-        break;
-      case 'shy': { // hands together in front, a little hunched, head down, rocking gently
-        const r = Math.sin(t * 0.9);
-        st.arms = armPose('clasped');
-        st.add = { hips: [0, 0, 0.03 * r], spine: [0.06, 0, -0.02 * r], neck: [0.08, 0, 0], head: [0.06, 0, 0.08 * Math.sin(t * 0.6)] };
-        st.ph.armX = -0.4;
-        break;
-      }
-      case 'polite': { // hands together in front, swaying side to side, head tilting with it
-        const r = Math.sin(t * 1.2);
-        st.arms = armPose('clasped');
-        st.add = { hips: [0, 0, 0.04 * r], spine: [0, 0, -0.03 * r], head: [0, 0, 0.08 * Math.sin(t * 1.2 - 0.6)] };
-        st.ph.armX = -0.4;
-        break;
-      }
-      case 'proper': // hands together in front, standing up straight, small nods
-        st.arms = armPose('clasped');
-        st.add = { chest: [-0.04, 0, 0], head: [0.03 * Math.sin(t * 0.8), 0, 0] };
-        st.ph.armX = -0.4;
-        break;
-      case 'bouncy': { // bopping to a beat: knees bounce, arms swing, head bobs side to side
-        const beat = t * Math.PI * 2 * 1.6, half = Math.sin(beat / 2);
-        knees(0.13 * (0.5 - 0.5 * Math.cos(beat)));
-        st.arms = { rightUpperArm: [0.2 * half, 0, 1.3], leftUpperArm: [-0.2 * half, 0, -1.3], rightLowerArm: [0, 0.35, 0], leftLowerArm: [0, -0.35, 0] };
-        st.add = { hips: [0, 0, 0.05 * half], spine: [0, 0, -0.03 * half], head: [0.04 * Math.sin(beat), 0, 0.08 * half] };
-        break;
-      }
-      case 'composed': // hands behind the back, chest out, calm
-        st.arms = armPose('behind');
-        st.add = { chest: [-0.05, 0, 0], head: [-0.03, 0, 0] };
-        st.ph.armX = 0.6;
-        break;
-      case 'playful': { // hands behind the back, rocking heel to toe, head tilting
-        const r = Math.sin(t * 2.2);
-        knees(0.05 * (0.5 - 0.5 * Math.cos(t * 4.4)));
-        st.arms = armPose('behind');
-        st.add = { hips: [0.04 * r, 0, 0.03 * Math.sin(t * 1.1)], head: [-0.03 * r, 0, 0.12 * Math.sin(t * 1.1)] };
-        st.ph.armX = 0.6;
-        break;
-      }
-      case 'cocky': // hands in pockets, leaning back, weight on one leg, nodding along to music in his head
-        knees(0.12, 0);
-        st.arms = armPose('pockets');
-        st.add = { hips: [0, 0, 0.05], spine: [-0.02, 0, 0.03], chest: [-0.03, 0, 0], head: [-0.07 + 0.04 * Math.sin(t * 2.4), 0.08, 0.1] };
-        st.ph.armX = 0.3;
-        break;
-    }
-    st.drop = 0.85 * (1 - Math.cos((st.bob.left + st.bob.right) / 2));
-    return st;
-  }
-
-  /** Plays an idle gesture now. Random if no name given. Try it in DevTools: character.playIdle('stretch') */
-  playIdle(name) {
-    if (!IDLE_LENGTH[name]) { // random, but never the same one twice in a row
-      const pool = Object.keys(IDLE_LENGTH).filter(n => n !== this.lastIdle);
-      name = pool[Math.floor(Math.random() * pool.length)];
-    }
-    this.idle = { name, start: this.clock.elapsedTime, dir: Math.random() < 0.5 ? -1 : 1 };
-    this.lastIdle = name;
-  }
-
-  /** Starts a gesture now and then while she's calm; fades it out if she starts talking, emoting or gets poked. */
-  updateIdle(t, dt) {
-    const calm = this.emotion === 'neutral' && this.mouth < 0.05 && t > this.waveUntil + 0.5 && t - this.pokeAt > 1.5 && !this.drag;
-    if (!calm) this.nextIdle = Math.max(this.nextIdle, t + 5);
-    else if (!this.idle && t > this.nextIdle) this.playIdle();
-    if (this.idle && t - this.idle.start > IDLE_LENGTH[this.idle.name]) {
-      this.idle = null;
-      this.nextIdle = t + IDLE_GAP[0] + Math.random() * (IDLE_GAP[1] - IDLE_GAP[0]);
-    }
-    this.idleAmt += ((this.idle && calm ? 1 : 0) - this.idleAmt) * Math.min(1, dt * 4);
-    this.gesture = this.idle && this.idleAmt > 0.01 ? this.idlePose(t) : null;
-  }
-
-  /** The pose for the current gesture. Arm angles replace the normal pose; body/head angles are added on top.
-   *  Bone angles are for VRM normalized bones; `ph` is the simpler version for the chibi placeholder. */
-  idlePose(t) {
-    const { name, start, dir } = this.idle;
-    const s = t - start, p = s / IDLE_LENGTH[name];
-    const env = smooth(0, 0.2, p) * (1 - smooth(0.75, 1, p)); // ease in, hold, ease out
-    const g = { k: env * this.idleAmt, arms: {}, add: {}, look: null, mouth: 0, eyes: 0, rise: 0, ph: { armR: null, armL: null, armX: 0, head: [0, 0, 0] } };
-    switch (name) {
-      case 'stretch': { // both arms up over the head, lean back, up on tiptoes
-        const side = Math.sin(s * 2.2) * 0.07;
-        g.arms = { rightUpperArm: [0, 0, -1.25], leftUpperArm: [0, 0, 1.25], rightLowerArm: [0, 0.2, -0.8], leftLowerArm: [0, -0.2, 0.8] };
-        g.add = { spine: [-0.1, 0, side], chest: [-0.08, 0, side], head: [-0.15, 0, 0] };
-        g.eyes = 0.8 * smooth(0.25, 0.4, p) * (1 - smooth(0.6, 0.7, p));
-        g.rise = 0.02;
-        g.ph = { armR: 2.7, armL: 2.7, armX: 0, head: [-0.15, 0, side] };
-        break;
-      }
-      case 'lookAround': { // glance to one side, then the other, then back at you
-        const yaw = 0.5 * dir * (smooth(0.1, 0.25, p) - 2 * smooth(0.42, 0.58, p) + smooth(0.78, 0.92, p));
-        g.look = { yaw, pitch: -0.06 };
-        g.add = { spine: [0, yaw * 0.15, 0] };
-        break;
-      }
-      case 'hairTouch': { // right hand up to fiddle with her hair
-        const fiddle = Math.sin(s * 5) * 0.12;
-        g.arms = { rightUpperArm: [0, 0.25, 0.05], rightLowerArm: [0, 0.15, -2.85 + fiddle] };
-        g.add = { head: [0.05, 0, -0.14], neck: [0, 0, -0.05] };
-        g.ph = { armR: 2.2 + fiddle, armL: null, armX: 0, head: [0.05, 0, -0.14] };
-        break;
-      }
-      case 'handsBehind': { // hands clasped behind her back, rocking on her heels
-        const rock = Math.sin(s * 2.6) * 0.03;
-        g.arms = { rightUpperArm: [0.45, 0, 1.3], leftUpperArm: [0.45, 0, -1.3], rightLowerArm: [0, 0, 0.5], leftLowerArm: [0, 0, -0.5] };
-        g.add = { hips: [rock, 0, 0], chest: [-0.06, 0, 0], head: [-rock, 0, Math.sin(s * 1.3) * 0.08] };
-        g.ph = { armR: 0.1, armL: 0.1, armX: 0.6, head: [0, 0, Math.sin(s * 1.3) * 0.08] };
-        break;
-      }
-      case 'headTilt': { // a curious head tilt
-        g.add = { head: [0.04, 0.1 * dir, 0.25 * dir], neck: [0, 0, 0.08 * dir], spine: [0, 0, -0.04 * dir] };
-        g.ph.head = [0.04, 0.1 * dir, 0.3 * dir];
-        break;
-      }
-      case 'yawn': { // hand to mouth, big yawn, eyes squeezed shut
-        const open = smooth(0.15, 0.35, p) * (1 - smooth(0.6, 0.75, p));
-        g.arms = { rightUpperArm: [-0.6, 0, 1.15], rightLowerArm: [0, 2.2, 0.35] };
-        g.add = { head: [-0.18 * open, 0, 0.05], chest: [-0.05 * open, 0, 0] };
-        g.mouth = 0.9 * open;
-        g.eyes = open;
-        g.ph = { armR: 1.6, armL: null, armX: -0.5, head: [-0.18 * open, 0, 0.05] };
-        break;
-      }
-      case 'handOnHip': { // weight on one leg, one hand on her hip
-        g.arms = dir > 0
-          ? { leftUpperArm: [0.2, 0, -0.85], leftLowerArm: [0, -0.3, -1.4] }
-          : { rightUpperArm: [0.2, 0, 0.85], rightLowerArm: [0, 0.3, 1.4] };
-        g.add = { hips: [0, 0, 0.06 * dir], spine: [0, 0, -0.07 * dir], head: [0, 0, 0.07 * dir] };
-        g.ph = { armR: dir < 0 ? 0.9 : null, armL: dir > 0 ? 0.9 : null, armX: 0, head: [0, 0, 0.1 * dir] };
-        break;
-      }
-    }
-    return g;
   }
 
   /** Rosy cheeks for a few seconds (chibi placeholder; VRM models use their happy face). */
@@ -674,11 +590,6 @@ export class Character {
       this.raycaster.setFromCamera(this.cursor, this.camera);
       const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -(headPos.z + 0.8));
       if (!this.raycaster.ray.intersectPlane(plane, goal)) goal.copy(this.camera.position);
-    } else if (this.gesture?.look) { // looking around on her own (idle gesture)
-      const { yaw: gy, pitch: gp } = this.gesture.look, k = this.gesture.k;
-      const toCam = this.camera.position.clone().sub(headPos);
-      const dir = new THREE.Vector3(Math.sin(gy), -Math.sin(gp), Math.cos(gy)).multiplyScalar(toCam.length());
-      goal.copy(headPos).add(toCam.lerp(dir, k));
     } else {
       goal.copy(this.camera.position); // look back at the user
     }
@@ -700,54 +611,54 @@ export class Character {
     const breathe = Math.sin(t * 1.6);
     const armDown = 1.32 - w.angry * 0.08 - w.happy * 0.2 + w.sad * 0.1;
     const elbow = 0.25 + w.angry * 0.9 + w.happy * 0.3;
-    set('leftUpperArm', 0, 0, -armDown + breathe * 0.02);
-    set('rightUpperArm', 0, 0, armDown - breathe * 0.02);
-    set('leftLowerArm', 0, -elbow, 0);
-    set('rightLowerArm', 0, elbow, 0);
-    const sway = Math.sin(t * 0.35); // slow weight shift from one leg to the other
-    set('hips', 0, sway * 0.05, sway * 0.02);
-    set('spine', 0.02 * breathe + w.angry * 0.08 + w.sad * 0.1, -sway * 0.03, -sway * 0.02);
-    set('chest', 0.015 * breathe, 0, 0);
+
+    // Base stance: the personality's idle pose. Strong emotions and talking take over with the plain arms-down pose.
+    const emotional = Math.min(1, w.angry + w.sad); // being happy or surprised keeps her usual stance
+    const react = { leftUpperArm: [0, 0, -armDown], rightUpperArm: [0, 0, armDown], leftLowerArm: [0, -elbow, 0], rightLowerArm: [0, elbow, 0], fingers: { left: 0.25 + w.angry * 0.7, right: 0.25 + w.angry * 0.7 } };
+    let pose = blend(REST[this.personality] || DEFAULT, react, emotional);
+
+    // Now and then, a little idle gesture (only while calm and quiet)
+    const busy = emotional > 0.15 || this.talk > 0.05 || this.waveAmt > 0.05 || this.dragRotate;
+    if (!this.gesture && t > this.nextGesture && !busy) {
+      const [gPose, seconds] = GESTURES[Math.floor(Math.random() * GESTURES.length)];
+      this.gesture = { pose: gPose, start: t, seconds };
+    }
+    if (this.gesture) {
+      const p = (t - this.gesture.start) / this.gesture.seconds;
+      if (p >= 1 || (busy && !this.gesture.force)) { this.gesture = null; this.nextGesture = t + 7 + Math.random() * 9; }
+      else pose = blend(pose, { ...(REST[this.personality] || DEFAULT), ...this.gesture.pose }, Math.sin(Math.min(1, p * 2.2) * Math.PI / 2) * Math.sin(Math.min(1, (1 - p) * 2.2) * Math.PI / 2));
+    }
+
+    // Breathing, slow weight shift, talking nods and following the mouse are added on top
+    const sway = Math.sin(t * 0.35);
     const talkNod = this.mouth * 0.06 * Math.sin(t * 7);
     const { yaw, pitch } = this.look; // split the turn between neck (40%) and head (60%) so it looks natural
-    set('neck', w.sad * 0.15 + pitch * 0.4, yaw * 0.4, Math.sin(t * 0.8) * 0.03);
-    set('head', talkNod + w.sad * 0.15 - w.surprised * 0.1 + pitch * 0.6,
+    const add = (bone, x, y, z) => { pose[bone][0] += x; pose[bone][1] += y; pose[bone][2] += z; };
+    add('leftUpperArm', 0, 0, breathe * 0.02); add('rightUpperArm', 0, 0, -breathe * 0.02);
+    // talking: the hands move a little with the words, nothing more
+    this.talk += ((this.mouth > 0.03 ? 1 : 0) - this.talk) * Math.min(1, dt * 4);
+    add('rightLowerArm', 0, this.talk * (0.22 + 0.1 * Math.sin(t * 3.4)), 0);
+    add('leftLowerArm', 0, -this.talk * (0.12 + 0.07 * Math.sin(t * 2.7 + 1)), 0);
+    add('hips', 0, sway * 0.05, sway * 0.02);
+    add('spine', 0.02 * breathe + w.angry * 0.08 + w.sad * 0.1, -sway * 0.03, -sway * 0.02);
+    add('chest', 0.015 * breathe, 0, 0);
+    add('neck', w.sad * 0.15 + pitch * 0.4, yaw * 0.4, Math.sin(t * 0.8) * 0.03);
+    add('head', talkNod + w.sad * 0.15 - w.surprised * 0.1 + pitch * 0.6,
       yaw * 0.6 + Math.sin(t * 25) * 0.05 * w.angry, Math.sin(t * 0.7) * 0.05 + w.happy * 0.1);
-
-    // arms: k=1 replaces the pose above; body/head angles in `add` go on top
-    const blend = (pose, k) => {
-      for (const [name, [x, y, z]] of Object.entries(pose.arms)) {
-        const n = b(name);
-        if (n) n.rotation.set(n.rotation.x + (x - n.rotation.x) * k, n.rotation.y + (y - n.rotation.y) * k, n.rotation.z + (z - n.rotation.z) * k);
-      }
-      for (const [name, [x, y, z]] of Object.entries(pose.add)) {
-        const n = b(name);
-        if (n) { n.rotation.x += x * k; n.rotation.y += y * k; n.rotation.z += z * k; }
-      }
-    };
-    const st = this.stance;
-    blend(st, st.k);
-    for (const side of ['left', 'right']) { // knee bob (and the right foot's tap)
-      const bend = st.bob[side];
-      set(`${side}UpperLeg`, -bend, 0, 0);
-      set(`${side}LowerLeg`, bend * 2, 0, 0);
-      set(`${side}Foot`, -bend - (side === 'right' ? st.tap : 0), 0, 0);
-    }
     if (this.waveAmt > 0.01) { // wave: raise the right arm and swing the forearm
-      const wv = this.waveAmt, ua = b('rightUpperArm'), la = b('rightLowerArm');
-      if (ua && la) {
-        ua.rotation.set(ua.rotation.x * (1 - wv), ua.rotation.y * (1 - wv), ua.rotation.z * (1 - wv) - 1.0 * wv);
-        la.rotation.set(la.rotation.x * (1 - wv), la.rotation.y * (1 - wv) + 0.2 * wv, la.rotation.z * (1 - wv) + wv * (-0.6 + Math.sin(t * 12) * 0.45));
-      }
+      const wv = this.waveAmt, up = pose.rightUpperArm, low = pose.rightLowerArm;
+      pose.rightUpperArm = [up[0] * (1 - wv), 0, up[2] * (1 - wv) - 1.0 * wv];
+      pose.rightLowerArm = [0, low[1] * (1 - wv) + 0.2 * wv, low[2] * (1 - wv) + wv * (-0.6 + Math.sin(t * 12) * 0.45)];
+      pose.fingers.right = Object.fromEntries(Object.entries(pose.fingers.right).map(([k, v]) => [k, v * (1 - wv)]));
     }
-    const g = this.gesture;
-    if (g) blend(g, g.k); // the occasional idle gesture
+    writePose(this.vrm, pose);
 
     const em = this.vrm.expressionManager;
     if (em) {
-      for (const e of EMOTIONS) em.setValue(e, w[e] * (e === 'surprised' ? 0.8 : 1));
-      em.setValue('aa', Math.min(1, Math.max(this.mouth * 1.2, g ? g.mouth * g.k : 0)));
-      em.setValue('blink', w.happy > 0.5 ? 0 : Math.max(blink, g ? g.eyes * g.k : 0));
+      // 'happy' at full strength squeezes the eyes shut, which looks like squinting while she talks: keep it to a smile
+      for (const e of EMOTIONS) em.setValue(e, w[e] * (e === 'surprised' ? 0.8 : e === 'happy' ? 0.45 : 1));
+      em.setValue('aa', Math.min(1, this.mouth * 1.2));
+      em.setValue('blink', w.happy > 0.5 ? 0 : blink);
     }
     this.vrm.update(dt);
   }
@@ -764,10 +675,6 @@ export class Character {
         a.rotation.z += (2.6 + Math.sin(t * 12) * 0.35 - a.rotation.z) * this.waveAmt;
         a.rotation.x *= 1 - this.waveAmt;
       }
-      a.rotation.x += this.stance.ph.armX * this.stance.k;
-      const g = this.gesture, up = g && (sd === 1 ? g.ph.armR : g.ph.armL);
-      if (up != null) a.rotation.z += (sd * up - a.rotation.z) * g.k;
-      if (g) a.rotation.x += g.ph.armX * g.k;
     }
     // twin tails swing a little, more when she moves
     for (const tl of tails) {
@@ -778,11 +685,6 @@ export class Character {
     headG.rotation.z = Math.sin(t * 0.7) * 0.05 + w.happy * 0.12;
     headG.rotation.x = this.mouth * 0.08 * Math.sin(t * 7) + w.sad * 0.25 + this.look.pitch * 0.8;
     headG.rotation.y = Math.sin(t * 25) * 0.06 * w.angry + this.look.yaw * 0.8;
-    const g = this.gesture;
-    if (g) {
-      headG.rotation.x += g.ph.head[0] * g.k; headG.rotation.y += g.ph.head[1] * g.k; headG.rotation.z += g.ph.head[2] * g.k;
-      blink = Math.max(blink, g.eyes * g.k);
-    }
     const eyeOpen = Math.max(0.08, 1 - blink - w.happy * 0.7);
     eyes.forEach(e => e.scale.set(1, eyeOpen * (1 + w.surprised * 0.4), 0.4));
     brows.forEach((br, i) => {
@@ -790,7 +692,7 @@ export class Character {
       br.rotation.z = s * (-w.angry * 0.5 + w.sad * 0.4);
       br.position.y = 0.075 + w.surprised * 0.03;
     });
-    mouth.scale.set(1 + w.happy * 0.5, 0.2 + Math.max(this.mouth, g ? g.mouth * g.k : 0) * 1.6 + w.surprised * 0.6, 0.3);
+    mouth.scale.set(1 + w.happy * 0.5, 0.2 + this.mouth * 1.6 + w.surprised * 0.6, 0.3);
     for (const b of this.ph.blushes) {
       b.material.opacity = 0.6 + this.blush * 0.35;
       b.material.color.set(this.blush > 0.3 ? '#ff6f9a' : '#ff9fb8');

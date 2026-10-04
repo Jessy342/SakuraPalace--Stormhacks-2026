@@ -21,11 +21,17 @@ from storage import Transaction
 router = APIRouter(prefix="/api/focus")
 IS_WINDOWS = sys.platform == "win32"
 BROWSERS = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "opera_gx.exe", "vivaldi.exe", "arc.exe"}
-OUR_WINDOW_TITLE = "anime assistant"
+OUR_WINDOW_TITLE = "sakura assistant"
 DEMO_TIMINGS = {"grace_seconds": 5, "drain_every_seconds": 5, "drain_amount": 10, "force_close_after": 20}
 
 # Pomodoro: work minutes -> break minutes. 0 = free session (counts up, no breaks).
 POMODORO_BREAKS = {25: 5, 50: 10}
+
+
+def break_minutes(work):
+    """Break length for a work block: 5 for 25, 10 for 50, otherwise a fifth of the work time."""
+    return POMODORO_BREAKS.get(work) or max(1, round(work / 5))
+
 DEMO_POMODORO = (30, 10)  # demo mode: 30s work, 10s break, so judges see a full cycle
 
 _lock = threading.RLock()
@@ -198,7 +204,7 @@ def tick():
 
 def _finish_pomodoro():
     """A work block is done: give a bonus and start the break."""
-    bonus = FOCUS["pomodoro"] * 2 // 5  # 25 min -> 10 points, 50 min -> 20 points
+    bonus = FOCUS["pomodoro"] * 2  # 25 min -> 50 points, 50 min -> 100 points
     FOCUS["rounds"] += 1
     FOCUS["pomodoro_bonus"] += bonus
     with Transaction() as st:
@@ -225,16 +231,16 @@ def start_watcher():
 
 # ---------------- API ----------------
 class StartIn(BaseModel):
-    pomodoro: int = 0  # 0 = free session, 25 or 50 = pomodoro work length in minutes
+    pomodoro: int = 0  # 0 = free session, otherwise the work length in minutes (25, 50 or a custom 1-180)
 
 
 @router.post("/start")
 def start(body: StartIn | None = None):
-    minutes = body.pomodoro if body and body.pomodoro in POMODORO_BREAKS else 0
+    minutes = max(0, min(int(body.pomodoro), 180)) if body else 0
     if minutes and storage.load()["settings"].get("demo_mode"):
         work, brk = DEMO_POMODORO
     else:
-        work, brk = minutes * 60, POMODORO_BREAKS.get(minutes, 0) * 60
+        work, brk = minutes * 60, break_minutes(minutes) * 60
     with _lock:
         FOCUS.update(active=True, started_at=time.time(), focused_seconds=0, stage="ok", offender=None,
                      distracted_since=None, last_drain=None, points_lost=0, simulated=None,
@@ -249,7 +255,7 @@ def stop():
     with _lock:
         minutes = FOCUS["focused_seconds"] // 60
         FOCUS.update(active=False, stage="ok", offender=None, simulated=None, phase="work")
-        reward_pts, reward_xp = minutes * 2, minutes * 1
+        reward_pts, reward_xp = minutes * 5, minutes * 2
         with Transaction() as st:
             st["points"] += reward_pts
             st["stats"]["focus_seconds"] += FOCUS["focused_seconds"]
@@ -304,7 +310,12 @@ class SimIn(BaseModel):
 
 @router.post("/simulate")
 def simulate(body: SimIn):
-    """Pretend a distraction is open (for testing, or for a safe live demo)."""
+    """Pretend a distraction is open (for testing, or for a safe live demo).
+    Distractions only count during a focus session, so this starts a free session if none is running."""
+    started = False
+    if body.on and not FOCUS["active"]:
+        start(StartIn())
+        started = True
     with _lock:
         FOCUS["simulated"] = {"name": body.name, "kind": "app" if body.kind == "app" else "site", "pid": None, "simulated": True} if body.on else None
-    return {"ok": True}
+    return {"ok": True, "started_session": started}

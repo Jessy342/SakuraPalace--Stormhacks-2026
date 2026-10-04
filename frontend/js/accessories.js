@@ -9,7 +9,7 @@ const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, rough
 
 // Where the eyes are, in the same head-bone space. character.js measures this for each model
 // so the glasses sit on the face instead of floating or hiding inside the head.
-export const DEFAULT_FACE = { eyeX: 0.034, eyeY: 0.075, frontZ: 0.105 };
+export const DEFAULT_FACE = { eyeX: 0.034, eyeY: 0.075, frontZ: 0.105, r: 0.026 }; // r = lens radius
 
 export function buildAccessory(id, face = DEFAULT_FACE) {
   const g = new THREE.Group();
@@ -31,7 +31,7 @@ export function buildAccessory(id, face = DEFAULT_FACE) {
       const frame = mat('#3b2a4a', { metalness: 0.6 });
       const lensMat = mat('#bfe6ff', { transparent: true, opacity: 0.18, metalness: 0.2, roughness: 0.05 });
       const { eyeX, eyeY, frontZ } = face;
-      const r = eyeX * 0.78;          // lens size scales with how far apart the eyes are
+      const r = face.r || eyeX * 0.78; // lens size follows the size of the eyes
       const thick = r * 0.15;
       for (const side of [-1, 1]) {
         const ring = new THREE.Mesh(new THREE.TorusGeometry(r, thick, 10, 32), frame);
@@ -49,6 +49,242 @@ export function buildAccessory(id, face = DEFAULT_FACE) {
       bridge.rotation.z = Math.PI / 2;
       bridge.position.set(0, eyeY + r * 0.15, frontZ);
       g.add(bridge);
+      break;
+    }
+    case 'headphones': {
+      const shell = mat('#f4f4f8'), pad = mat('#ff7eb6');
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.112, 0.012, 10, 28, Math.PI), shell);
+      band.position.set(0, 0.085, -0.005);
+      g.add(band);
+      for (const side of [-1, 1]) {
+        const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 20), shell);
+        cup.rotation.z = Math.PI / 2;
+        cup.position.set(side * 0.112, 0.08, -0.005);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 8, 20), pad);
+        ring.rotation.y = Math.PI / 2;
+        ring.position.set(side * 0.134, 0.08, -0.005);
+        g.add(cup, ring);
+      }
+      break;
+    }
+    case 'bunny_ears': {
+      for (const side of [-1, 1]) {
+        const ear = new THREE.Mesh(new THREE.CapsuleGeometry(0.024, 0.15, 6, 12), mat('#ffffff'));
+        ear.position.set(side * 0.05, HEAD_TOP + 0.085, -0.01);
+        ear.rotation.z = -side * 0.16;
+        ear.scale.z = 0.6;
+        const inner = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.12, 4, 10), mat('#ffb3d1'));
+        inner.position.set(0, 0, 0.016);
+        ear.add(inner);
+        g.add(ear);
+      }
+      break;
+    }
+    case 'captain_hat': {
+      const white = mat('#fbfbff'), navy = mat('#1c2a5a'), gold = mat('#ffcc33', { metalness: 0.8, roughness: 0.3 });
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.1, 0.045, 28), white);
+      top.position.set(0, HEAD_TOP + 0.045, -0.01);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.035, 28), navy);
+      band.position.set(0, HEAD_TOP + 0.008, -0.01);
+      const visor = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.008, 24, 1, false, -Math.PI / 2, Math.PI), mat('#11131f'));
+      visor.position.set(0, HEAD_TOP - 0.008, 0.045);
+      visor.rotation.x = 0.22;
+      const badge = new THREE.Mesh(new THREE.SphereGeometry(0.018, 12, 10), gold);
+      badge.position.set(0, HEAD_TOP + 0.02, 0.092);
+      badge.scale.z = 0.5;
+      g.add(top, band, visor, badge);
+      break;
+    }
+    case 'star_clip': {
+      const star = new THREE.Shape();
+      for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5, r = i % 2 ? 0.012 : 0.028; star[i ? 'lineTo' : 'moveTo'](Math.sin(a) * r, Math.cos(a) * r); }
+      const geo = new THREE.ExtrudeGeometry(star, { depth: 0.008, bevelEnabled: false });
+      for (const side of [-1, 1]) {
+        const clip = new THREE.Mesh(geo, mat('#e9d9ff', { emissive: '#b79cff', emissiveIntensity: 0.5 }));
+        clip.position.set(side * 0.085, 0.135, 0.085);
+        clip.rotation.set(-0.25, side * 0.55, side * 0.2);
+        g.add(clip);
+      }
+      break;
+    }
+    case 'butterfly_clips': {
+      const black = mat('#17151f'), green = mat('#c9e86a');
+      for (const side of [-1, 1]) {
+        const clip = new THREE.Group();
+        for (const up of [-1, 1]) { // two wings
+          const wing = new THREE.Mesh(new THREE.ConeGeometry(0.038, 0.085, 4), black);
+          wing.position.set(0, up * 0.03, 0);
+          wing.rotation.z = up > 0 ? Math.PI + side * 0.5 : side * 0.5;
+          wing.scale.z = 0.25;
+          const mark = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.05, 4), green);
+          mark.position.set(0, -0.012, 0.012);
+          mark.scale.z = 0.25;
+          wing.add(mark);
+          clip.add(wing);
+        }
+        for (const k of [-1, 1]) { // ribbon tails
+          const tail = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.16, 0.004), black);
+          tail.position.set(k * 0.012, -0.12, 0);
+          tail.rotation.z = k * 0.08;
+          clip.add(tail);
+        }
+        clip.position.set(side * 0.118, 0.155, 0.0);
+        clip.rotation.y = side * 1.2;
+        g.add(clip);
+      }
+      break;
+    }
+    case 'mahoraga': { // an eight-handled wheel floating above the head
+      const gold = mat('#e8b84a', { metalness: 0.9, roughness: 0.25, emissive: '#5a3a00', emissiveIntensity: 0.4 });
+      const wheel = new THREE.Group();
+      wheel.add(new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.009, 10, 48), gold));
+      wheel.add(new THREE.Mesh(new THREE.SphereGeometry(0.022, 14, 12), gold));
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.13), gold);
+        spoke.position.set(Math.cos(a) * 0.065, Math.sin(a) * 0.065, 0);
+        spoke.rotation.z = a + Math.PI / 2;
+        const knob = new THREE.Mesh(new THREE.SphereGeometry(0.02, 14, 12), gold);
+        knob.position.set(Math.cos(a) * 0.15, Math.sin(a) * 0.15, 0);
+        wheel.add(spoke, knob);
+      }
+      wheel.rotation.x = Math.PI / 2;
+      wheel.position.set(0, HEAD_TOP + 0.13, -0.01);
+      wheel.userData.spin = true;
+      g.add(wheel);
+      break;
+    }
+    case 'round_glasses': case 'sunglasses': case 'heart_glasses': case 'monocle': {
+      const { eyeX, eyeY, frontZ } = face;
+      const gold = mat('#e8c26a', { metalness: 0.8, roughness: 0.3 }), dark = mat('#15151c', { metalness: 0.5 }), pink = mat('#ff5fa2');
+      const frame = id === 'sunglasses' ? dark : id === 'heart_glasses' ? pink : gold;
+      const r = (face.r || eyeX * 0.8) * (id === 'heart_glasses' ? 1.05 : 1.1);
+      const heart = new THREE.Shape(); // a heart, pointing down
+      heart.moveTo(0, -r); heart.bezierCurveTo(r * 1.5, -r * 0.1, r * 1.1, r * 1.05, 0, r * 0.45); heart.bezierCurveTo(-r * 1.1, r * 1.05, -r * 1.5, -r * 0.1, 0, -r);
+      for (const side of id === 'monocle' ? [1] : [-1, 1]) {
+        const at = new THREE.Vector3(side * eyeX, eyeY, frontZ + 0.004);
+        if (id === 'heart_glasses') {
+          const lens = new THREE.Mesh(new THREE.ShapeGeometry(heart), mat('#ff8fc4', { transparent: true, opacity: 0.3 }));
+          lens.position.copy(at);
+          const frameShape = heart.clone(); // a heart-shaped frame: the heart with a smaller heart cut out of it
+          frameShape.holes.push(new THREE.Path(heart.getPoints(24).map(q => new THREE.Vector2(q.x * 0.84, q.y * 0.84 - r * 0.03))));
+          const rim = new THREE.Mesh(new THREE.ExtrudeGeometry(frameShape, { depth: 0.003, bevelEnabled: false }), pink);
+          rim.position.copy(at).add(new THREE.Vector3(0, 0, -0.004)); rim.scale.setScalar(1.12);
+          g.add(rim, lens);
+        } else {
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(r, r * 0.09, 10, 36), frame);
+          ring.position.copy(at);
+          const lens = new THREE.Mesh(new THREE.CircleGeometry(r, 32), id === 'sunglasses'
+            ? mat('#0c0c12', { transparent: true, opacity: 0.5, metalness: 0.6, roughness: 0.15 }) : mat('#d9f0ff', { transparent: true, opacity: 0.16, roughness: 0.05 }));
+          lens.position.copy(at);
+          g.add(ring, lens);
+        }
+        if (id !== 'monocle') { // arm going back toward the ear
+          const arm = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.07, r * 0.07, frontZ * 0.9), frame);
+          arm.rotation.x = Math.PI / 2; arm.position.set(side * (eyeX + r), eyeY, frontZ * 0.55);
+          g.add(arm);
+        }
+      }
+      if (id === 'monocle') { // a fine chain hanging from it
+        const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.0015, 0.0015, 0.12), gold);
+        chain.position.set(eyeX + r * 0.9, eyeY - 0.07, frontZ); chain.rotation.z = -0.15;
+        g.add(chain);
+      } else {
+        const bridge = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.07, r * 0.07, Math.max(0.004, 2 * eyeX - 2 * r)), frame);
+        bridge.rotation.z = Math.PI / 2; bridge.position.set(0, eyeY + r * 0.1, frontZ + 0.004);
+        g.add(bridge);
+      }
+      break;
+    }
+    case 'pointed_shades': { // sharp triangular shades
+      const { eyeX, eyeY, frontZ } = face;
+      const s = (face.r || eyeX * 0.8) * 1.2;
+      const shape = new THREE.Shape();
+      shape.moveTo(0, -s * 0.35); shape.lineTo(s * 3.3, s * 1.05); shape.lineTo(s * 0.9, s * 0.75); shape.lineTo(0, s * 0.5);
+      shape.lineTo(-s * 0.9, s * 0.75); shape.lineTo(-s * 3.3, s * 1.05); shape.lineTo(0, -s * 0.35);
+      const shades = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.004, bevelEnabled: false }),
+        mat('#ff5a1f', { emissive: '#ff3b00', emissiveIntensity: 0.5, metalness: 0.4, roughness: 0.25 }));
+      shades.position.set(0, eyeY - s * 0.3, frontZ + 0.004);
+      g.add(shades);
+      break;
+    }
+    case 'blindfold': { // a black band over the eyes
+      const { eyeY, frontZ } = face;
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(frontZ + 0.006, frontZ + 0.006, (face.r || 0.026) * 2.1, 32, 1, true), mat('#101016', { roughness: 0.9 }));
+      band.position.set(0, eyeY + 0.004, 0); band.scale.set(0.98, 1, 1);
+      g.add(band);
+      break;
+    }
+    case 'eyepatch': {
+      const { eyeX, eyeY, frontZ } = face;
+      const black = mat('#101016', { roughness: 0.8 });
+      const patch = new THREE.Mesh(new THREE.CircleGeometry((face.r || eyeX * 0.8) * 1.2, 24), black);
+      patch.position.set(-eyeX, eyeY, frontZ + 0.006); patch.scale.set(1.1, 1, 1);
+      const strap = new THREE.Mesh(new THREE.TorusGeometry(frontZ + 0.004, 0.003, 6, 40), black);
+      strap.rotation.x = Math.PI / 2; strap.rotation.y = 0.28; strap.position.set(0, eyeY + 0.012, 0);
+      g.add(patch, strap);
+      break;
+    }
+    case 'face_mask': { // a white mask over the nose and mouth
+      const { eyeX, eyeY, frontZ } = face;
+      const rad = frontZ * 0.92;
+      const mask = new THREE.Mesh(new THREE.SphereGeometry(rad, 24, 14, Math.PI / 2 - 0.78, 1.56, Math.PI / 2 - 0.02, 1.12), mat('#f7f9fc', { roughness: 0.9 }));
+      mask.position.set(0, eyeY - 0.03, frontZ - rad + 0.012);
+      g.add(mask);
+      for (const side of [-1, 1]) { // ear loops
+        const strap = new THREE.Mesh(new THREE.CylinderGeometry(0.0018, 0.0018, frontZ * 0.95), mat('#e8ecf2'));
+        strap.rotation.x = Math.PI / 2; strap.rotation.z = side * 0.1;
+        strap.position.set(side * (eyeX + 0.028), eyeY - 0.06, frontZ * 0.45);
+        g.add(strap);
+      }
+      break;
+    }
+    case 'masquerade': { // a phantom thief's mask: white, sharp-edged, with black around the eyes
+      const { eyeX, eyeY, frontZ } = face;
+      const r = face.r || 0.026, w = eyeX + r * 1.5, h = r * 1.5;
+      const poly = pts => { const sh = new THREE.Shape(); pts.forEach(([x, y], k) => (k ? sh.lineTo(x, y) : sh.moveTo(x, y))); sh.closePath(); return sh; };
+      const half = [[0, h * 0.5], [w * 0.3, h * 0.95], [w * 0.78, h * 1.0], [w * 1.3, h * 1.85], [w * 1.04, h * 0.3], [w * 1.2, -h * 0.55],
+        [w * 0.66, -h * 0.72], [w * 0.3, -h * 1.3], [w * 0.15, -h * 0.4], [0, -h * 0.12]];
+      const outline = [...half, ...half.slice(1, -1).reverse().map(([x, y]) => [-x, y])];
+      // slanted, sharp eye openings, each with a thick black rim
+      const eye = (side, k) => [[-0.95, -0.12], [-0.25, 0.58], [1.12, 0.62], [0.35, -0.5]].map(([x, y]) => [side * (eyeX + x * r * k), y * r * k]);
+      const body = poly(outline), edgeShape = poly(outline);
+      const layers = new THREE.Group();
+      for (const side of [-1, 1]) {
+        const rim = poly(eye(side, 1.42)), hole = new THREE.Path(eye(side, 1).map(([x, y]) => new THREE.Vector2(x, y)));
+        body.holes.push(hole);
+        edgeShape.holes.push(hole); // (the black backing needs the openings too, or the eyes are covered)
+        rim.holes.push(hole);
+        const rimMesh = new THREE.Mesh(new THREE.ExtrudeGeometry(rim, { depth: 0.0025, bevelEnabled: false }), mat('#0e0e12', { roughness: 0.6 }));
+        rimMesh.position.z = 0.004;
+        layers.add(rimMesh);
+      }
+      const white = new THREE.Mesh(new THREE.ExtrudeGeometry(body, { depth: 0.004, bevelEnabled: false }), mat('#f6f6f8', { roughness: 0.35 }));
+      const edge = new THREE.Mesh(new THREE.ExtrudeGeometry(edgeShape, { depth: 0.002, bevelEnabled: false }), mat('#0e0e12', { roughness: 0.6 }));
+      edge.scale.set(1.06, 1.1, 1); edge.position.z = -0.0022;
+      layers.add(edge, white);
+      layers.position.set(0, eyeY, frontZ + 0.003);
+      g.add(layers);
+      break;
+    }
+    case 'fox_mask': { // a festival fox mask, worn on the side of the head
+      const white = mat('#fbfbff'), red = mat('#e5484d'), black = mat('#17151f');
+      const m = new THREE.Group();
+      const faceShape = new THREE.Mesh(new THREE.SphereGeometry(0.07, 20, 16), white);
+      faceShape.scale.set(1, 1.15, 0.4);
+      const snout = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.05, 12), white);
+      snout.rotation.x = Math.PI / 2; snout.position.set(0, -0.03, 0.035);
+      const nose = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 8), black); nose.position.set(0, -0.03, 0.06);
+      m.add(faceShape, snout, nose);
+      for (const side of [-1, 1]) {
+        const ear = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.06, 4), white); ear.position.set(side * 0.042, 0.09, 0); ear.scale.z = 0.4;
+        const inner = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.035, 4), red); inner.position.set(side * 0.042, 0.085, 0.008); inner.scale.z = 0.4;
+        const eye = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.004), black); eye.position.set(side * 0.03, 0.012, 0.028); eye.rotation.z = side * 0.35;
+        const mark = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.006, 0.004), red); mark.position.set(side * 0.045, -0.018, 0.024); mark.rotation.z = -side * 0.3;
+        m.add(ear, inner, eye, mark);
+      }
+      m.position.set(0.1, HEAD_TOP - 0.075, 0.035); m.rotation.set(-0.1, 1.05, -0.2);
+      g.add(m);
       break;
     }
     case 'halo': {
@@ -104,6 +340,9 @@ export function buildAccessory(id, face = DEFAULT_FACE) {
     default:
       return null;
   }
+  // See-through parts (lenses) must not hide what is behind them: the eyes are drawn as see-through layers too,
+  // and a lens that wrote to the depth buffer made them vanish, leaving blank white lenses.
+  g.traverse(o => { if (o.isMesh && o.material.transparent) { o.material.depthWrite = false; o.renderOrder = 30; } });
   return g;
 }
 

@@ -54,12 +54,12 @@ class TTSIn(BaseModel):
     next: str = ""            # ElevenLabs uses them to keep the tone and speed steady between the pieces.
 
 
-def tts_payload(text, model, lang, prev="", nxt=""):
+def tts_payload(text, model, lang, prev="", nxt="", similarity=0.8):
     # A fixed stability keeps long lines from drifting faster and higher-pitched
-    payload = {"text": text, "model_id": model, "voice_settings": {"stability": 0.5, "similarity_boost": 0.8}}
-    if "flash" in model or "turbo" in model:  # (the expressive v3 model doesn't accept these extras)
-        if lang == "ja":
-            payload["language_code"] = "ja"
+    payload = {"text": text, "model_id": model, "voice_settings": {"stability": 0.5, "similarity_boost": similarity}}
+    if lang == "ja" and ("flash" in model or "turbo" in model):
+        payload["language_code"] = "ja"
+    if "v3" not in model:  # (the expressive v3 model doesn't accept these extras)
         if prev:
             payload["previous_text"] = prev[-300:]
         if nxt:
@@ -78,20 +78,26 @@ def tts(body: TTSIn):
     char = get_character(body.character_id or state["active_character"])
     voice = voice_for(char, body.lang)
     model = TTS_EXPRESSIVE_MODEL if body.expressive else TTS_MODEL
+    # a character can tune one of its voices in characters.json, e.g. "tts_ja": {"model": ..., "similarity_boost": ...}
+    # (a voice that comes out too loud and crackly with the fast model)
+    tune = char.get(f"tts_{body.lang}") or {}
+    similarity = tune.get("similarity_boost", 0.8)
+    if not body.expressive:
+        model = tune.get("model", model)
 
-    key = hashlib.sha1(f"{voice}|{model}|{body.lang}|{text}|{body.prev}|{body.next}|s2".encode()).hexdigest()
+    key = hashlib.sha1(f"{voice}|{model}|{body.lang}|{text}|{body.prev}|{body.next}|s2{'|' + str(similarity) if tune else ''}".encode()).hexdigest()
     cached = CACHE_DIR / f"{key}.mp3"
     if cached.exists():
         return FileResponse(cached, media_type="audio/mpeg")
 
     r = el_post(f"/text-to-speech/{voice}", params={"output_format": "mp3_44100_128"},
-                json=tts_payload(text, model, body.lang, body.prev, body.next))
+                json=tts_payload(text, model, body.lang, body.prev, body.next, similarity))
     if r.status_code != 200 and body.expressive:
         # expressive model unavailable on this plan? retry with the fast model, tags stripped
         import re
         plain = re.sub(r"\[[^\]]+\]\s*", "", text)
         r = el_post(f"/text-to-speech/{voice}", params={"output_format": "mp3_44100_128"},
-                    json=tts_payload(plain, TTS_MODEL, body.lang))
+                    json=tts_payload(plain, tune.get("model", TTS_MODEL), body.lang, similarity=similarity))
     if r.status_code != 200:
         raise HTTPException(502, f"ElevenLabs TTS error {r.status_code}: {r.text[:300]}")
     cached.write_bytes(r.content)
@@ -154,11 +160,11 @@ YELLS = {
         "rival": ["[shouting] {app}?! You think a champion slacks off? Close it!", "[angry] Ha! Distracted already? Close {app}!"],
     },
     "drain": {
-        "tsundere": ["[shouting] That's it! I'm taking your points, you idiot!", "[angry] Every second on {app} costs you! Hmph!"],
-        "cheerful": ["[sad] Your points are melting away... please come back!", "[pouting] I'm not happy anymore! Points are draining!"],
-        "sensei": ["[stern] You are losing points. Every minute matters.", "[disappointed] Points deducted. I expected better."],
-        "chill": ["[annoyed] And there go your points. Nice.", "[sighs] Points draining. Your call."],
-        "rival": ["[shouting] You're losing to ME right now! Points gone!", "[laughs] Ha! Your points are mine!"],
+        "tsundere": ["[shouting] That's it! I'm taking your sakura petals, you idiot!", "[angry] Every second on {app} costs you! Hmph!"],
+        "cheerful": ["[sad] Your sakura petals are melting away... please come back!", "[pouting] I'm not happy anymore! Your petals are draining!"],
+        "sensei": ["[stern] You are losing sakura petals. Every minute matters.", "[disappointed] Sakura petals deducted. I expected better."],
+        "chill": ["[annoyed] And there go your sakura petals. Nice.", "[sighs] Petals draining. Your call."],
+        "rival": ["[shouting] You're losing to ME right now! Petals gone!", "[laughs] Ha! Your sakura petals are mine!"],
     },
     "praise": {
         "tsundere": ["[embarrassed] W-well, I guess that wasn't terrible. Good job... idiot.", "[huffs] Hmph. Fine. You did well. Don't let it go to your head!"],

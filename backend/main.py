@@ -25,13 +25,23 @@ from fastapi.staticfiles import StaticFiles
 import ai
 import focus
 import game
+import journey
 import voice
 
-app = FastAPI(title="Anime Assistant")
+app = FastAPI(title="Sakura Assistant")
 app.include_router(game.router)
 app.include_router(ai.router)
+app.include_router(journey.router)
 app.include_router(voice.router)
 app.include_router(focus.router)
+
+
+@app.middleware("http")
+async def always_fresh(request, call_next):
+    """Makes the app window re-check every file with the server, so it never keeps running an old copy of the code."""
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 @app.get("/api/health")
@@ -46,7 +56,7 @@ app.mount("/models", StaticFiles(directory=MODELS_DIR), name="models")
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 URL = f"http://127.0.0.1:{PORT}"
-TITLE = "Anime Assistant"  # focus.py looks for this title so it never counts our own window as a distraction
+TITLE = "Sakura Assistant"  # focus.py looks for this title so it never counts our own window as a distraction
 
 
 def server_running():
@@ -92,6 +102,20 @@ def set_window_icon():
         time.sleep(0.25)
 
 
+def log_graphics(window):
+    """Writes which graphics chip the window uses and how smoothly it runs to the log (helps when the app feels slow)."""
+    probe = ("(() => { const c = document.createElement('canvas').getContext('webgl'); const e = c && c.getExtension('WEBGL_debug_renderer_info');"
+             " return (e ? c.getParameter(e.UNMASKED_RENDERER_WEBGL) : 'unknown') + ' | window ' + innerWidth + 'x' + innerHeight + ' @' + devicePixelRatio"
+             " + ' | fps ' + (window.__fps || '?') + ' | performance mode ' + (localStorage.getItem('perfMode') || 'off'); })()")
+    for wait in (25, 60):
+        time.sleep(wait)
+        try:
+            print("Graphics:", window.evaluate_js(probe))
+        except Exception as e:
+            print("Graphics check failed:", e)
+            return
+
+
 def run_app():
     """Runs the server in the background and shows the app in its own desktop window. Closing the window quits."""
     import webview  # pywebview: a native window that uses the Edge engine built into Windows
@@ -106,13 +130,14 @@ def run_app():
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("SakuraPalace.AnimeAssistant")
         threading.Thread(target=set_window_icon, daemon=True).start()
-    webview.create_window(TITLE, URL, width=1400, height=820, min_size=(1000, 640), maximized=True, background_color="#0b0e22")
+    window = webview.create_window(TITLE, URL, width=1400, height=820, min_size=(1000, 640), maximized=True, background_color="#0b0e22")
+    threading.Thread(target=log_graphics, args=(window,), daemon=True).start()
     webview.start()
 
 
 if __name__ == "__main__":
     focus.start_watcher()
-    print(f"\n  Anime Assistant running at {URL}\n")
+    print(f"\n  Sakura Assistant running at {URL}\n")
     if os.getenv("NO_WINDOW"):
         run_server()
     else:

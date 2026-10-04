@@ -1,5 +1,5 @@
 @echo off
-title Anime Assistant (starting...)
+title Sakura Assistant (starting...)
 cd /d "%~dp0"
 if not exist .venv (
   echo Creating Python environment, first run only...

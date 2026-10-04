@@ -17,23 +17,37 @@ CHARACTERS = _load_json("characters.json")
 SHOP = _load_json("shop.json")
 
 DEFAULT_STATE = {
+    "player_name": "",  # what the companion calls you (asked on the title screen)
+    "goals": [],  # bigger ambitions: {id, category, title, want, plan, note, status tracking|paused|done, created, note_day, rewarded}
+    "ideas": {"day": None, "items": [], "dismissed": []},  # offers the companion came up with: {id, emoji, title, body, action}
+    "feed": {"instruction": "Make me a feed about my interests. Keep the tone clear and direct. Ensure it is quick to skim. Try to avoid clickbait.",
+             "day": None, "items": [], "earned_day": None, "earned": 0},  # news cards: {id, emoji, title, body, source, url, liked, paid, at}
+    "game_ready": {},  # mini game -> the time (unix seconds) it can be played again
+    "rhythm_tickets": 0,  # rounds of Rhythm Tap you have unlocked (finishing a quest gives one, up to 3)
+    "wheel": {"day": None},  # the day the free daily wheel was last spun
+    "free_wishes": 0,  # free single summons won on the wheel
     "points": 1600,  # enough for one 10-pull so the demo starts fun
     "xp": 0,
     "level": 1,
     "tasks": [],
     "events": [],  # scheduled sessions: {id, title, start "YYYY-MM-DDTHH:MM" (local time), minutes, notified}
-    "notes": [],   # jotted notes and reminders: {id, text, created}
+    "notes": [],
+    "profile": [],  # short facts the companion has learned about you from chat (used to suggest quests that fit you)
+    "ai": {"chats_since_quest": 9},  # so the companion only suggests a quest now and then, not in every reply   # jotted notes and reminders: {id, text, created}
     "owned_characters": {CHARACTERS["starter"]: {"bond": 0}},
     "active_character": CHARACTERS["starter"],
     "personality_overrides": {},  # character id -> personality preset chosen by the user
     "owned_accessories": [],
     "equipped_accessories": [],
+    "owned_outfits": [],
+    "outfit": "",  # the outfit being worn ("" = the character's own clothes)
     "owned_backgrounds": [b["id"] for b in SHOP["backgrounds"] if b["price"] == 0],  # the free rooms
     "background": "bedroom",
     "pity": {"since_legendary": 0},
     "stats": {"pulls": 0, "focus_seconds": 0, "tasks_done": 0, "distractions": 0, "pomodoros": 0},
     "daily": {},  # "YYYY-MM-DD" -> {"focus": seconds, "tasks": count}, last 60 days (for the weekly stats card)
     "login": {"last_day": None, "streak": 0, "best": 0},  # daily login gift + streak
+    "dev_mode": False,  # Dev Mode: everything unlocked and unlimited lotus (the real progress waits in "dev_backup")
     "settings": {
         "voice_mode": "dub",  # "dub" = English voice, "sub" = Japanese voice + English subtitles
         "blocked_apps": ["discord.exe", "steam.exe", "epicgameslauncher.exe", "riotclientservices.exe"],
@@ -78,6 +92,19 @@ def _migrate(state):
     state["owned_backgrounds"] += [b for b, info in rooms.items() if info["price"] == 0 and b not in state["owned_backgrounds"]]
     if state["background"] not in state["owned_backgrounds"]:
         state["background"] = state["owned_backgrounds"][0]
+    accessories = {a["id"] for a in SHOP["accessories"]}
+    gone = [a for a in state["owned_accessories"] if a not in accessories]  # accessories that no longer exist are refunded
+    state["points"] += 300 * len(gone)
+    state["owned_accessories"] = [a for a in state["owned_accessories"] if a in accessories]
+    state["equipped_accessories"] = [a for a in state["equipped_accessories"] if a in accessories]
+    outfits = {o["id"] for o in SHOP.get("outfits", [])}
+    removed = [o for o in state["owned_outfits"] if o not in outfits]  # outfits that no longer exist are refunded
+    state["points"] += 400 * len(removed)
+    state["owned_outfits"] = [o for o in state["owned_outfits"] if o in outfits]
+    if state["outfit"] not in state["owned_outfits"]:
+        state["outfit"] = ""
+    if state.get("dev_mode"):  # stays topped up, and picks up characters or items added since it was switched on
+        _unlock_everything(state)
     active = fix(state["active_character"])
     state["active_character"] = active if active in owned else next(iter(owned))
     return state
@@ -117,6 +144,37 @@ class Transaction:
         finally:
             _lock.release()
         return False
+
+
+UNLIMITED = 999_999_999  # shown as an infinity sign in the app
+
+
+def _unlock_everything(state):
+    for c in CHARACTERS["characters"]:
+        state["owned_characters"].setdefault(c["id"], {"bond": 0})
+    state["owned_accessories"] = [a["id"] for a in SHOP["accessories"]]
+    state["owned_backgrounds"] = [b["id"] for b in SHOP["backgrounds"]]
+    state["owned_outfits"] = [o["id"] for o in SHOP.get("outfits", [])]
+    state["points"] = UNLIMITED
+    state["rhythm_tickets"] = 3
+
+
+def set_dev_mode(on):
+    """Dev Mode on: remembers the real progress, then unlocks everything. Off: puts the real progress back
+    (whatever was done in Dev Mode is thrown away)."""
+    with _lock:
+        state = load()
+        if on and not state["dev_mode"]:
+            backup = copy.deepcopy(state)
+            _unlock_everything(state)
+            state["dev_mode"] = True
+            state["dev_backup"] = backup
+            save(state)
+        elif not on and state["dev_mode"]:
+            real = state.get("dev_backup") or copy.deepcopy(DEFAULT_STATE)
+            real["dev_mode"] = False
+            real.pop("dev_backup", None)
+            save(real)
 
 
 def reset():

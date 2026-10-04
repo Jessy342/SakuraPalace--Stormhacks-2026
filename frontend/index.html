@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Anime Assistant</title>
+  <title>Sakura Assistant</title>
   <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
   <link rel="icon" type="image/png" sizes="256x256" href="assets/icon-256.png" />
   <link rel="alternate icon" href="assets/icon.ico" />
@@ -20,17 +20,62 @@
   </script>
 </head>
 <body data-view="lobby">
+  <!-- ===================== TITLE SCREEN (covers the app while it loads) ===================== -->
+  <div id="title">
+    <div class="t-bg"><div class="t-paint"></div></div>
+    <div class="t-sun"></div>
+    <canvas id="title-petals"></canvas>
+    <div class="t-shade"></div>
+    <div class="t-logo">
+      <svg class="t-flower" viewBox="-50 -50 100 100" aria-hidden="true">
+        <g id="t-petal5"><path d="M0 -6 C 16 -22 14 -40 4 -46 L0 -41 L-4 -46 C -14 -40 -16 -22 0 -6 Z"/></g>
+        <use href="#t-petal5" transform="rotate(72)"/><use href="#t-petal5" transform="rotate(144)"/><use href="#t-petal5" transform="rotate(216)"/><use href="#t-petal5" transform="rotate(288)"/>
+        <circle r="5.5" class="t-heart"/>
+      </svg>
+      <small>Your personal anime companion</small>
+      <h1><span>Sakura</span><em>Assistant</em></h1>
+      <i class="t-rule"></i>
+    </div>
+    <div id="title-welcome" class="t-welcome"></div>
+    <nav id="title-menu" class="t-menu">
+      <button data-act="start">Continue</button>
+      <button data-act="name">Change Name</button>
+      <button data-act="options">Options</button>
+    </nav>
+    <form id="title-login" class="t-login hidden">
+      <label for="title-name">What should I call you?</label>
+      <input id="title-name" maxlength="24" placeholder="Your name" autocomplete="off" spellcheck="false" />
+      <div class="row"><button type="button" data-back>Back</button><button type="submit" class="primary">Begin</button></div>
+    </form>
+    <div id="title-options" class="t-login t-options hidden">
+      <label>Options</label>
+      <small>Voice</small>
+      <label class="check"><input type="radio" name="t-voice" value="dub" /> English voice</label>
+      <label class="check"><input type="radio" name="t-voice" value="sub" /> Japanese voice with English subtitles</label>
+      <small>Sound</small>
+      <label class="check"><input type="checkbox" id="t-sounds" /> Click sounds on buttons</label>
+      <small>Graphics</small>
+      <label class="check"><input type="checkbox" id="t-perf" /> Performance mode (smoother on slower laptops)</label>
+      <div class="row"><button type="button" class="primary" data-back>Back</button></div>
+    </div>
+    <div class="t-loading">Loading…</div>
+    <div class="t-foot">Ver. 1.0<br>StormHacks 2026<br>Sakura Palace</div>
+    <div class="t-flash"></div>
+  </div>
+
   <!-- Icon shapes used by the menus -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
-      <symbol id="i-quest" viewBox="0 0 24 24"><path d="M7 4h10v17H7z M9.5 12.5l2 2 3.5-4.5 M10 4V2.5h4V4"/></symbol>
-      <symbol id="i-focus" viewBox="0 0 24 24"><path d="M7 3h10 M7 21h10 M8 3c0 5 8 5 8 9s-8 4-8 9 M16 3c0 5-8 5-8 9s8 4 8 9"/></symbol>
-      <symbol id="i-convene" viewBox="0 0 24 24"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></symbol>
-      <symbol id="i-chars" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></symbol>
-      <symbol id="i-dress" viewBox="0 0 24 24"><path d="M12 7.5a2 2 0 1 0-2-2 M12 7.5v2l8.6 6.2a1 1 0 0 1-.6 1.8H4a1 1 0 0 1-.6-1.8L12 9.5"/></symbol>
+      <symbol id="i-quest" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v3h3M9 11.500l2 2 4-4.500M9 17h6"/></symbol>
+      <symbol id="i-focus" viewBox="0 0 24 24"><circle cx="12" cy="13.500" r="7.500"/><path d="M12 9.500v4l2.500 2M9.500 2.500h5M12 2.500V6"/></symbol>
+      <symbol id="i-convene" viewBox="0 0 24 24"><path d="M11 2.500l2.300 6.200L19.500 11l-6.200 2.300L11 19.500l-2.300-6.200L2.500 11l6.200-2.300z"/><path d="M19 15.500l.800 2.200 2.200.800-2.200.800-.800 2.200-.800-2.200-2.200-.800 2.200-.800z"/></symbol>
+      <symbol id="i-chars" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.500"/><path d="M2.500 20.500c0-3.600 2.900-6 6.500-6s6.500 2.400 6.500 6z"/><path d="M15.500 4.700a3.500 3.500 0 0 1 0 6.600M17.500 14.800c2.400.800 4 2.900 4 5.700"/></symbol>
+      <symbol id="i-dress" viewBox="0 0 24 24"><path d="M8 3l4 2.500L16 3l5 4-2.500 3.500-1.500-1V21H7V9.500l-1.500 1L3 7z"/></symbol>
       <symbol id="i-shop" viewBox="0 0 24 24"><path d="M5 8h14l-1 13H6z M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
-      <symbol id="i-log" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z M8 9h8 M8 12h5"/></symbol>
-      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.500"/><path d="M12 2v3.500 M12 18.500V22 M2 12h3.500 M18.500 12H22 M4.900 4.900l2.500 2.500 M16.600 16.600l2.500 2.500 M4.900 19.100l2.500-2.500 M16.600 7.400l2.500-2.500"/></symbol>
+      <symbol id="i-log" viewBox="0 0 24 24"><path d="M3 4h13v10H9l-4 3.500V14H3z"/><path d="M19 9h2v9h-2v3l-3.500-3H11"/></symbol>
+      <symbol id="i-journey" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.500 8.500l-2 5-5 2 2-5z"/></symbol>
+      <symbol id="i-game" viewBox="0 0 24 24"><path d="M7 8h10a5 5 0 0 1 4.9 6l-.6 3a2.300 2.300 0 0 1-4 1L15.500 16h-7L6.700 18a2.300 2.300 0 0 1-4-1l-.6-3A5 5 0 0 1 7 8z"/><path d="M7.500 10.500v3M6 12h3M15.500 11.200h.01M17.800 13h.01"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.200"/><circle cx="9" cy="17" r="2.200"/></symbol>
       <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M5.500 11.500a6.500 6.500 0 0 0 13 0 M12 18v3"/></symbol>
       <symbol id="i-close" viewBox="0 0 24 24"><path d="M5 5l14 14 M19 5L5 19"/></symbol>
       <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6 M12 7.500v.500"/></symbol>
@@ -39,6 +84,14 @@
       <symbol id="i-room" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z M10 20v-6h4v6"/></symbol>
       <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></symbol>
       <symbol id="i-turn" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 1 2.6 5.7 M4 19v-5h5"/></symbol>
+      <!-- the points symbol: a lotus -->
+      <symbol id="i-lotus" viewBox="0 0 24 24">
+        <path d="M2.200 11c3 .200 5.300 1.500 6.800 3.600.900 1.300 1.500 2.800 1.600 4.400-3 .300-5.400-.700-6.900-2.900-1-1.500-1.500-3.200-1.500-5.100z" fill="#ff9ac4" stroke="#b3246b" stroke-width=".9" stroke-linejoin="round"/>
+        <path d="M2.200 11c3 .200 5.300 1.500 6.800 3.600.900 1.300 1.500 2.800 1.600 4.400-3 .300-5.400-.700-6.900-2.900-1-1.500-1.500-3.200-1.500-5.100z" fill="#ff9ac4" stroke="#b3246b" stroke-width=".9" stroke-linejoin="round" transform="translate(24 0) scale(-1 1)"/>
+        <path d="M6.300 5.800c2.400 1.300 4 3.400 4.700 6.100.500 2.200.400 4.400-.200 6.400-2.300-1.100-3.800-2.900-4.600-5.300-.700-2.400-.700-4.800.100-7.200z" fill="#ff6fae" stroke="#b3246b" stroke-width=".9" stroke-linejoin="round"/>
+        <path d="M6.300 5.800c2.400 1.300 4 3.400 4.700 6.100.500 2.200.400 4.400-.200 6.400-2.300-1.100-3.800-2.900-4.600-5.300-.700-2.400-.700-4.800.100-7.200z" fill="#ff6fae" stroke="#b3246b" stroke-width=".9" stroke-linejoin="round" transform="translate(24 0) scale(-1 1)"/>
+        <path d="M12 2.600c2.300 2.900 3.400 6.100 3.400 9.400 0 3.100-1.200 5.500-3.400 7.100-2.200-1.600-3.400-4-3.400-7.100 0-3.300 1.100-6.500 3.400-9.400z" fill="#ffd9ea" stroke="#b3246b" stroke-width=".9" stroke-linejoin="round"/>
+      </symbol>
     </defs>
   </svg>
 
@@ -46,13 +99,14 @@
   <canvas id="env"></canvas>
   <div id="floor"></div>
   <canvas id="stage"></canvas>
+  <canvas id="envfx"></canvas> <!-- soft out-of-focus things drifting in front of the character (depth) -->
   <div id="vignette"></div>
   <div id="model-hint" class="hidden"></div>
 
   <!-- ===================== LOBBY HUD ===================== -->
   <header id="hud">
     <div class="player-card">
-      <div class="avatar"><img id="hud-avatar" alt="" /><span id="hud-avatar-fallback"></span></div>
+      <button class="avatar" data-open="dress" title="Open the dressing room"><img id="hud-avatar" alt="" /><span id="hud-avatar-fallback"></span><em>View<br>character</em></button>
       <div class="player-info">
         <div class="player-name"><span id="hud-char">…</span><small id="hud-title"></small></div>
         <div class="player-level">
@@ -63,9 +117,10 @@
       </div>
     </div>
     <div class="hud-right">
-      <div id="hud-focus" class="pill focus-pill off">Focus off</div>
+      <div id="hud-dev" class="pill dev-pill hidden" title="Dev Mode is on: everything is unlocked and Sakura Petals are unlimited">DEV</div>
+      <button id="hud-focus" class="pill focus-pill off" data-open="focus" title="Open the Focus menu">Focus off</button>
       <div id="hud-streak" class="pill streak-pill" title="Daily streak">0</div>
-      <div class="pill hud-points" title="Points: earn them from quests and focus, spend them on Convene and the shop"><span class="gem">◆</span><b id="hud-points">0</b></div>
+      <div class="pill hud-points" title="Points: earn them from quests and focus, spend them on Summons and in the dressing room"><svg class="lotus"><use href="#i-lotus"/></svg><b id="hud-points">0</b></div>
     </div>
   </header>
 
@@ -73,16 +128,20 @@
   <nav id="tabs" class="dock">
     <button data-tab="tasks" data-key="q"><svg><use href="#i-quest"/></svg><span>Quests</span><kbd>Q</kbd></button>
     <button data-tab="focus" data-key="f"><svg><use href="#i-focus"/></svg><span>Focus</span><kbd>F</kbd></button>
-    <button data-tab="gacha" data-key="g"><svg><use href="#i-convene"/></svg><span>Convene</span><kbd>G</kbd></button>
+    <button data-tab="gacha" data-key="g"><svg><use href="#i-convene"/></svg><span>Summon</span><kbd>G</kbd></button>
     <button data-tab="chars" data-key="c"><svg><use href="#i-chars"/></svg><span>Characters</span><kbd>C</kbd></button>
     <button data-tab="dress" data-key="d"><svg><use href="#i-dress"/></svg><span>Dressing Room &amp; Shop</span><kbd>D</kbd></button>
     <button data-tab="chat" data-key="l"><svg><use href="#i-log"/></svg><span>Log</span><kbd>L</kbd></button>
+    <button data-tab="journey" data-key="j"><svg><use href="#i-journey"/></svg><span>Journey: Goals, Ideas &amp; Feed</span><kbd>J</kbd></button>
+    <button data-tab="games" data-key="m"><svg><use href="#i-game"/></svg><span>Mini Games</span><kbd>M</kbd></button>
     <button data-tab="settings" data-key="o"><svg><use href="#i-settings"/></svg><span>Options</span><kbd>O</kbd></button>
   </nav>
 
+  <button id="to-title" title="Back to the main menu"><svg viewBox="0 0 24 24"><path d="M4 11.500L12 4l8 7.500M6.500 10v9.500h11V10M10 19.500v-5h4v5"/></svg><span>Main Menu</span></button>
+
   <!-- Quest tracker (right side of the lobby) -->
   <aside id="tracker" class="frame">
-    <div class="frame-title"><span>Quests</span><button class="link" data-open="tasks">View all</button></div>
+    <div class="frame-title"><span>Quests</span><button class="chip-btn" data-open="tasks">View all ›</button></div>
     <ul id="tracker-list" class="list"></ul>
     <div id="tracker-next" class="next-event hidden"></div>
     <div id="tracker-week" class="week-card"></div>
@@ -143,9 +202,9 @@
       <form id="task-form" class="row">
         <input id="task-title" placeholder="New quest…" required />
         <select id="task-diff">
-          <option value="easy">Easy (+15 XP)</option>
-          <option value="medium" selected>Medium (+30 XP)</option>
-          <option value="hard">Hard (+60 XP)</option>
+          <option value="easy">Easy (+30 XP)</option>
+          <option value="medium" selected>Medium (+60 XP)</option>
+          <option value="hard">Hard (+120 XP)</option>
         </select>
         <input id="task-due" type="date" />
         <button type="submit" class="primary">Add</button>
@@ -192,6 +251,8 @@
           <button data-pomo="0">Free</button>
           <button data-pomo="25" class="active">25 min</button>
           <button data-pomo="50">50 min</button>
+          <button data-pomo="custom">Custom</button>
+          <span id="pomo-custom" class="pomo-custom hidden"><button type="button" data-step="-5" title="5 minutes less">−</button><input id="pomo-minutes" type="number" min="1" max="180" value="15" aria-label="Minutes" /><button type="button" data-step="5" title="5 minutes more">+</button> min</span>
         </div>
         <div id="focus-phase" class="focus-phase"></div>
         <div id="focus-timer">25:00</div>
@@ -200,12 +261,12 @@
         <button id="focus-toggle" class="big primary">Start focus session</button>
         <small id="focus-hint"></small>
       </div>
-      <div class="sim">
+      <div class="sim hidden">
         <button id="sim-on">Simulate distraction</button>
         <button id="sim-app">Simulate app (Discord)</button>
         <button id="sim-off">Stop simulating</button>
       </div>
-      <small id="focus-platform"></small>
+      <small id="focus-platform" class="hidden"></small>
       <details>
         <summary>Focus rules</summary>
         <h3>Blocked apps <small>(process names)</small></h3>
@@ -215,7 +276,7 @@
         <div class="grid2">
           <label>Grace period (s)<input id="grace" type="number" min="0" /></label>
           <label>Drain every (s)<input id="drain-every" type="number" min="1" /></label>
-          <label>Points per drain<input id="drain-amount" type="number" min="0" /></label>
+          <label>Sakura Petals per drain<input id="drain-amount" type="number" min="0" /></label>
           <label>Force-close after (s)<input id="force-close" type="number" min="5" /></label>
         </div>
         <label class="check"><input id="demo-mode" type="checkbox" /> Demo mode (fast timings + forced gacha rarity, for judges)</label>
@@ -223,18 +284,82 @@
       </details>
     </section>
 
-    <!-- DRESSING ROOM: wardrobe and shop in one. Locked items can be tried on, then bought right here. -->
-    <section id="tab-dress" class="tab" data-title="Dressing Room">
+    <!-- LOG (chat history) -->
+    <section id="tab-chat" class="tab" data-title="Log">
+      <div id="chat-log"></div>
+    </section>
+
+    <!-- OPTIONS -->
+    <section id="tab-journey" class="tab" data-title="Journey">
+      <div id="journey-tabs" class="subtabs">
+        <button data-pane="goals" class="active">Goals</button>
+        <button data-pane="ideas">Ideas</button>
+        <button data-pane="feed">Feed</button>
+      </div>
+      <div id="journey-body"></div>
+    </section>
+
+    <section id="tab-games" class="tab" data-title="Mini Games">
+      <p class="games-intro">Take a short break and win Sakura Petals.</p>
+      <button class="game-card wheel-card" data-game="wheel"><i>🎡</i><span><b>Daily Spin</b><small id="wheel-status">One free spin every day: 10 to 500 Sakura Petals, or a rare Free Wish.</small></span><em>free</em></button>
+      <button class="game-card" data-game="catch"><i>🌸</i><span><b>Petal Catch</b><small>Catch falling petals in your basket for 20 seconds. Dodge the phones!</small></span><em>up to 80</em></button>
+      <button class="game-card" data-game="memory"><i>🎴</i><span><b>Memory Match</b><small>Find the six pairs of companions in as few turns as you can.</small></span><em>up to 80</em></button>
+      <button class="game-card" data-game="rhythm"><i>🎵</i><span><b>Rhythm Tap</b><small id="rhythm-status">Tap the notes to the beat. Finish a quest to unlock a round.</small></span><em>up to 100</em></button>
+    </section>
+
+    <section id="tab-settings" class="tab" data-title="Options">
+      <h3>Player</h3>
+      <form id="player-form" class="row"><input id="player-name" maxlength="24" placeholder="Your name" autocomplete="off" /><button type="submit" class="primary">Save</button></form>
+      <h3>Sound</h3>
+      <label class="check"><input type="checkbox" id="ui-sounds" checked /> Click sounds on buttons</label>
+      <h3>Graphics</h3>
+      <label class="check"><input type="checkbox" id="perf-mode" /> Performance mode (smoother on slower laptops: lower resolution, fewer effects)</label>
+      <h3>Keyboard</h3>
+      <div class="keys">
+        <span><kbd>Enter</kbd> Talk</span><span><kbd>Esc</kbd> Close menu</span><span><kbd>Q</kbd> Quests</span><span><kbd>F</kbd> Focus</span>
+        <span><kbd>G</kbd> Summon</span><span><kbd>C</kbd> Characters</span><span><kbd>D</kbd> Dressing room</span>
+        <span><kbd>L</kbd> Log</span><span><kbd>J</kbd> Journey</span><span><kbd>M</kbd> Mini games</span><span><kbd>O</kbd> Options</span>
+      </div>
+      <h3>System</h3>
+      <div id="sys-status"></div>
+      <button id="reset-btn" class="danger">Reset all progress</button>
+      <h3>Dev Mode</h3>
+      <div id="dev-box" class="dev-box">
+        <small id="dev-status"></small>
+        <form id="dev-form" class="row">
+          <input id="dev-password" type="password" placeholder="Password" autocomplete="off" />
+          <button type="submit" class="primary">Unlock</button>
+        </form>
+        <button id="dev-off" class="danger hidden">Turn Dev Mode off</button>
+      </div>
+    </section>
+  </aside>
+
+  <!-- ===================== DRESSING ROOM (wardrobe + shop in one) =====================
+       Left: categories and the item you picked, with the button to wear / buy it. Right: the list of items. -->
+  <section id="tab-dress" class="tab dressroom">
+    <aside class="dress-left frame">
+      <div class="drawer-head">
+        <div class="drawer-title">Dressing Room</div>
+        <button class="icon-btn" data-close title="Close (Esc)"><svg><use href="#i-close"/></svg></button>
+      </div>
       <div id="dress-cats" class="dress-cats">
+        <button data-cat="outfit"><svg><use href="#i-dress"/></svg>Outfits</button>
         <button data-cat="head"><svg><use href="#i-crown"/></svg>Headwear</button>
         <button data-cat="face"><svg><use href="#i-glasses"/></svg>Eyewear</button>
-        <button data-cat="room"><svg><use href="#i-room"/></svg>Rooms</button>
-        <button data-cat="persona"><svg><use href="#i-heart"/></svg>Persona</button>
+        <button data-cat="room"><svg><use href="#i-room"/></svg>Backgrounds</button>
+        <button data-cat="persona"><svg><use href="#i-heart"/></svg>Personality</button>
         <button data-cat="voice"><svg><use href="#i-mic"/></svg>Voice</button>
+      </div>
+      <div id="dress-action" class="dress-action"></div>
+    </aside>
+    <aside class="dress-right frame">
+      <div class="dress-right-head">
+        <span id="dress-cat-title">Outfits</span>
+        <div class="pill hud-points"><svg class="lotus"><use href="#i-lotus"/></svg><b id="dress-points">0</b></div>
       </div>
       <div id="dress-grid" class="dress-grid"></div>
       <div id="dress-persona" class="dress-pane hidden">
-        <h3>Personality</h3>
         <select id="personality">
           <option value="tsundere">Tsundere</option>
           <option value="cheerful">Cheerful &amp; supportive</option>
@@ -247,47 +372,21 @@
         <button id="save-personality" class="primary">Save personality</button>
       </div>
       <div id="dress-voice" class="dress-pane hidden">
-        <h3>Voice</h3>
         <label class="check"><input type="radio" name="vmode" value="dub" /> Dub (English voice)</label>
         <label class="check"><input type="radio" name="vmode" value="sub" /> Sub (Japanese voice + English subtitles)</label>
-        <div class="row">
-          <button data-preview="en">▶ Hear English voice</button>
-          <button data-preview="ja">▶ Hear Japanese voice</button>
-        </div>
+        <button data-preview="en">▶ Hear English voice</button>
+        <button data-preview="ja">▶ Hear Japanese voice</button>
       </div>
-      <div id="dress-action" class="dress-action"></div>
-    </section>
-
-    <!-- LOG (chat history) -->
-    <section id="tab-chat" class="tab" data-title="Log">
-      <div id="chat-log"></div>
-    </section>
-
-    <!-- OPTIONS -->
-    <section id="tab-settings" class="tab" data-title="Options">
-      <h3>Sound</h3>
-      <label class="check"><input type="checkbox" id="ui-sounds" checked /> Click sounds on buttons</label>
-      <h3>Graphics</h3>
-      <label class="check"><input type="checkbox" id="perf-mode" /> Performance mode (smoother on slower laptops: lower resolution, fewer effects)</label>
-      <h3>Keyboard</h3>
-      <div class="keys">
-        <span><kbd>Enter</kbd> talk</span><span><kbd>Esc</kbd> close menu</span><span><kbd>Q</kbd> quests</span><span><kbd>F</kbd> focus</span>
-        <span><kbd>G</kbd> convene</span><span><kbd>C</kbd> characters</span><span><kbd>D</kbd> dressing room</span>
-        <span><kbd>L</kbd> log</span><span><kbd>O</kbd> options</span>
-      </div>
-      <h3>System</h3>
-      <div id="sys-status"></div>
-      <button id="reset-btn" class="danger">Reset all progress</button>
-    </section>
-  </aside>
+    </aside>
+  </section>
 
   <!-- ===================== CONVENE (gacha) ===================== -->
   <section id="tab-gacha" class="tab full">
     <div class="full-bg"><div class="glyph" id="banner-glyph"></div></div>
     <div class="full-top">
-      <div class="full-title"><svg><use href="#i-convene"/></svg>Convene</div>
+      <div class="full-title"><svg><use href="#i-convene"/></svg>Summon</div>
       <div class="full-right">
-        <div class="pill hud-points"><span class="gem">◆</span><b id="gacha-points">0</b></div>
+        <div class="pill hud-points"><svg class="lotus"><use href="#i-lotus"/></svg><b id="gacha-points">0</b></div>
         <button class="icon-btn star" data-close title="Close (Esc)"><svg><use href="#i-close"/></svg></button>
       </div>
     </div>
@@ -296,8 +395,9 @@
     <div id="banner" class="g-info">
       <div class="banner-kind" id="banner-kind"></div>
       <div class="banner-title" id="banner-title"></div>
-      <div class="banner-sub">Every <b>10</b> Convenes guarantees an <b>Epic</b> or above.<br>A <b>Legendary</b> or above is guaranteed within <b id="pity-limit">50</b> Convenes.<br>Featured characters have a higher drop chance.</div>
+      <div class="banner-sub">Every <b>10</b> Summons guarantees an <b>Epic</b> or above.<br>A <b>Legendary</b> or above is guaranteed within <b id="pity-limit">50</b> Summons.<br>Featured characters have a higher drop chance.</div>
       <div id="pity-text"></div>
+      <div id="banner-rotate" class="banner-rotate"></div>
       <div id="force-row" class="hidden">
         <label>Demo: force rarity of first pull
           <select id="force-rarity">
@@ -315,7 +415,7 @@
     <div id="rates-pop" class="frame hidden">
       <div class="frame-title"><span>Drop rates</span></div>
       <table id="rates"></table>
-      <small>10-pull guarantees Epic or better. Duplicates refund points and raise Bond (max 6).</small>
+      <small>10-pull guarantees Epic or better. Characters you already have are refunded as Sakura Petals.</small>
     </div>
     <div class="g-pull">
       <button id="pull1" class="pull-btn"></button>
@@ -326,9 +426,9 @@
   <!-- ===================== CHARACTERS (data bank) ===================== -->
   <section id="tab-chars" class="tab full">
     <div class="full-top">
-      <div class="full-title"><svg><use href="#i-chars"/></svg><div><small>Data Bank</small>Characters</div></div>
+      <div class="full-title"><svg><use href="#i-chars"/></svg><div><small>Collection</small>Characters</div></div>
       <div class="full-right">
-        <div class="indexed">Indexed <b id="chars-count">0/0</b></div>
+        <div class="indexed">Collected <b id="chars-count">0/0</b></div>
         <button class="icon-btn star" data-close title="Close (Esc)"><svg><use href="#i-close"/></svg></button>
       </div>
     </div>
@@ -338,7 +438,41 @@
   </section>
 
   <!-- Menu transition wipe + gacha cutscene -->
+  <!-- Login streak (shown once a day when the gift is claimed) -->
+  <div id="streak" class="hidden">
+    <div class="streak-panel frame">
+      <div class="streak-title">Login Streak</div>
+      <div id="streak-days" class="streak-days"></div>
+      <div id="streak-text" class="streak-text"></div>
+      <small>Come back every day: skipping a day starts again at Day 1.</small>
+    </div>
+  </div>
+  <!-- Mini game window -->
+  <div id="minigame" class="hidden">
+    <div class="mg-panel frame">
+      <div class="drawer-head"><div class="drawer-title" id="mg-title"></div><b id="mg-score"></b><button class="icon-btn" id="mg-close" title="Close (Esc)"><svg><use href="#i-close"/></svg></button></div>
+      <div id="mg-stage"></div>
+      <small id="mg-how"></small>
+    </div>
+  </div>
   <div id="wipe"></div>
+  <!-- A small confirmation window (used when ending a focus session) -->
+  <div id="confirm" class="hidden">
+    <div class="confirm-box frame">
+      <div class="confirm-title" id="confirm-title"></div>
+      <div class="confirm-text" id="confirm-text"></div>
+      <div class="confirm-count" id="confirm-count"></div>
+      <div class="confirm-actions">
+        <button id="confirm-no" class="confirm-btn no" title="Cancel">✕</button>
+        <button id="confirm-yes" class="confirm-btn yes" title="Confirm">✓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Effects over everything: click sparkles, reward bursts, confetti, the level-up celebration -->
+  <canvas id="fx"></canvas>
+  <div id="levelup" class="hidden"><div class="lu-rays"></div><div class="lu-text">LEVEL UP</div><div class="lu-num">Lv 2</div></div>
+
   <div id="cutscene" class="hidden">
     <canvas id="cut-canvas"></canvas>
     <div id="cut-content"></div>
