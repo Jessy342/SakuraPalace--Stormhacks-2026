@@ -32,7 +32,6 @@ export class Character {
   constructor(canvas, getMouthLevel) {
     this.getMouthLevel = getMouthLevel || (() => 0);
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
@@ -66,7 +65,9 @@ export class Character {
     // Dressing room: drag to turn the character around, and zoom between full body (0) and close-up (1).
     this.dragRotate = false;
     this.drag = null;
-    this.spin = 0;
+    this.spin = 0; this.spinTarget = 0;
+    this.low = false;    // performance mode
+    this.paused = false; // true while a full-screen menu or the cutscene covers the character
     this.zoom = 0; this.zoomTarget = 0;
 
     // Cursor tracking: she turns her head (and eyes, on VRM models) toward the mouse.
@@ -84,7 +85,7 @@ export class Character {
       if (this.drag) {
         const dx = e.clientX - this.drag.x;
         if (Math.abs(dx) > 4) this.drag.moved = true;
-        if (this.drag.moved) { this.spin = this.drag.spin + dx * 0.012; canvas.style.cursor = 'grabbing'; return; }
+        if (this.drag.moved) { this.spin = this.spinTarget = this.drag.spin + dx * 0.012; canvas.style.cursor = 'grabbing'; return; }
       }
       if (e.target === canvas) canvas.style.cursor = this.hitTest(this.cursor) ? 'pointer' : this.dragRotate ? 'grab' : '';
     });
@@ -134,13 +135,21 @@ export class Character {
   setShift(px) { this.shiftTarget = px; }
 
   /** Dressing room mode: drag to rotate. Turning it off makes the character face forward again. */
-  setDressing(on) { this.dragRotate = on; if (!on) { this.drag = null; this.zoomTarget = 0; } }
+  setDressing(on) { this.dragRotate = on; if (!on) { this.drag = null; this.zoomTarget = 0; this.spinTarget = 0; } }
+
+  /** Turn buttons in the dressing room: dir is -1 (left) or 1 (right), an eighth of a turn each. */
+  turn(dir) { this.spinTarget += dir * Math.PI / 4; }
+
+  /** Performance mode renders the 3D character at a lower resolution. */
+  setQuality(low) { this.low = low; this.resize(); }
 
   /** 'full' body or 'face' close-up. */
   setFraming(view) { this.zoomTarget = view === 'face' ? 1 : 0; }
 
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
+    // Cap how many pixels we draw: high-resolution laptop screens are otherwise too much for built-in graphics chips
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, (this.low ? 1100 : 1600) / w));
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     // Shift the view so the character is centered in the space left of the open menu
@@ -152,9 +161,10 @@ export class Character {
   frameCamera() {
     const h = this.height, z = this.zoom;
     const half = Math.tan(THREE.MathUtils.degToRad(15));
-    const fullDist = (h * 1.4) / (2 * half), faceDist = 0.8 / (2 * half);
-    const y = THREE.MathUtils.lerp(h * 0.56, h - 0.16, z);
-    this.camera.position.set(0, y + 0.02 * h * (1 - z), THREE.MathUtils.lerp(fullDist, faceDist, z));
+    // Full body: the character fills most of the screen height, with their feet standing on the room's floor
+    const span = h * 1.27, fullDist = span / (2 * half), faceDist = 0.8 / (2 * half); // a little headroom for hats
+    const y = THREE.MathUtils.lerp(span * 0.39, h - 0.16, z);
+    this.camera.position.set(0, y, THREE.MathUtils.lerp(fullDist, faceDist, z));
     this.camera.lookAt(0, y, 0);
   }
 
@@ -421,6 +431,10 @@ export class Character {
   }
 
   update() {
+    // Fast screens call this 120+ times a second; 60 (30 in performance mode) looks the same and halves the work
+    const now = performance.now();
+    if (now - (this.lastFrame || 0) < (this.low ? 31 : 15)) return;
+    this.lastFrame = now;
     const dt = Math.min(this.clock.getDelta(), 0.1);
     const t = this.clock.elapsedTime;
     if (t > this.emotionUntil) this.emotion = 'neutral';
@@ -439,7 +453,7 @@ export class Character {
     // glide the view when a menu opens/closes or the dressing room zooms
     if (Math.abs(this.shiftTarget - this.shift) > 0.5) { this.shift += (this.shiftTarget - this.shift) * Math.min(1, dt * 7); this.resize(); }
     if (Math.abs(this.zoomTarget - this.zoom) > 0.002) { this.zoom += (this.zoomTarget - this.zoom) * Math.min(1, dt * 5); this.frameCamera(); }
-    if (!this.dragRotate) this.spin += (0 - this.spin) * Math.min(1, dt * 5);
+    if (!this.drag) this.spin += (this.spinTarget - this.spin) * Math.min(1, dt * 6);
 
     this.updateIdle(t, dt);
     const w = this.weights;
@@ -465,7 +479,7 @@ export class Character {
     else if (this.ph) this.posePlaceholder(t, blink);
 
     for (const a of this.accGroup.children) a.traverse(o => { if (o.userData.spin) o.rotation.z = t; });
-    this.renderer.render(this.scene, this.camera);
+    if (!this.paused) this.renderer.render(this.scene, this.camera);
   }
 
   /** Returns 'head', 'body' or null for a point on screen (normalized device coords). */

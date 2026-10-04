@@ -1,6 +1,7 @@
 // Main UI logic: connects the game-style menus to the backend and the 3D character.
 import { api, post } from './api.js';
 import { Character } from './character.js';
+import { accessoryThumbs } from './accessories.js';
 import { Environment } from './environment.js';
 import * as voice from './voice.js';
 import { playCutscene, stars, portrait, portraitImg } from './gacha.js';
@@ -34,6 +35,7 @@ const classOf = c => CLASSES[c.personality] || ['Unique', '✦'];
 // ======================= Speaking =======================
 let bubbleTimer = null;
 let typeTimer = null;
+let sayGen = 0; // the newest line wins; an older one that is still being prepared gives up
 function showBubble(text, sub = '') {
   $('bubble-name').textContent = activeChar().name;
   $('bubble-sub').textContent = sub;
@@ -51,19 +53,52 @@ function showBubble(text, sub = '') {
   }, 28);
 }
 
+const stripTags = text => text.replace(/\[[^\]]+\]\s*/g, '');
+
+/** Splits a long line into sentence-sized pieces, so each is shown and spoken on its own. Short lines stay whole. */
+function splitSpeech(text) {
+  const japanese = /[\u3040-\u30ff\u4e00-\u9fff]/.test(text);
+  const limit = japanese ? 60 : 150;
+  const pieces = text.match(/[^.!?…。！？]+[.!?…。！？]+["”』」)]*\s*|[^.!?…。！？]+$/g) || [text];
+  const out = [];
+  let cur = '';
+  for (const p of pieces) {
+    if (cur && (cur + p).length > limit) { out.push(cur.trim()); cur = ''; }
+    cur += p;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out.length ? out : [text];
+}
+
+/** Japanese version of a line (for sub mode). The server remembers translations, and so do we. */
+const jaMemo = new Map();
+async function toJa(text) {
+  const key = S.active_character + '|' + text;
+  if (!jaMemo.has(key)) {
+    try { jaMemo.set(key, (await post('/ja', { text })).ja || ''); } catch { return ''; }
+  }
+  return jaMemo.get(key);
+}
+
 async function say(text, { emotion = 'neutral', ja = '', expressive = false, seconds } = {}) {
   if (!text) return;
+  const my = ++sayGen;
   const char = activeChar();
+  // In sub mode EVERY line is spoken in Japanese with English subtitles, not just chat replies
+  if (S.settings.voice_mode === 'sub' && !ja) {
+    ja = await toJa(text);
+    if (my !== sayGen) return;
+  }
   const sub = S.settings.voice_mode === 'sub' && ja;
-  const shown = text.replace(/\[[^\]]+\]\s*/g, '');
-  showBubble(sub ? ja : shown, sub ? shown : '');
+  const shown = stripTags(text);
+  const parts = splitSpeech(sub ? ja : text);
+  const subs = sub ? splitSpeech(shown) : [];
+  const paired = subs.length === parts.length; // subtitles follow sentence by sentence when the counts line up
   character.setEmotion(emotion, seconds || Math.max(3, shown.length / 12));
-  const started = Date.now();
-  const minShow = 1500 + shown.length * 55; // keep subtitles readable even if audio is short/missing
-  await voice.speak(sub ? ja : text, { characterId: char.id, expressive, lang: sub ? 'ja' : 'en', gender: char.gender });
-  const wait = Math.max(2000, minShow - (Date.now() - started));
   clearTimeout(bubbleTimer);
-  bubbleTimer = setTimeout(() => $('bubble').classList.add('hidden'), wait);
+  const finished = await voice.speakParts(parts, { characterId: char.id, expressive, lang: sub ? 'ja' : 'en', gender: char.gender },
+    i => showBubble(stripTags(parts[i]), sub ? (paired ? subs[i] : shown) : ''));
+  if (finished && my === sayGen) bubbleTimer = setTimeout(() => $('bubble').classList.add('hidden'), 2200);
 }
 
 async function yell(stage, app = '', emotion = 'angry') {
@@ -98,10 +133,9 @@ character.onPoke = async zone => {
   character.setEmotion(spam ? 'angry' : zone === 'head' ? 'happy' : 'surprised', 2.5);
   // Don't talk over important lines (focus warnings) and don't stack voice lines when clicked fast
   if (focusActive && $('warning') && !$('warning').classList.contains('hidden')) return;
-  if (now - lastPokeLine < 2500 && !spam) return;
+  if (chatBusy || voice.isSpeaking() || now - lastPokeLine < 2500) return; // one voice line at a time
   if (spam) pokeTimes = [];
   lastPokeLine = now;
-  voice.stopSpeaking();
   try {
     const line = await post('/yell', { stage: spam ? 'poke_spam' : zone === 'head' ? 'headpat' : 'poke' });
     await say(line.tts_text, { emotion: spam ? 'angry' : zone === 'head' ? 'happy' : 'surprised', expressive: true });
@@ -156,6 +190,11 @@ function applyShift() {
   character.setShift(px);
 }
 
+/** The room you picked is the backdrop everywhere; in the dressing room a room you are previewing shows instead. */
+function applyEnv() {
+  environment.set(trying?.kind === 'background' ? trying.id : S.background);
+}
+
 function openTab(name) {
   if (name === currentTab) name = null; // pressing the same button again closes the menu
   const isFull = FULL.includes(name);
@@ -164,6 +203,9 @@ function openTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + name));
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.body.dataset.view = !name ? 'lobby' : isFull ? 'full' : 'drawer';
+  document.body.dataset.tab = name || '';
+  character.paused = isFull;
+  if (name !== 'dress' && trying) { trying = null; applyTry(); renderDress(); } // stop trying things on when leaving
   if (name && !isFull) $('drawer-title').textContent = $('tab-' + name).dataset.title;
   $('rates-pop').classList.add('hidden');
   applyShift();
@@ -171,6 +213,8 @@ function openTab(name) {
   if (name !== 'dress') setFrame('full');
   if (name === 'chat') $('chat-log').scrollTop = 1e9;
   if (name === 'chars') { charPick = S.active_character; renderChars(); }
+  if (name === 'dress') renderDress();
+  applyEnv();
 }
 const closeTab = () => openTab(null);
 
@@ -209,7 +253,7 @@ async function setState(newState) {
     $('model-hint').classList.toggle('hidden', ok);
     $('model-hint').textContent = `Placeholder shown: export ${char.name} from VRoid Studio as models/${char.model}`;
   }
-  character.setAccessories(S.equipped_accessories);
+  applyTry();
 }
 
 function render() {
@@ -223,21 +267,19 @@ function render() {
     av.dataset.id = char.id;
     av.style.display = '';
     av.onerror = () => { av.style.display = 'none'; };
+    av.onload = () => { $('hud-avatar-fallback').textContent = ''; }; // the letter is only for characters without a picture
     av.src = portrait(char.id, true);
   }
   $('hud-level').textContent = S.level;
   $('hud-xp').style.width = (100 * S.xp / S.xp_to_next) + '%';
   $('hud-xptext').textContent = `${S.xp} / ${S.xp_to_next} XP`;
   updatePoints(S.points);
-  const bg = S.catalog.backgrounds.find(b => b.id === S.background);
-  document.body.style.background = bg ? bg.css : '';
-  environment.set(S.background);
+  applyEnv();
 
   renderTasks();
   renderFocusSettings();
   renderGacha();
   renderChars();
-  renderShop();
   renderDress();
   renderOptions();
 }
@@ -256,31 +298,88 @@ function updatePoints(p) {
 }
 
 // ======================= Chat =======================
+let chatBusy = false; // one message at a time: wait for the reply before sending the next
+function setChatBusy(on) {
+  chatBusy = on;
+  $('chat-input').disabled = on;
+  $('mic-btn').disabled = on;
+  $('chat-form').querySelector('button[type=submit]').disabled = on;
+  $('chat-input').placeholder = on ? `${activeChar().name} is thinking…` : 'Press Enter to talk… (try: remind me to study at 5pm)';
+}
+
 $('chat-form').addEventListener('submit', async e => {
   e.preventDefault();
   const text = $('chat-input').value.trim();
-  if (!text) return;
+  if (!text || chatBusy) return;
   $('chat-input').value = '';
   await sendChat(text);
 });
 
 async function sendChat(text) {
+  if (chatBusy) return;
+  setChatBusy(true);
   addMsg('user', text);
   voice.stopSpeaking();
+  sayGen++;
   showBubble('…');
   try {
     const res = await post('/chat', { message: text, history: chatHistory });
-    chatHistory.push({ role: 'user', text }, { role: 'model', text: res.reply });
+    chatHistory.push({ role: 'user', text }, { role: 'model', text: res.lesson ? `${res.reply}\n\n${res.lesson.markdown}` : res.reply });
     addMsg('bot', res.reply);
     for (const t of res.added_tasks) addMsg('sys', `📝 New quest: ${t.title}${t.due ? ' (due ' + t.due + ')' : ''}`);
     if (res.added_tasks.length) voice.sfx('task_done');
     await setState(res.state);
+    for (const ev of res.added_events || []) addMsg('sys', `🗓 Scheduled: ${ev.title} · ${whenLabel(ev.start)}`);
+    for (const n of res.added_notes || []) addMsg('sys', `📝 Noted: ${n.text}`);
+    if (res.lesson) showLesson(res.lesson);
+    else if ((res.added_events || []).length || (res.added_notes || []).length) { // show where it went
+      setQuestSub((res.added_events || []).length ? 'schedule' : 'notes');
+      if (currentTab !== 'tasks') openTab('tasks');
+      voice.sfx('task_done');
+    }
     say(res.reply, { emotion: res.emotion, ja: res.reply_ja });
   } catch (err) { $('bubble').classList.add('hidden'); toastError(err); }
+  setChatBusy(false);
+}
+
+// ---- lessons: for bigger questions the Log opens with a written explanation and pictures ----
+function renderMarkdown(md) {
+  const lines = esc(md).split('\n');
+  let html = '', list = null;
+  const inline = t => t.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>').replace(/`(.+?)`/g, '<code>$1</code>');
+  for (const line of lines) {
+    const m = line.match(/^\s*([-*]|\d+\.)\s+(.*)/);
+    if (m) {
+      const tag = /\d/.test(m[1]) ? 'ol' : 'ul';
+      if (list !== tag) { if (list) html += `</${list}>`; html += `<${tag}>`; list = tag; }
+      html += `<li>${inline(m[2])}</li>`;
+      continue;
+    }
+    if (list) { html += `</${list}>`; list = null; }
+    const h = line.match(/^(#{1,4})\s+(.*)/);
+    if (h) html += `<h4>${inline(h[2])}</h4>`;
+    else if (line.trim()) html += `<p>${inline(line)}</p>`;
+  }
+  if (list) html += `</${list}>`;
+  return html;
+}
+
+function showLesson(lesson) {
+  const card = document.createElement('div');
+  card.className = 'lesson';
+  const safeUrl = u => /^https:\/\//.test(u || '') ? esc(u) : '';
+  card.innerHTML = `<div class="lesson-title">${esc(lesson.title)}</div>
+    ${lesson.images.length ? `<div class="lesson-images">${lesson.images.map(im => safeUrl(im.url)
+      ? `<a href="${safeUrl(im.link)}" target="_blank" rel="noopener"><img src="${safeUrl(im.url)}" alt=""><span>${esc(im.caption)}</span></a>` : '').join('')}</div>` : ''}
+    <div class="lesson-body">${renderMarkdown(lesson.markdown)}</div>`;
+  $('chat-log').appendChild(card);
+  if (currentTab !== 'chat') openTab('chat');
+  card.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 $('mic-btn').addEventListener('click', async () => {
   const btn = $('mic-btn');
+  if (chatBusy) return;
   if (!voice.isRecording()) {
     try {
       voice.stopSpeaking();
@@ -296,7 +395,7 @@ $('mic-btn').addEventListener('click', async () => {
       if (text) await sendChat(text);
       else addMsg('sys', "Didn't catch that. Try again?");
     } catch (e) { toastError(e); }
-    $('chat-input').placeholder = 'Press Enter to talk… (try: remind me to study at 5pm)';
+    if (!chatBusy) $('chat-input').placeholder = 'Press Enter to talk… (try: remind me to study at 5pm)';
   }
 });
 
@@ -361,6 +460,7 @@ const questRow = (t, withDelete) => `
 
 function renderTasks() {
   renderWeek();
+  renderPlanner();
   const pending = S.tasks.filter(t => !t.done)
     .map((t, i) => ({ t, i, d: dueInfo(t.due) }))
     .sort((a, b) => (a.d?.day || '9999z').localeCompare(b.d?.day || '9999z') || a.i - b.i) // soonest deadline first
@@ -372,6 +472,80 @@ function renderTasks() {
     + (pending.length > 4 ? `<li class="empty"><span class="t">+${pending.length - 4} more…</span></li>` : '') : empty;
   $('done-list').innerHTML = done.map(t => `<li><span class="t">${esc(t.title)}</span></li>`).join('');
 }
+
+// ======================= Schedule + Notes (inside the Quests menu) =======================
+let questSub = 'quests'; // quests | schedule | notes
+function setQuestSub(name) {
+  questSub = name;
+  document.querySelectorAll('#quest-tabs button').forEach(b => b.classList.toggle('active', b.dataset.sub === name));
+  for (const s of ['quests', 'schedule', 'notes']) $('sub-' + s).classList.toggle('hidden', s !== name);
+}
+
+/** "Today 2:00 PM", "Tomorrow 9:30 AM", "Fri, Oct 9 2:00 PM" */
+function whenLabel(start) {
+  const d = new Date(start), now = new Date();
+  const tmr = new Date(now); tmr.setDate(now.getDate() + 1);
+  const day = localISO(d) === localISO(now) ? 'Today' : localISO(d) === localISO(tmr) ? 'Tomorrow'
+    : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return `${day} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function renderPlanner() {
+  const now = Date.now();
+  const events = [...(S.events || [])].sort((a, b) => a.start.localeCompare(b.start));
+  const ended = e => new Date(e.start).getTime() + e.minutes * 60000 < now;
+  $('event-list').innerHTML = events.length ? events.map(e => `
+    <li class="${ended(e) ? 'past' : ''}"><span class="when">${esc(whenLabel(e.start))}</span>
+      <span class="t">${esc(e.title)} <small>${e.minutes} min</small></span>
+      <button class="ghost" data-delevent="${e.id}" title="Remove">✕</button></li>`).join('')
+    : '<li class="empty"><span class="t">Nothing scheduled yet.</span></li>';
+  const notes = [...(S.notes || [])].reverse();
+  $('note-list').innerHTML = notes.length ? notes.map(n => `
+    <li><span class="t">${esc(n.text)}</span><button class="ghost" data-delnote="${n.id}" title="Remove">✕</button></li>`).join('')
+    : '<li class="empty"><span class="t">No notes yet.</span></li>';
+  const tabs = $('quest-tabs').children; // show how many of each there are
+  tabs[1].textContent = `Schedule${events.filter(e => !ended(e)).length ? ` (${events.filter(e => !ended(e)).length})` : ''}`;
+  tabs[2].textContent = `Notes${notes.length ? ` (${notes.length})` : ''}`;
+  const next = events.find(e => new Date(e.start).getTime() > now);
+  $('tracker-next').classList.toggle('hidden', !next);
+  if (next) $('tracker-next').innerHTML = `<b>Next up</b> ${esc(next.title)} <span>${esc(whenLabel(next.start))}</span>`;
+}
+
+$('event-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    const res = await post('/events', { title: $('event-title').value, start: $('event-start').value });
+    $('event-title').value = '';
+    await setState(res.state);
+  } catch (err) { toastError(err); }
+});
+$('note-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    const res = await post('/notes', { text: $('note-text').value });
+    $('note-text').value = '';
+    await setState(res.state);
+  } catch (err) { toastError(err); }
+});
+
+/** When a scheduled session starts, the companion says so (once). Sessions missed while the app was closed are just marked. */
+async function checkEvents() {
+  if (!S) return;
+  const now = Date.now();
+  for (const e of S.events || []) {
+    const at = new Date(e.start).getTime();
+    if (e.notified || at > now) continue;
+    e.notified = true;
+    try { await setState(await post(`/events/${e.id}/notified`)); } catch { continue; }
+    if (now - at < 30 * 60000) {
+      voice.sfx('level_up');
+      addMsg('sys', `⏰ It's time: ${e.title}`);
+      character.wave(2.5);
+      say(`It's time for ${e.title}! Let's get started.`, { emotion: 'happy' });
+    }
+  }
+}
+setInterval(checkEvents, 20000);
 
 async function completeTask(id) {
   const res = await post(`/tasks/${id}/complete`);
@@ -613,7 +787,8 @@ async function doPull(count) {
   try {
     voice.stopSpeaking();
     const res = await post('/gacha/pull', { count, force_rarity: $('force-rarity').value || null, banner: bannerId });
-    await playCutscene(res.results, res.best_rarity);
+    environment.paused = true;
+    await playCutscene(res.results, res.best_rarity, { japanese: S.settings.voice_mode === 'sub' }).finally(() => { environment.paused = false; });
     await setState(res.state);
     const news = res.results.filter(r => r.new);
     addMsg('sys', `✨ Pulled: ${res.results.map(r => `${r.name} (${r.rarity})`).join(', ')}`);
@@ -675,35 +850,54 @@ function previewVoice(id, lang) {
   voice.speak(lang === 'ja' ? (c.intro_line_ja || c.intro_line) : c.intro_line, { characterId: c.id, lang, gender: c.gender });
 }
 
-// ======================= Shop + Dressing Room =======================
-const accIcon = id => ({ cat_ears: '🐱', glasses: '👓', halo: '😇', crown: '👑', witch_hat: '🧙', bow: '🎀' }[id] || '✨');
-const accSwatch = 'background:linear-gradient(135deg,#3b3f8f,#b0478f)';
+// ======================= Dressing Room (wardrobe + shop in one) =======================
+// Like a dress-up game: pick a category, click a tile to wear it. Locked items show their price;
+// clicking one tries it on the character (or previews the room) and a Buy button appears.
+let dressCat = 'head';   // head | face | room | persona | voice
+let trying = null;       // { kind: 'accessory' | 'background', id } being previewed but not owned yet
+let accThumbs = null;    // little pictures of the accessories, made the first time the dressing room opens
 
-function renderShop() {
-  $('shop-acc').innerHTML = S.catalog.accessories.map(a => {
-    const owned = S.owned_accessories.includes(a.id);
-    return `<div class="card"><div class="swatch" style="${accSwatch}">${accIcon(a.id)}</div><b>${esc(a.name)}</b>
-      ${owned ? '<span class="owned">✓ Owned</span>'
-              : `<button data-buy="accessory:${a.id}" ${S.points < a.price ? 'disabled' : ''}><span class="gem">◆</span> ${a.price}</button>`}</div>`;
-  }).join('');
-  $('shop-bg').innerHTML = S.catalog.backgrounds.map(b => {
-    const owned = S.owned_backgrounds.includes(b.id);
-    return `<div class="card"><div class="swatch" style="background:${b.css}"></div><b>${esc(b.name)}</b>
-      ${owned ? '<span class="owned">✓ Owned</span>'
-              : `<button data-buy="background:${b.id}" ${S.points < b.price ? 'disabled' : ''}><span class="gem">◆</span> ${b.price}</button>`}</div>`;
-  }).join('');
+const ownsItem = (kind, id) => (kind === 'accessory' ? S.owned_accessories : S.owned_backgrounds).includes(id);
+const findItem = (kind, id) => (kind === 'accessory' ? S.catalog.accessories : S.catalog.backgrounds).find(x => x.id === id);
+
+/** Shows what is equipped, plus the item being tried on. */
+function applyTry() {
+  character.setAccessories(trying?.kind === 'accessory' ? [...S.equipped_accessories, trying.id] : S.equipped_accessories);
+  applyEnv();
+}
+
+function tile(kind, it, img) {
+  const owned = ownsItem(kind, it.id);
+  const on = kind === 'accessory' ? S.equipped_accessories.includes(it.id) : S.background === it.id;
+  const badge = on ? (kind === 'accessory' ? '✓ Wearing' : '✓ In use') : owned ? 'Owned' : `◆ ${it.price}`;
+  return `<button class="tile ${kind === 'accessory' ? 'acc' : ''} ${on ? 'worn' : ''} ${owned ? '' : 'locked'} ${trying?.id === it.id ? 'trying' : ''}"
+    data-item="${kind}:${it.id}" title="${esc(it.name)}"><img src="${img}" alt="" draggable="false">
+    <span class="badge">${badge}</span><span class="tname">${esc(it.name)}</span></button>`;
 }
 
 function renderDress() {
-  const mine = S.catalog.accessories.filter(a => S.owned_accessories.includes(a.id));
-  $('dress-acc').innerHTML = mine.map(a => {
-    const on = S.equipped_accessories.includes(a.id);
-    return `<div class="card ${on ? 'selected' : ''}"><div class="swatch" style="${accSwatch}">${accIcon(a.id)}</div><b>${esc(a.name)}</b>
-      <button data-equip="${a.id}" data-on="${!on}">${on ? 'Take off' : 'Wear'}</button></div>`;
-  }).join('') || '<small>No accessories yet. <button class="link" data-open="shop">Visit the Shop</button></small>';
-  $('bg-select').innerHTML = S.catalog.backgrounds.filter(b => S.owned_backgrounds.includes(b.id)).map(b => `
-    <div class="card ${S.background === b.id ? 'selected' : ''}"><div class="swatch" style="background:${b.css}"></div>
-    <b>${esc(b.name)}</b><button data-bg="${b.id}" ${S.background === b.id ? 'disabled' : ''}>${S.background === b.id ? 'In use' : 'Use'}</button></div>`).join('');
+  document.querySelectorAll('#dress-cats button').forEach(b => b.classList.toggle('active', b.dataset.cat === dressCat));
+  const items = ['head', 'face', 'room'].includes(dressCat);
+  $('dress-grid').classList.toggle('hidden', !items);
+  $('dress-action').classList.toggle('hidden', !items);
+  $('dress-persona').classList.toggle('hidden', dressCat !== 'persona');
+  $('dress-voice').classList.toggle('hidden', dressCat !== 'voice');
+  if (currentTab === 'dress' && items) { // (skip the picture work while the dressing room is closed)
+    if (dressCat === 'room') {
+      $('dress-grid').innerHTML = S.catalog.backgrounds.map(b => tile('background', b, environment.thumb(b.id))).join('');
+    } else {
+      accThumbs ||= accessoryThumbs(S.catalog.accessories.map(a => a.id));
+      $('dress-grid').innerHTML = S.catalog.accessories.filter(a => (a.slot || 'head') === dressCat)
+        .map(a => tile('accessory', a, accThumbs[a.id])).join('');
+    }
+    const it = trying && findItem(trying.kind, trying.id);
+    const short = it ? it.price - S.points : 0;
+    $('dress-action').innerHTML = it
+      ? `<div class="what">${trying.kind === 'accessory' ? 'Trying on' : 'Previewing'}<b>${esc(it.name)}</b></div>
+         <button class="primary big" data-buyitem ${short > 0 ? 'disabled' : ''}>${short > 0 ? `Need ${short} more ◆` : `Buy · ◆ ${it.price}`}</button>`
+      : `<div class="what">Click an item to ${dressCat === 'room' ? 'use' : 'wear'} it. Items with a price can be tried first, then bought right here.</div>
+         <div class="pill hud-points"><span class="gem">◆</span><b>${S.points}</b></div>`;
+  }
   const char = activeChar();
   const p = S.personality_overrides[char.id] || char.personality;
   const presets = Object.keys(CLASSES);
@@ -713,6 +907,32 @@ function renderDress() {
     if (!presets.includes(p)) $('personality-custom').value = p;
   }
   document.querySelectorAll('input[name=vmode]').forEach(r => { r.checked = r.value === S.settings.voice_mode; });
+}
+
+async function clickItem(kind, id) {
+  if (ownsItem(kind, id)) {
+    trying = null;
+    if (kind === 'accessory') {
+      const on = !S.equipped_accessories.includes(id);
+      await setState(await post('/equip', { kind, id, on }));
+      if (on) character.setEmotion('happy', 3);
+    } else {
+      await setState(await post('/equip', { kind, id }));
+    }
+  } else { // not owned: try it on (click again to take it off)
+    trying = trying?.id === id ? null : { kind, id };
+    applyTry();
+    renderDress();
+  }
+}
+
+async function buyTrying() {
+  const { kind, id } = trying;
+  await setState(await post('/shop/buy', { kind, id }));
+  trying = null;
+  voice.sfx('task_done');
+  await setState(await post('/equip', { kind, id, on: true })); // wear / use it right away
+  say('Ooh, thank you! I love it!', { emotion: 'happy' });
 }
 
 function setFrame(view) {
@@ -733,30 +953,40 @@ $('save-personality').addEventListener('click', async () => {
   } catch (err) { toastError(err); }
 });
 document.querySelectorAll('input[name=vmode]').forEach(r => r.addEventListener('change', async () => {
+  voice.stopSpeaking();
   await setState(await post('/settings', { settings: { voice_mode: r.value } }));
+  const c = activeChar();
+  say(c.intro_line, { emotion: 'happy', ja: c.intro_line_ja }); // hear the change right away
 }));
 
 // ======================= One click handler for all the generated buttons =======================
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-buy],[data-equip],[data-bg],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del]');
+  const t = e.target.closest('[data-item],[data-buyitem],[data-cat],[data-turn],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del],[data-delevent],[data-delnote],[data-sub]');
   if (!t || t.disabled) return;
   const d = t.dataset;
   try {
     if (d.done) {
       await completeTask(d.done);
+    } else if (d.delevent) {
+      await setState(await api(`/events/${d.delevent}`, { method: 'DELETE' }));
+    } else if (d.delnote) {
+      await setState(await api(`/notes/${d.delnote}`, { method: 'DELETE' }));
+    } else if (d.sub) {
+      setQuestSub(d.sub);
     } else if (d.del) {
       await setState(await api(`/tasks/${d.del}`, { method: 'DELETE' }));
-    } else if (d.buy) {
-      const [kind, id] = d.buy.split(':');
-      await setState(await post('/shop/buy', { kind, id }));
-      voice.sfx('task_done');
-      say('Ooh, thank you! I love it!', { emotion: 'happy' });
-      await setState(await post('/equip', { kind, id, on: true })); // wear / use it right away
-    } else if (d.equip) {
-      await setState(await post('/equip', { kind: 'accessory', id: d.equip, on: d.on === 'true' }));
-      if (d.on === 'true') character.setEmotion('happy', 3);
-    } else if (d.bg) {
-      await setState(await post('/equip', { kind: 'background', id: d.bg }));
+    } else if (d.item) {
+      const [kind, id] = d.item.split(':');
+      await clickItem(kind, id);
+    } else if ('buyitem' in d) {
+      await buyTrying();
+    } else if (d.cat) {
+      dressCat = d.cat;
+      trying = null;
+      applyTry();
+      renderDress();
+    } else if (d.turn) {
+      character.turn(+d.turn);
     } else if (d.char) {
       await setState(await post('/equip', { kind: 'character', id: d.char }));
       const c = activeChar();
@@ -790,6 +1020,33 @@ function renderOptions() {
     Quests done: ${S.stats.tasks_done} · Pulls: ${S.stats.pulls} · Distractions caught: ${S.stats.distractions}</small>`;
 }
 
+// Performance mode: lower resolution and fewer effects, for laptops without a dedicated graphics card
+let perfMode = false;
+try { perfMode = localStorage.getItem('perfMode') === 'on'; } catch { /* storage blocked */ }
+function setPerfMode(on) {
+  perfMode = on;
+  $('perf-mode').checked = on;
+  character.setQuality(on);
+  environment.setQuality(on);
+  try { localStorage.setItem('perfMode', on ? 'on' : 'off'); } catch { /* storage blocked */ }
+}
+$('perf-mode').addEventListener('change', () => setPerfMode($('perf-mode').checked));
+if (perfMode) setPerfMode(true);
+
+/** Counts frames for a few seconds; if the app is running slowly, turns performance mode on by itself. */
+function watchFrameRate() {
+  if (perfMode) return;
+  let frames = 0;
+  const start = performance.now();
+  const tick = () => {
+    frames++;
+    if (performance.now() - start < 4000) return requestAnimationFrame(tick);
+    if (document.hidden) return; // a hidden window is throttled by the browser, so the count means nothing
+    if (frames / 4 < 30) { setPerfMode(true); addMsg('sys', 'Performance mode turned on to keep things smooth. You can change it in Options (O).'); }
+  };
+  requestAnimationFrame(tick);
+}
+
 $('reset-btn').addEventListener('click', async () => {
   if (!$('reset-btn').dataset.confirm) {
     $('reset-btn').dataset.confirm = '1';
@@ -807,6 +1064,7 @@ $('reset-btn').addEventListener('click', async () => {
 async function boot() {
   try {
     elevenOn = (await api('/voice/status')).elevenlabs;
+    voice.setElevenLabs(elevenOn);
     await setState(await api('/state'));
   } catch (e) {
     console.error(e);
@@ -828,6 +1086,8 @@ async function boot() {
   const reminder = reminderLine();
   if (reminder) addMsg('sys', '⏰ ' + reminder);
   character.wave(3);
+  setTimeout(watchFrameRate, 2500); // once the model has settled in
+  setTimeout(checkEvents, 8000);
 
   // Browsers block sound until the first click or key press, so greet out loud on the first interaction.
   let greeted = false;

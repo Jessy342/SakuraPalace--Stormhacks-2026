@@ -21,13 +21,15 @@ DEFAULT_STATE = {
     "xp": 0,
     "level": 1,
     "tasks": [],
+    "events": [],  # scheduled sessions: {id, title, start "YYYY-MM-DDTHH:MM" (local time), minutes, notified}
+    "notes": [],   # jotted notes and reminders: {id, text, created}
     "owned_characters": {CHARACTERS["starter"]: {"bond": 0}},
     "active_character": CHARACTERS["starter"],
     "personality_overrides": {},  # character id -> personality preset chosen by the user
     "owned_accessories": [],
     "equipped_accessories": [],
-    "owned_backgrounds": ["sakura"],
-    "background": "sakura",
+    "owned_backgrounds": [b["id"] for b in SHOP["backgrounds"] if b["price"] == 0],  # the free rooms
+    "background": "bedroom",
     "pity": {"since_legendary": 0},
     "stats": {"pulls": 0, "focus_seconds": 0, "tasks_done": 0, "distractions": 0, "pomodoros": 0},
     "daily": {},  # "YYYY-MM-DD" -> {"focus": seconds, "tasks": count}, last 60 days (for the weekly stats card)
@@ -71,6 +73,11 @@ def _migrate(state):
         owned[CHARACTERS["starter"]] = {"bond": 0}
     state["owned_characters"] = owned
     state["personality_overrides"] = {fix(k): v for k, v in state["personality_overrides"].items() if fix(k) in known}
+    rooms = {b["id"]: b for b in SHOP["backgrounds"]}
+    state["owned_backgrounds"] = [b for b in state["owned_backgrounds"] if b in rooms]
+    state["owned_backgrounds"] += [b for b, info in rooms.items() if info["price"] == 0 and b not in state["owned_backgrounds"]]
+    if state["background"] not in state["owned_backgrounds"]:
+        state["background"] = state["owned_backgrounds"][0]
     active = fix(state["active_character"])
     state["active_character"] = active if active in owned else next(iter(owned))
     return state

@@ -2,7 +2,7 @@
 import random
 import time
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -191,6 +191,81 @@ def delete_task(task_id: str):
     return public_state(storage.load())
 
 
+# ---------------- Schedule (sessions at a date and time) ----------------
+class EventIn(BaseModel):
+    title: str
+    start: str         # local date and time, e.g. 2026-10-04T14:00
+    minutes: int = 60  # how long the session lasts
+
+
+def create_event(state, title, start, minutes=60):
+    """Adds a scheduled session. Returns None if the date/time can't be understood."""
+    try:
+        when = datetime.fromisoformat(str(start).strip().replace("Z", "")).replace(tzinfo=None)
+        minutes = max(5, min(int(minutes or 60), 24 * 60))
+    except (ValueError, TypeError):
+        return None
+    event = {"id": uuid.uuid4().hex[:8], "title": str(title).strip()[:200], "start": when.strftime("%Y-%m-%dT%H:%M"),
+             "minutes": minutes, "notified": False}
+    state["events"].append(event)
+    return event
+
+
+@router.post("/events")
+def add_event(body: EventIn):
+    if not body.title.strip():
+        raise HTTPException(400, "The session needs a name")
+    with Transaction() as state:
+        event = create_event(state, body.title, body.start, body.minutes)
+        if not event:
+            raise HTTPException(400, "Couldn't understand that date and time")
+    return {"event": event, "state": public_state(storage.load())}
+
+
+@router.post("/events/{event_id}/notified")
+def event_notified(event_id: str):
+    """Marks that the companion has announced this session, so it is only announced once."""
+    with Transaction() as state:
+        for e in state["events"]:
+            if e["id"] == event_id:
+                e["notified"] = True
+    return public_state(storage.load())
+
+
+@router.delete("/events/{event_id}")
+def delete_event(event_id: str):
+    with Transaction() as state:
+        state["events"] = [e for e in state["events"] if e["id"] != event_id]
+    return public_state(storage.load())
+
+
+# ---------------- Notes and reminders ----------------
+class NoteIn(BaseModel):
+    text: str
+
+
+def create_note(state, text):
+    note = {"id": uuid.uuid4().hex[:8], "text": str(text).strip()[:500], "created": time.time()}
+    state["notes"].append(note)
+    return note
+
+
+@router.post("/notes")
+def add_note(body: NoteIn):
+    if not body.text.strip():
+        raise HTTPException(400, "The note is empty")
+    with Transaction() as state:
+        note = create_note(state, body.text)
+    return {"note": note, "state": public_state(storage.load())}
+
+
+@router.delete("/notes/{note_id}")
+def delete_note(note_id: str):
+    with Transaction() as state:
+        state["notes"] = [n for n in state["notes"] if n["id"] != note_id]
+    return public_state(storage.load())
+
+
 # ---------------- Shop ----------------
 class BuyIn(BaseModel):
     kind: str  # "accessory" or "background"
@@ -332,6 +407,7 @@ def do_pull(state, min_rarity=None, forced=None, featured=()):
         result["color"] = reward.get("color")
         result["title"] = reward.get("title")
         result["intro_line"] = reward.get("intro_line")
+        result["intro_line_ja"] = reward.get("intro_line_ja")
     return result
 
 

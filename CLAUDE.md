@@ -9,9 +9,9 @@ tasks → XP → levels → points → shop accessories/backgrounds + Genshin-st
 Opening blocked apps/sites during a focus session makes the character yell, drains points, then force-closes the app.
 
 ## How to run
-- Windows: double-click `start.bat` (creates `.venv`, installs `requirements.txt`, runs `backend/main.py`, opens an Edge app window at http://127.0.0.1:8765).
+- Windows: double-click `start.bat` (creates `.venv`, installs `requirements.txt`, runs `backend/main.py`, opens the app in its own desktop window via pywebview; closing that window quits the app. If pywebview can't load it falls back to an Edge app window at http://127.0.0.1:8765. Errors go to `backend/data/app.log`).
 - Any OS: `pip install -r requirements.txt` then `python backend/main.py`. Set `NO_WINDOW=1` to skip opening a window.
-- After changing **Python** files: close the server window and run `start.bat` again. After changing **frontend** files: just press Ctrl+R in the app window.
+- After changing **Python** files: close the app window and run `start.bat` again. After changing **frontend** files: just press Ctrl+R in the app window.
 - The app works with no API keys (browser voice + canned replies), so you can always test the UI.
 
 ## Architecture (keep it this simple)
@@ -28,7 +28,8 @@ backend/                 Python 3.12, FastAPI. One file per system.
 frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. three.js + three-vrm are vendored in frontend/vendor/.
   index.html, style.css  game-style HUD: lobby (dock, quest tracker, dialogue box), side drawer menus, full-screen Convene + Characters
   js/app.js              all UI wiring (menus + keyboard shortcuts, chat, quests, focus polling, convene, characters, dressing room, shop)
-  js/environment.js      animated room behind the character (one canvas scene per background id in shop.json)
+  js/environment.js      rooms behind the character, drawn with canvas shapes: each scene is painted once, then only small effects animate at 30fps (keep it that way: full-screen redraws and CSS backdrop-filter made the app lag on integrated graphics). One scene per background id in shop.json, plus 'dressing', 'convene' and 'archive' for the menus
+  (Dressing Room = wardrobe + shop in one: locked items are tried on, then bought there. Teacher mode was removed.)
   js/character.js        3D scene, VRM loading, procedural idle/emotion animation, blink, lip sync, placeholder chibi
   js/accessories.js      accessories built from three.js shapes, attached to the head bone
   js/voice.js            speak() with lip-sync analyser, mic recording -> /api/stt, sound effects w/ beep fallback
@@ -55,6 +56,10 @@ tools/make_portraits.mjs dev tool: re-render portraits after adding/changing a m
 - Gemini model default `gemini-3.5-flash` (google-genai SDK). Replies are JSON: `{emotion, reply, reply_ja, add_tasks}`.
 - ElevenLabs: TTS `eleven_flash_v2_5` (fast) and `eleven_v3` for expressive lines with audio tags like `[angry]`, `[shouting]`, `[laughs]`; STT `scribe_v2`; sound effects via `/v1/sound-generation` (cached to `frontend/assets/sfx/`).
 - Voice modes: "dub" = English voice; "sub" = Japanese voice + English subtitles. Each character in characters.json has `voice_id` (English) and `voice_id_ja` (Japanese); `/api/tts` takes `lang` ("en"/"ja") to pick between them.
+- In sub mode EVERY spoken line must be Japanese: `say()` in app.js asks `/api/ja` for a translation of any line that has none (remembered in `backend/data/ja_cache.json`). Don't call `voice.speak` with English text directly for character lines.
+- Only one voice line plays at a time (`speakParts` in voice.js); long lines are split into sentences and spoken one by one. `/api/tts` also takes `prev`/`next` (neighbouring sentences) to keep the tone steady.
+- `/api/chat` may return `lesson` ({title, markdown, images}) for bigger questions; the Log opens and shows it with Wikipedia pictures.
+- Chat can also schedule and take notes: `/api/chat` returns `added_events` and `added_notes` next to `added_tasks`. Sessions (`/api/events`: title, start `YYYY-MM-DDTHH:MM` local time, minutes) and notes (`/api/notes`) live in the save file and show under Quests → Schedule / Notes; app.js announces a session out loud when it starts.
 - Gacha banners live in characters.json (`banners`); `/api/gacha/pull` takes `banner`, and that banner's `featured` characters get a 50% rate-up within their rarity.
 - VRM expressions used: happy, angry, sad, surprised, relaxed, aa (mouth), blink. Normalized bones are posed in `poseVRM()`.
 - Demo mode (Focus tab checkbox) = 5s grace / 5s drain / 20s force-close, and lets you force the first gacha pull's rarity.
