@@ -9,6 +9,8 @@ import { playCutscene, stars, portrait, portraitImg, LOTUS } from './gacha.js';
 import { preloadSummonArt } from './summonscene.js';
 import * as vfx from './vfx.js';
 import { ModelViewer } from './viewer.js';
+import { runTitle, skipTitle } from './title.js';
+import { playGame, closeGame, gameOpen } from './minigames.js';
 
 const $ = id => document.getElementById(id);
 /** Escapes text for HTML and draws the points symbol (written ◆ in messages) as the lotus. */
@@ -259,6 +261,7 @@ $('rates-btn').addEventListener('click', () => $('rates-pop').classList.toggle('
 addEventListener('keydown', e => {
   if (!S || !$('cutscene').classList.contains('hidden') || e.ctrlKey || e.altKey || e.metaKey) return;
   const typing = e.target.matches?.('input, textarea, select');
+  if (gameOpen()) { if (e.key === 'Escape') closeGame(); return; } // a mini game is being played
   if (e.key === 'Escape') {
     if (typing) e.target.blur();
     if (currentTab) closeTab();
@@ -1227,6 +1230,8 @@ document.addEventListener('click', async e => {
 
 // ======================= Options =======================
 function renderOptions() {
+  if (document.activeElement !== $('player-name')) $('player-name').value = S.player_name || '';
+  $('games-left').textContent = S.minigame_left > 0 ? `${S.minigame_left} more can be won today.` : 'Today\'s limit is reached: come back tomorrow!';
   $('hud-dev').classList.toggle('hidden', !S.dev_mode);
   $('dev-form').classList.toggle('hidden', !!S.dev_mode);
   $('dev-off').classList.toggle('hidden', !S.dev_mode);
@@ -1306,6 +1311,43 @@ $('reset-btn').addEventListener('click', async () => {
   await setState(await post('/reset'));
 });
 
+// ======================= Mini games =======================
+/** Puts the player's name into a spoken line, after any [tone] tags: "[happy] Good morning!" -> "[happy] Jo! Good morning!" */
+const withName = text => (S?.player_name ? text.replace(/^((?:\[[^\]]+\]\s*)*)/, `$1${S.player_name}! `) : text);
+
+async function startGame(id) {
+  voice.stopSpeaking();
+  character.paused = true; environment.paused = true; // rest the lobby while the game runs
+  const score = await playGame(id, { portraits: S.catalog.characters.map(c => portrait(c.id)) });
+  environment.paused = false; character.paused = FULL.includes(currentTab);
+  if (score === null) return;
+  try {
+    const res = await post('/minigame', { game: id, score });
+    await setState(res.state);
+    if (res.earned > 0) {
+      voice.sfx('task_done');
+      floater(`+${res.earned} ◆`, 'big');
+      vfx.flyTo(innerWidth / 2, innerHeight * 0.45, $('hud-points').parentElement, LOTUS, 10);
+      character.react();
+      const who = S.player_name ? `, ${S.player_name}` : '';
+      say(res.earned >= 60 ? `Sugoi${who}! ${res.earned} Sakura Petals!` : `Nice one${who}! That's ${res.earned} Sakura Petals.`, { emotion: 'happy' });
+    } else {
+      addMsg('sys', "You've won all the Sakura Petals mini games can give today. Come back tomorrow!");
+      say("That's all the petals I can give you from games today. Back to work!", { emotion: 'happy' });
+    }
+  } catch (err) { toastError(err); }
+}
+document.querySelectorAll('[data-game]').forEach(b => b.addEventListener('click', () => startGame(b.dataset.game)));
+$('mg-close').addEventListener('click', closeGame);
+$('player-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    await setState(await post('/player', { name: $('player-name').value }));
+    document.activeElement?.blur();
+    addMsg('sys', S.player_name ? `Got it: I'll call you ${S.player_name}.` : 'Name cleared.');
+  } catch (err) { toastError(err); }
+});
+
 // ======================= Start =======================
 async function boot() {
   try {
@@ -1326,9 +1368,22 @@ async function boot() {
   let daily = null;
   try { daily = await post('/daily'); await setState(daily.state); } catch (e) { console.warn(e); }
 
+  // The title screen: wait there until the player enters (and tells us their name the first time)
+  let entered = null;
+  if (new URLSearchParams(location.search).has('notitle')) skipTitle();
+  else {
+    character.paused = true;
+    entered = await runTitle({ name: S.player_name || '', saveName: async name => setState(await post('/player', { name })), click: () => voice.uiClick() });
+    character.paused = false;
+    document.body.classList.add('arrive');
+    setTimeout(() => document.body.classList.remove('arrive'), 1600);
+    voice.sfx('task_done', 0.5);
+  }
+
   const c = activeChar();
   addMsg('bot', `${c.intro_line}`);
   showBubble(c.intro_line);
+  if (S.player_name) addMsg('sys', `Welcome back, ${S.player_name}!`);
   if (daily?.claimed) addMsg('sys', `🎁 Daily gift: +${daily.gift} ◆ (day ${daily.streak} streak${daily.streak >= 7 ? ', max bonus!' : ''})`);
   const reminder = reminderLine();
   if (reminder) addMsg('sys', '⏰ ' + reminder);
@@ -1347,7 +1402,7 @@ async function boot() {
     const stage = h >= 5 && h < 11 ? 'greet_morning' : h < 17 && h >= 11 ? 'greet_afternoon' : h >= 17 && h < 22 ? 'greet_evening' : 'greet_night';
     try {
       const line = await post('/yell', { stage });
-      await say(line.tts_text, { emotion: stage === 'greet_night' ? 'surprised' : 'happy', expressive: true });
+      await say(withName(line.tts_text), { emotion: stage === 'greet_night' ? 'surprised' : 'happy', expressive: true });
     } catch { await say(c.intro_line, { emotion: 'happy' }); }
     if (daily?.claimed) {
       voice.sfx('task_done');
@@ -1357,6 +1412,11 @@ async function boot() {
     }
     if (reminder) await say(reminder, { emotion: reminder.includes('overdue') ? 'angry' : 'surprised' });
   };
+  if (entered) { // coming in from the title screen counts as the first click
+    if (entered.options) openTab('settings');
+    setTimeout(greet, 900);
+    return;
+  }
   document.addEventListener('pointerdown', greet, { once: true });
   document.addEventListener('keydown', greet, { once: true });
 }

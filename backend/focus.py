@@ -21,7 +21,7 @@ from storage import Transaction
 router = APIRouter(prefix="/api/focus")
 IS_WINDOWS = sys.platform == "win32"
 BROWSERS = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "opera_gx.exe", "vivaldi.exe", "arc.exe"}
-OUR_WINDOW_TITLE = "anime assistant"
+OUR_WINDOW_TITLE = "sakura assistant"
 DEMO_TIMINGS = {"grace_seconds": 5, "drain_every_seconds": 5, "drain_amount": 10, "force_close_after": 20}
 
 # Pomodoro: work minutes -> break minutes. 0 = free session (counts up, no breaks).

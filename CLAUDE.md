@@ -38,6 +38,8 @@ frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. th
   js/summon3d.js         the summon reveal in 3D: loads the pulled character's model, entrance (spin, drop, landing), signature pose, idle and camera move, plus the themed effects layer behind them
   js/accessories.js      accessories built from three.js shapes, attached to the head bone
   js/outfits.js          outfits = the real clothes of another VRoid model: the donor's body, clothes and shoes are bound to the wearer's bones (same skeleton in every VRoid model), the wearer keeps face and hair. Colour variants repaint the textures. Listed in shop.json `outfits` (model file + optional hue/saturate/brightness); worn via `state.outfit`. To add an outfit, add a VRoid model wearing it to models/ and a line in shop.json. Do not build clothes from primitive shapes: that was tried and looked bad
+  js/title.js            the title screen (painted backdrop assets/title/bg.webp from tools/make_title_art.py, falling petals, logo, menu, name login). Shown on every start; open the app with `?notitle` to skip it (automated tests do)
+  js/minigames.js        mini games that earn Sakura Petals (Petal Catch, Memory Match), played in the #minigame window; `POST /api/minigame {game, score}` pays out (80 a round, 400 a day at most)
   js/voice.js            speak() with lip-sync analyser, mic recording -> /api/stt, sound effects w/ beep fallback
   js/gacha.js            summon cutscene (gate, rarity tease, starfall, eruption, then a cinematic reveal: the character large on the right in front of their own `scene` from characters.json, slim info block on the left; summary cards)
   assets/portraits/      <id>.webp + <id>_bust.webp, rendered from the VRM models by tools/make_portraits.mjs
@@ -76,6 +78,7 @@ tools/make_portraits.mjs dev tool: re-render portraits after adding/changing a m
 - `window.character` is exposed for debugging in DevTools.
 - Performance: never raycast against the VRM mesh on mouse move (it takes ~150ms and made the whole app stutter); `hitTest()` in character.js uses a head ball + body box instead. Avoid CSS `filter`/`backdrop-filter` on full-screen animated layers. The app logs its graphics chip and frame rate to `backend/data/app.log` 25s and 85s after start (`window.__fps`).
 - An outfit with `default_for: <character id>` in shop.json is that character's own clothes: free for them (shown as "Free", wearing it just means no outfit, `state.outfit = ""`), and it costs its price for everyone else.
+- The player's name (`state.player_name`, `POST /api/player {name}`) is typed on the title screen or in Options; the chat prompt gets it and `withName()` in app.js puts it into the spoken greeting.
 - The points are called **Sakura Petals** wherever they are named on screen or spoken (the code still says `points`).
 - The points symbol is a lotus (`#i-lotus` in index.html, `LOTUS` in gacha.js). Write points as ◆ in message text; `rich()` in app.js turns it into the lotus.
 - Portraits in `frontend/assets/portraits/` show each character in their signature pose; re-run tools/make_portraits.mjs after changing a model or a pose.

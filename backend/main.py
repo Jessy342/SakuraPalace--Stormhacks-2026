@@ -27,7 +27,7 @@ import focus
 import game
 import voice
 
-app = FastAPI(title="Anime Assistant")
+app = FastAPI(title="Sakura Assistant")
 app.include_router(game.router)
 app.include_router(ai.router)
 app.include_router(voice.router)
@@ -54,7 +54,7 @@ app.mount("/models", StaticFiles(directory=MODELS_DIR), name="models")
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 URL = f"http://127.0.0.1:{PORT}"
-TITLE = "Anime Assistant"  # focus.py looks for this title so it never counts our own window as a distraction
+TITLE = "Sakura Assistant"  # focus.py looks for this title so it never counts our own window as a distraction
 
 
 def server_running():
@@ -135,7 +135,7 @@ def run_app():
 
 if __name__ == "__main__":
     focus.start_watcher()
-    print(f"\n  Anime Assistant running at {URL}\n")
+    print(f"\n  Sakura Assistant running at {URL}\n")
     if os.getenv("NO_WINDOW"):
         run_server()
     else:

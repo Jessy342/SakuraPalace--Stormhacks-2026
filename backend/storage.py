@@ -17,6 +17,8 @@ CHARACTERS = _load_json("characters.json")
 SHOP = _load_json("shop.json")
 
 DEFAULT_STATE = {
+    "player_name": "",  # what the companion calls you (asked on the title screen)
+    "minigames": {"day": None, "earned": 0},  # Sakura Petals won in mini games today (there is a daily limit)
     "points": 1600,  # enough for one 10-pull so the demo starts fun
     "xp": 0,
     "level": 1,

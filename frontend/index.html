@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Anime Assistant</title>
+  <title>Sakura Assistant</title>
   <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
   <link rel="icon" type="image/png" sizes="256x256" href="assets/icon-256.png" />
   <link rel="alternate icon" href="assets/icon.ico" />
@@ -20,6 +20,38 @@
   </script>
 </head>
 <body data-view="lobby">
+  <!-- ===================== TITLE SCREEN (covers the app while it loads) ===================== -->
+  <div id="title">
+    <div class="t-bg"><div class="t-paint"></div></div>
+    <div class="t-sun"></div>
+    <canvas id="title-petals"></canvas>
+    <div class="t-shade"></div>
+    <div class="t-logo">
+      <svg class="t-flower" viewBox="-50 -50 100 100" aria-hidden="true">
+        <g id="t-petal5"><path d="M0 -6 C 16 -22 14 -40 4 -46 L0 -41 L-4 -46 C -14 -40 -16 -22 0 -6 Z"/></g>
+        <use href="#t-petal5" transform="rotate(72)"/><use href="#t-petal5" transform="rotate(144)"/><use href="#t-petal5" transform="rotate(216)"/><use href="#t-petal5" transform="rotate(288)"/>
+        <circle r="5.5" class="t-heart"/>
+      </svg>
+      <small>Your personal anime companion</small>
+      <h1><span>Sakura</span><em>Assistant</em></h1>
+      <i class="t-rule"></i>
+    </div>
+    <div id="title-welcome" class="t-welcome"></div>
+    <nav id="title-menu" class="t-menu">
+      <button data-act="start">Continue</button>
+      <button data-act="name">Change Name</button>
+      <button data-act="options">Options</button>
+    </nav>
+    <form id="title-login" class="t-login hidden">
+      <label for="title-name">What should I call you?</label>
+      <input id="title-name" maxlength="24" placeholder="Your name" autocomplete="off" spellcheck="false" />
+      <div class="row"><button type="button" data-back>Back</button><button type="submit" class="primary">Begin</button></div>
+    </form>
+    <div class="t-loading">Loading…</div>
+    <div class="t-foot">Ver. 1.0<br>StormHacks 2026<br>Sakura Palace</div>
+    <div class="t-flash"></div>
+  </div>
+
   <!-- Icon shapes used by the menus -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
@@ -31,6 +63,7 @@
       <symbol id="i-shop" viewBox="0 0 24 24"><path d="M5 8h14l-1 13H6z M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
       <symbol id="i-teacher" viewBox="0 0 24 24"><path d="M12 5v15 M12 5c-2-1.5-5-2-8-1.500v14c3-.5 6 0 8 1.500 M12 5c2-1.500 5-2 8-1.500v14c-3-.5-6 0-8 1.500"/></symbol>
       <symbol id="i-log" viewBox="0 0 24 24"><path d="M3 4h13v10H9l-4 3.500V14H3z"/><path d="M19 9h2v9h-2v3l-3.500-3H11"/></symbol>
+      <symbol id="i-game" viewBox="0 0 24 24"><path d="M7 8h10a5 5 0 0 1 4.9 6l-.6 3a2.300 2.300 0 0 1-4 1L15.500 16h-7L6.700 18a2.300 2.300 0 0 1-4-1l-.6-3A5 5 0 0 1 7 8z"/><path d="M7.500 10.500v3M6 12h3M15.500 11.200h.01M17.800 13h.01"/></symbol>
       <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.200"/><circle cx="9" cy="17" r="2.200"/></symbol>
       <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M5.500 11.500a6.500 6.500 0 0 0 13 0 M12 18v3"/></symbol>
       <symbol id="i-close" viewBox="0 0 24 24"><path d="M5 5l14 14 M19 5L5 19"/></symbol>
@@ -88,6 +121,7 @@
     <button data-tab="chars" data-key="c"><svg><use href="#i-chars"/></svg><span>Characters</span><kbd>C</kbd></button>
     <button data-tab="dress" data-key="d"><svg><use href="#i-dress"/></svg><span>Dressing Room &amp; Shop</span><kbd>D</kbd></button>
     <button data-tab="chat" data-key="l"><svg><use href="#i-log"/></svg><span>Log</span><kbd>L</kbd></button>
+    <button data-tab="games" data-key="m"><svg><use href="#i-game"/></svg><span>Mini Games</span><kbd>M</kbd></button>
     <button data-tab="settings" data-key="o"><svg><use href="#i-settings"/></svg><span>Options</span><kbd>O</kbd></button>
   </nav>
 
@@ -242,7 +276,15 @@
     </section>
 
     <!-- OPTIONS -->
+    <section id="tab-games" class="tab" data-title="Mini Games">
+      <p class="games-intro">Take a short break and win Sakura Petals. <span id="games-left"></span></p>
+      <button class="game-card" data-game="catch"><i>🌸</i><span><b>Petal Catch</b><small>Catch falling petals in your basket for 30 seconds. Dodge the phones!</small></span><em>up to 80</em></button>
+      <button class="game-card" data-game="memory"><i>🎴</i><span><b>Memory Match</b><small>Find the six pairs of companions in as few turns as you can.</small></span><em>up to 80</em></button>
+    </section>
+
     <section id="tab-settings" class="tab" data-title="Options">
+      <h3>Player</h3>
+      <form id="player-form" class="row"><input id="player-name" maxlength="24" placeholder="Your name" autocomplete="off" /><button type="submit" class="primary">Save</button></form>
       <h3>Sound</h3>
       <label class="check"><input type="checkbox" id="ui-sounds" checked /> Click sounds on buttons</label>
       <h3>Graphics</h3>
@@ -251,7 +293,7 @@
       <div class="keys">
         <span><kbd>Enter</kbd> Talk</span><span><kbd>Esc</kbd> Close menu</span><span><kbd>Q</kbd> Quests</span><span><kbd>F</kbd> Focus</span>
         <span><kbd>G</kbd> Summon</span><span><kbd>C</kbd> Characters</span><span><kbd>D</kbd> Dressing room</span>
-        <span><kbd>L</kbd> Log</span><span><kbd>O</kbd> Options</span>
+        <span><kbd>L</kbd> Log</span><span><kbd>M</kbd> Mini games</span><span><kbd>O</kbd> Options</span>
       </div>
       <h3>System</h3>
       <div id="sys-status"></div>
@@ -371,6 +413,14 @@
   </section>
 
   <!-- Menu transition wipe + gacha cutscene -->
+  <!-- Mini game window -->
+  <div id="minigame" class="hidden">
+    <div class="mg-panel frame">
+      <div class="drawer-head"><div class="drawer-title" id="mg-title"></div><b id="mg-score"></b><button class="icon-btn" id="mg-close" title="Close (Esc)"><svg><use href="#i-close"/></svg></button></div>
+      <div id="mg-stage"></div>
+      <small id="mg-how"></small>
+    </div>
+  </div>
   <div id="wipe"></div>
   <!-- A small confirmation window (used when ending a focus session) -->
   <div id="confirm" class="hidden">

@@ -99,6 +99,7 @@ def public_state(state):
         **{k: v for k, v in state.items() if k != "dev_backup"},
         "week": week_summary(state),
         "xp_to_next": xp_to_next(state["level"]),
+        "minigame_left": minigame_left(state),  # Sakura Petals that can still be won in mini games today
         "catalog": {
             "characters": CHARACTERS["characters"],
             "accessories": SHOP["accessories"],
@@ -125,6 +126,59 @@ def get_state():
 def reset_state():
     storage.reset()
     return public_state(storage.load())
+
+
+# ---------------- Player name ----------------
+class PlayerIn(BaseModel):
+    name: str
+
+
+@router.post("/player")
+def set_player(body: PlayerIn):
+    """The name the companion calls you by (typed on the title screen)."""
+    name = " ".join(body.name.split())[:24]
+    with Transaction() as state:
+        state["player_name"] = name
+    return public_state(storage.load())
+
+
+# ---------------- Mini games ----------------
+MINIGAME_PLAY_CAP = 80    # most Sakura Petals one round can pay
+MINIGAME_DAILY_CAP = 400  # most Sakura Petals mini games can pay in one day
+
+
+def minigame_left(state):
+    played = state.get("minigames") or {}
+    return MINIGAME_DAILY_CAP - (played.get("earned", 0) if played.get("day") == date.today().isoformat() else 0)
+
+
+def minigame_reward(game, score):
+    if game == "catch":   # score = petals caught (golden ones count 5, phones take 5 away)
+        return max(0, min(MINIGAME_PLAY_CAP, score))
+    if game == "memory":  # score = turns needed to find 6 pairs (6 is perfect)
+        return max(20, min(MINIGAME_PLAY_CAP, MINIGAME_PLAY_CAP - (max(6, score) - 6) * 5))
+    raise HTTPException(400, "Unknown game")
+
+
+class MinigameIn(BaseModel):
+    game: str
+    score: int
+
+
+@router.post("/minigame")
+def minigame(body: MinigameIn):
+    """Pays out a finished mini game in Sakura Petals, up to the daily limit."""
+    reward = minigame_reward(body.game, body.score)
+    today = date.today().isoformat()
+    with Transaction() as state:
+        played = state.setdefault("minigames", {"day": None, "earned": 0})
+        if played.get("day") != today:
+            played.update(day=today, earned=0)
+        earned = max(0, min(reward, MINIGAME_DAILY_CAP - played["earned"]))
+        played["earned"] += earned
+        state["points"] += earned
+        left = MINIGAME_DAILY_CAP - played["earned"]
+    return {"earned": earned, "left_today": left, "state": public_state(storage.load())}
 
 
 # ---------------- Dev Mode ----------------
