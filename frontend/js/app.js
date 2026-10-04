@@ -996,7 +996,7 @@ function renderCharDetail() {
       : '<p class="d-line">You have not met this character yet. Summon to bring them to your room.</p>'}
     <div class="spacer"></div>
     ${!own ? '<button class="primary big" data-open="gacha">Go to Summon</button>'
-      : isActive ? '<button class="big" disabled>Current companion</button><button class="primary big" data-open="dress">Customize</button>'
+      : isActive ? '<div class="d-buttons"><button class="big" disabled>Current companion</button><button class="primary big" data-open="dress">Customize</button></div>'
       : `<button class="primary big" data-char="${c.id}">Set as companion</button>`}`;
   // characters you own are shown as their real 3D model (the picture stays until it has loaded)
   if (currentTab === 'chars' && own) (viewer ||= new ModelViewer()).show($('char-detail').querySelector('.d-art'), c.id, `/models/${c.model}`, S.personality_overrides[c.id] || c.personality);

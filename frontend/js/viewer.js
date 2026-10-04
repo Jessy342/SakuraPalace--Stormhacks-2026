@@ -29,6 +29,7 @@ export class ModelViewer {
     const end = () => { last = null; this.canvas.classList.remove('dragging'); };
     this.canvas.addEventListener('pointerup', end);
     this.canvas.addEventListener('pointercancel', end);
+    addEventListener('resize', () => { if (this.holder?.isConnected) this.fit(); });
   }
 
   /** Shows character `id` (model at `url`) inside `holder`. The holder gets the class "live" once the model is ready. */
