@@ -59,6 +59,7 @@ tools/make_portraits.mjs dev tool: re-render portraits after adding/changing a m
 - In sub mode EVERY spoken line must be Japanese: `say()` in app.js asks `/api/ja` for a translation of any line that has none (remembered in `backend/data/ja_cache.json`). Don't call `voice.speak` with English text directly for character lines.
 - Only one voice line plays at a time (`speakParts` in voice.js); long lines are split into sentences and spoken one by one. `/api/tts` also takes `prev`/`next` (neighbouring sentences) to keep the tone steady.
 - `/api/chat` may return `lesson` ({title, markdown, images}) for bigger questions; the Log opens and shows it with Wikipedia pictures.
+- Chat can also schedule and take notes: `/api/chat` returns `added_events` and `added_notes` next to `added_tasks`. Sessions (`/api/events`: title, start `YYYY-MM-DDTHH:MM` local time, minutes) and notes (`/api/notes`) live in the save file and show under Quests → Schedule / Notes; app.js announces a session out loud when it starts.
 - Gacha banners live in characters.json (`banners`); `/api/gacha/pull` takes `banner`, and that banner's `featured` characters get a 50% rate-up within their rarity.
 - VRM expressions used: happy, angry, sad, surprised, relaxed, aa (mouth), blink. Normalized bones are posed in `poseVRM()`.
 - Demo mode (Focus tab checkbox) = 5s grace / 5s drain / 20s force-close, and lets you force the first gacha pull's rarity.

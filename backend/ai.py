@@ -6,7 +6,7 @@ import threading
 import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, datetime
 
 import requests
 
@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 import storage
 from config import DATA_DIR, GEMINI_API_KEY, GEMINI_MODEL, UPLOAD_DIR
-from game import create_task, public_state
+from game import create_event, create_note, create_task, public_state
 from storage import Transaction, get_character
 
 router = APIRouter(prefix="/api")
@@ -98,19 +98,32 @@ def base_system(state, char):
     task_lines = "\n".join(f"- [{t['id']}] {t['title']} ({t['difficulty']}{', due ' + t['due'] if t.get('due') else ''})" for t in pending) or "- (none)"
     sub = state["settings"].get("voice_mode") == "sub"
     today = date.today()
+    now = datetime.now()
+    upcoming = sorted((e for e in state["events"] if e["start"] >= now.strftime("%Y-%m-%dT%H:%M")), key=lambda e: e["start"])[:12]
+    event_lines = "\n".join(f"- {e['start'].replace('T', ' ')} {e['title']} ({e['minutes']} min)" for e in upcoming) or "- (nothing scheduled)"
+    note_lines = "\n".join(f"- {n['text']}" for n in state["notes"][-15:]) or "- (none)"
     return f"""You are {char['name']} ("{char.get('title', '')}"), the user's personal anime assistant inside a productivity app.
 Personality: {personality_for(state, char)}
 Stay fully in character. You help the user stay focused, manage their schedule, and feel motivated.
-Today is {today.strftime('%A')}, {today.isoformat()}. Work out due dates like "Friday" or "tomorrow" from this.
+Right now it is {today.strftime('%A')}, {today.isoformat()}, {now.strftime('%H:%M')}. Work out dates and times like "Friday", "tomorrow at 2pm" or "in an hour" from this.
 
 User stats: level {state['level']}, {state['points']} points, {state['stats']['tasks_done']} tasks done.
 Their pending tasks:
 {task_lines}
+Their schedule:
+{event_lines}
+Their notes:
+{note_lines}
 
 Rules:
 - Your reply is SPOKEN aloud, so keep it short: 1-3 sentences, no markdown, no emojis, no lists.
-- If the user asks you to add/schedule/remember something to do, put it in "add_tasks".
-- Difficulty is "easy", "medium" or "hard". "due" is an ISO date (YYYY-MM-DD) or null.
+- A thing to DO (homework, chores, "remind me to study") goes in "add_tasks". Difficulty is "easy", "medium" or "hard". "due" is an ISO date (YYYY-MM-DD) or null.
+- A session, meeting, class or reminder AT A SPECIFIC TIME ("schedule a session called Studying for tomorrow at 2pm", "remind me at 6pm to call mom")
+  goes in "add_events": "start" is the local date and time as YYYY-MM-DDTHH:MM (24-hour), "minutes" is the length (60 if they don't say).
+  If they give a day but no time, ask what time instead of guessing. If that time has already passed today, point it out and ask which day they mean.
+  Don't also add it as a task.
+- Something to write down or remember with no time ("jot down that...", "note that...", "remember my locker code is 4412") goes in "add_notes" as short plain text.
+- Use empty lists when there is nothing to add. Say out loud what you added, in character.
 - {"Also give a natural Japanese version of your reply in reply_ja (the voice speaks Japanese, the English is shown as subtitles)." if sub else "Set reply_ja to an empty string."}
 - If the user asks you to explain, teach, compare or work through something (anything that needs more than three sentences),
   keep "reply" as a short spoken lead-in and put the full explanation in "lesson". For normal chat set "lesson" to null.
@@ -120,6 +133,7 @@ Rules:
 
 Respond ONLY with JSON in this exact shape:
 {{"emotion": "happy|angry|sad|surprised|relaxed|neutral", "reply": "...", "reply_ja": "...", "add_tasks": [{{"title": "...", "difficulty": "medium", "due": null}}],
+"add_events": [{{"title": "...", "start": "YYYY-MM-DDTHH:MM", "minutes": 60}}], "add_notes": ["..."],
 "lesson": null or {{"title": "...", "markdown": "...", "images": ["..."]}}}}"""
 
 
@@ -254,18 +268,28 @@ def chat(body: ChatIn):
         except Exception as e:  # show the error in character instead of crashing
             data = {"emotion": "sad", "reply": f"Ugh, something went wrong with my brain: {str(e)[:150]}", "add_tasks": []}
 
-    added = []
-    tasks = data.get("add_tasks") or []
-    if tasks:
+    added, added_events, added_notes = [], [], []
+    tasks, events, notes = (data.get(k) if isinstance(data.get(k), list) else [] for k in ("add_tasks", "add_events", "add_notes"))
+    if tasks or events or notes:
         with Transaction() as st:
             for t in tasks[:10]:
                 if isinstance(t, dict) and t.get("title"):
                     added.append(create_task(st, t["title"], t.get("difficulty", "medium"), t.get("due")))
+            for e in events[:10]:
+                if isinstance(e, dict) and e.get("title") and e.get("start"):
+                    event = create_event(st, e["title"], e["start"], e.get("minutes", 60))
+                    if event:
+                        added_events.append(event)
+            for n in notes[:10]:
+                if isinstance(n, str) and n.strip():
+                    added_notes.append(create_note(st, n))
     return {
         "emotion": data.get("emotion", "neutral"),
         "reply": data.get("reply", ""),
         "reply_ja": data.get("reply_ja", ""),
         "added_tasks": added,
+        "added_events": added_events,
+        "added_notes": added_notes,
         "lesson": build_lesson(data.get("lesson")),
         "state": public_state(storage.load()),
     }

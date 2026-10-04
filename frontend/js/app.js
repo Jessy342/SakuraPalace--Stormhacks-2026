@@ -328,7 +328,14 @@ async function sendChat(text) {
     for (const t of res.added_tasks) addMsg('sys', `📝 New quest: ${t.title}${t.due ? ' (due ' + t.due + ')' : ''}`);
     if (res.added_tasks.length) voice.sfx('task_done');
     await setState(res.state);
+    for (const ev of res.added_events || []) addMsg('sys', `🗓 Scheduled: ${ev.title} · ${whenLabel(ev.start)}`);
+    for (const n of res.added_notes || []) addMsg('sys', `📝 Noted: ${n.text}`);
     if (res.lesson) showLesson(res.lesson);
+    else if ((res.added_events || []).length || (res.added_notes || []).length) { // show where it went
+      setQuestSub((res.added_events || []).length ? 'schedule' : 'notes');
+      if (currentTab !== 'tasks') openTab('tasks');
+      voice.sfx('task_done');
+    }
     say(res.reply, { emotion: res.emotion, ja: res.reply_ja });
   } catch (err) { $('bubble').classList.add('hidden'); toastError(err); }
   setChatBusy(false);
@@ -452,6 +459,7 @@ const questRow = (t, withDelete) => `
 
 function renderTasks() {
   renderWeek();
+  renderPlanner();
   const pending = S.tasks.filter(t => !t.done)
     .map((t, i) => ({ t, i, d: dueInfo(t.due) }))
     .sort((a, b) => (a.d?.day || '9999z').localeCompare(b.d?.day || '9999z') || a.i - b.i) // soonest deadline first
@@ -463,6 +471,80 @@ function renderTasks() {
     + (pending.length > 4 ? `<li class="empty"><span class="t">+${pending.length - 4} more…</span></li>` : '') : empty;
   $('done-list').innerHTML = done.map(t => `<li><span class="t">${esc(t.title)}</span></li>`).join('');
 }
+
+// ======================= Schedule + Notes (inside the Quests menu) =======================
+let questSub = 'quests'; // quests | schedule | notes
+function setQuestSub(name) {
+  questSub = name;
+  document.querySelectorAll('#quest-tabs button').forEach(b => b.classList.toggle('active', b.dataset.sub === name));
+  for (const s of ['quests', 'schedule', 'notes']) $('sub-' + s).classList.toggle('hidden', s !== name);
+}
+
+/** "Today 2:00 PM", "Tomorrow 9:30 AM", "Fri, Oct 9 2:00 PM" */
+function whenLabel(start) {
+  const d = new Date(start), now = new Date();
+  const tmr = new Date(now); tmr.setDate(now.getDate() + 1);
+  const day = localISO(d) === localISO(now) ? 'Today' : localISO(d) === localISO(tmr) ? 'Tomorrow'
+    : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return `${day} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function renderPlanner() {
+  const now = Date.now();
+  const events = [...(S.events || [])].sort((a, b) => a.start.localeCompare(b.start));
+  const ended = e => new Date(e.start).getTime() + e.minutes * 60000 < now;
+  $('event-list').innerHTML = events.length ? events.map(e => `
+    <li class="${ended(e) ? 'past' : ''}"><span class="when">${esc(whenLabel(e.start))}</span>
+      <span class="t">${esc(e.title)} <small>${e.minutes} min</small></span>
+      <button class="ghost" data-delevent="${e.id}" title="Remove">✕</button></li>`).join('')
+    : '<li class="empty"><span class="t">Nothing scheduled yet.</span></li>';
+  const notes = [...(S.notes || [])].reverse();
+  $('note-list').innerHTML = notes.length ? notes.map(n => `
+    <li><span class="t">${esc(n.text)}</span><button class="ghost" data-delnote="${n.id}" title="Remove">✕</button></li>`).join('')
+    : '<li class="empty"><span class="t">No notes yet.</span></li>';
+  const tabs = $('quest-tabs').children; // show how many of each there are
+  tabs[1].textContent = `Schedule${events.filter(e => !ended(e)).length ? ` (${events.filter(e => !ended(e)).length})` : ''}`;
+  tabs[2].textContent = `Notes${notes.length ? ` (${notes.length})` : ''}`;
+  const next = events.find(e => new Date(e.start).getTime() > now);
+  $('tracker-next').classList.toggle('hidden', !next);
+  if (next) $('tracker-next').innerHTML = `<b>Next up</b> ${esc(next.title)} <span>${esc(whenLabel(next.start))}</span>`;
+}
+
+$('event-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    const res = await post('/events', { title: $('event-title').value, start: $('event-start').value });
+    $('event-title').value = '';
+    await setState(res.state);
+  } catch (err) { toastError(err); }
+});
+$('note-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    const res = await post('/notes', { text: $('note-text').value });
+    $('note-text').value = '';
+    await setState(res.state);
+  } catch (err) { toastError(err); }
+});
+
+/** When a scheduled session starts, the companion says so (once). Sessions missed while the app was closed are just marked. */
+async function checkEvents() {
+  if (!S) return;
+  const now = Date.now();
+  for (const e of S.events || []) {
+    const at = new Date(e.start).getTime();
+    if (e.notified || at > now) continue;
+    e.notified = true;
+    try { await setState(await post(`/events/${e.id}/notified`)); } catch { continue; }
+    if (now - at < 30 * 60000) {
+      voice.sfx('level_up');
+      addMsg('sys', `⏰ It's time: ${e.title}`);
+      character.wave(2.5);
+      say(`It's time for ${e.title}! Let's get started.`, { emotion: 'happy' });
+    }
+  }
+}
+setInterval(checkEvents, 20000);
 
 async function completeTask(id) {
   const res = await post(`/tasks/${id}/complete`);
@@ -878,12 +960,18 @@ document.querySelectorAll('input[name=vmode]').forEach(r => r.addEventListener('
 
 // ======================= One click handler for all the generated buttons =======================
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-item],[data-buyitem],[data-cat],[data-turn],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del]');
+  const t = e.target.closest('[data-item],[data-buyitem],[data-cat],[data-turn],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del],[data-delevent],[data-delnote],[data-sub]');
   if (!t || t.disabled) return;
   const d = t.dataset;
   try {
     if (d.done) {
       await completeTask(d.done);
+    } else if (d.delevent) {
+      await setState(await api(`/events/${d.delevent}`, { method: 'DELETE' }));
+    } else if (d.delnote) {
+      await setState(await api(`/notes/${d.delnote}`, { method: 'DELETE' }));
+    } else if (d.sub) {
+      setQuestSub(d.sub);
     } else if (d.del) {
       await setState(await api(`/tasks/${d.del}`, { method: 'DELETE' }));
     } else if (d.item) {
@@ -998,6 +1086,7 @@ async function boot() {
   if (reminder) addMsg('sys', '⏰ ' + reminder);
   character.wave(3);
   setTimeout(watchFrameRate, 2500); // once the model has settled in
+  setTimeout(checkEvents, 8000);
 
   // Browsers block sound until the first click or key press, so greet out loud on the first interaction.
   let greeted = false;

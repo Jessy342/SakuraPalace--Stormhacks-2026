@@ -85,6 +85,7 @@
   <aside id="tracker" class="frame">
     <div class="frame-title"><span>Quests</span><button class="link" data-open="tasks">View all</button></div>
     <ul id="tracker-list" class="list"></ul>
+    <div id="tracker-next" class="next-event hidden"></div>
     <div id="tracker-week" class="week-card"></div>
   </aside>
 
@@ -134,6 +135,12 @@
     <!-- QUESTS -->
     <section id="tab-tasks" class="tab" data-title="Quests">
       <div id="week-card" class="week-card"></div>
+      <div id="quest-tabs" class="subtabs">
+        <button data-sub="quests" class="active">Quests</button>
+        <button data-sub="schedule">Schedule</button>
+        <button data-sub="notes">Notes</button>
+      </div>
+      <div id="sub-quests">
       <form id="task-form" class="row">
         <input id="task-title" placeholder="New quest…" required />
         <select id="task-diff">
@@ -153,6 +160,30 @@
       <h3>Plan my week</h3>
       <textarea id="plan-goals" rows="3" placeholder="Tell me your goals and interests this week (e.g. midterm Friday, gym 3x, learn guitar)…"></textarea>
       <button id="plan-btn" class="primary">Make my plan</button>
+      </div>
+
+      <!-- Schedule: sessions at a date and time. The companion announces each one when it starts. -->
+      <div id="sub-schedule" class="hidden">
+        <form id="event-form" class="row">
+          <input id="event-title" placeholder="New session… (e.g. Studying)" required />
+          <input id="event-start" type="datetime-local" required />
+          <button type="submit" class="primary">Add</button>
+        </form>
+        <small>Or just say it: “Schedule a session called Studying for tomorrow at 2pm.”</small>
+        <h3>Coming up</h3>
+        <ul id="event-list" class="list"></ul>
+      </div>
+
+      <!-- Notes and reminders -->
+      <div id="sub-notes" class="hidden">
+        <form id="note-form" class="row">
+          <input id="note-text" placeholder="Jot something down…" required />
+          <button type="submit" class="primary">Add</button>
+        </form>
+        <small>Or just say it: “Jot down that the exam covers chapters 3 to 5.”</small>
+        <h3>Notes &amp; reminders</h3>
+        <ul id="note-list" class="list notes"></ul>
+      </div>
     </section>
 
     <!-- FOCUS -->

@@ -533,3 +533,18 @@ body[data-tab="dress"] #dialogue { bottom: 84px; } /* keep the speech box above 
 .lesson-body ul, .lesson-body ol { margin: 6px 0; padding-left: 22px; }
 .lesson-body code { background: rgba(255,255,255,.12); padding: 1px 5px; border-radius: 5px; }
 #chat-form input:disabled { opacity: .6; }
+
+/* Quests menu: Quests / Schedule / Notes */
+.subtabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 12px; background: rgba(0,0,0,.35); border-radius: 999px; }
+.subtabs button { flex: 1; border-color: transparent; background: transparent; padding: 6px 8px; border-radius: 999px; font-size: .85rem; }
+.subtabs button.active { color: #2a1c05; background: linear-gradient(180deg, #fff1c9, #e3b565); }
+.when { flex: none; font-size: .72rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; color: #0b0e22; background: var(--cyan); }
+.list li.past { opacity: .5; }
+.list li.past .when { background: var(--muted); }
+.list li .t small { margin-left: 4px; }
+.list.notes li { border-left-color: var(--accent); align-items: flex-start; }
+.list.notes li .t { white-space: pre-wrap; }
+#event-start { color-scheme: dark; flex: 0 0 200px; }
+.next-event { margin-top: 8px; padding: 7px 10px; border-radius: 10px; font-size: .82rem; background: rgba(111,211,255,.12); border: 1px solid rgba(111,211,255,.4); }
+.next-event b { color: var(--cyan); margin-right: 4px; }
+.next-event span { float: right; color: var(--muted); }

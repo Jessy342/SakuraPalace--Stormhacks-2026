@@ -21,6 +21,8 @@ DEFAULT_STATE = {
     "xp": 0,
     "level": 1,
     "tasks": [],
+    "events": [],  # scheduled sessions: {id, title, start "YYYY-MM-DDTHH:MM" (local time), minutes, notified}
+    "notes": [],   # jotted notes and reminders: {id, text, created}
     "owned_characters": {CHARACTERS["starter"]: {"bond": 0}},
     "active_character": CHARACTERS["starter"],
     "personality_overrides": {},  # character id -> personality preset chosen by the user
