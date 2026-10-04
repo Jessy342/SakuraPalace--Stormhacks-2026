@@ -124,7 +124,7 @@ export class SummonStage {
     if (em) {
       if (t > this.nextBlink) { this.blinkStart = t; this.nextBlink = t + 2 + Math.random() * 3.5; }
       const blink = this.blinkStart > 0 && t - this.blinkStart < 0.15 ? Math.sin(((t - this.blinkStart) / 0.15) * Math.PI) : 0;
-      const smile = smooth(LAND, LAND + 0.8, t) * (this.mood === 'happy' ? 0.75 : 0.5);
+      const smile = smooth(LAND, LAND + 0.8, t) * (this.mood === 'happy' ? 0.45 : 0.5);
       em.setValue(this.mood, smile);
       em.setValue('blink', this.mood === 'happy' && smile > 0.6 ? 0 : blink);
     }

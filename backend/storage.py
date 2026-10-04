@@ -30,6 +30,8 @@ DEFAULT_STATE = {
     "personality_overrides": {},  # character id -> personality preset chosen by the user
     "owned_accessories": [],
     "equipped_accessories": [],
+    "owned_outfits": [],
+    "outfit": "",  # the outfit being worn ("" = the character's own clothes)
     "owned_backgrounds": [b["id"] for b in SHOP["backgrounds"] if b["price"] == 0],  # the free rooms
     "background": "bedroom",
     "pity": {"since_legendary": 0},

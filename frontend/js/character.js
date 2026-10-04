@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { buildAccessory, DEFAULT_FACE } from './accessories.js';
 import { REST, GESTURES, DEFAULT, blend, writePose } from './poses.js';
+import { wearOutfit } from './outfits.js';
 
 const EMOTIONS = ['happy', 'angry', 'sad', 'surprised', 'relaxed'];
 const MAX_YAW = 0.7;    // how far she can turn her head left/right (radians, ~40°)
@@ -19,7 +20,8 @@ export class Character {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
 
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    this.ambient = new THREE.AmbientLight(0xffffff, 0.9);
+    this.scene.add(this.ambient);
     const key = new THREE.DirectionalLight(0xffffff, 2.3);
     key.position.set(1, 2, 3);
     this.scene.add(key);
@@ -42,6 +44,8 @@ export class Character {
     this.accGroup = new THREE.Group();
     this.equipped = [];
     this.face = DEFAULT_FACE; // eye positions in accessory space (used by glasses)
+    this.outfitId = '';
+    this.worn = null;
 
     // View: menus cover the right side of the screen, so the character slides over to stay centred in what's left.
     this.shift = 0; this.shiftTarget = 0;
@@ -137,6 +141,7 @@ export class Character {
     const p = Math.round(this.shift);
     this.camera.setViewOffset(w + p, h, p, 0, w, h);
     this.camera.updateProjectionMatrix();
+    this.placeShadow();
   }
 
   frameCamera() {
@@ -147,9 +152,42 @@ export class Character {
     const y = THREE.MathUtils.lerp(span * 0.39, h - 0.16, z);
     this.camera.position.set(0, y, THREE.MathUtils.lerp(fullDist, faceDist, z));
     this.camera.lookAt(0, y, 0);
+    this.placeShadow();
+  }
+
+  /** Tells the page where the feet are on screen, so the shadow on the ground sits right under them. */
+  placeShadow() {
+    this.camera.updateMatrixWorld();
+    const p = new THREE.Vector3(0, 0, 0).project(this.camera);
+    const css = document.documentElement.style;
+    css.setProperty('--feet-x', ((p.x + 1) / 2 * innerWidth).toFixed(1) + 'px');
+    css.setProperty('--feet-y', ((1 - p.y) / 2 * innerHeight).toFixed(1) + 'px');
+  }
+
+  /** Tints the light on the character with the room's colour ([r, g, b] 0-255), so they look lit by the scene. */
+  setRoomLight(rgb) {
+    const max = Math.max(...rgb, 1);
+    this.ambient.color.setRGB(...rgb.map(v => 0.68 + 0.32 * v / max));
+  }
+
+  /** Wears an outfit from outfits.js ('' = the model's own clothes). */
+  setOutfit(id) {
+    if ((id || '') === this.outfitId) return;
+    this.outfitId = id || '';
+    this.applyOutfit();
+  }
+
+  applyOutfit() {
+    if (this.worn) { this.worn.remove(); this.worn = null; }
+    if (!this.vrm || !this.outfitId) return;
+    const r = this.root, turn = r.rotation.y, scale = r.scale.clone(), pos = r.position.clone();
+    r.rotation.set(0, 0, 0); r.scale.set(1, 1, 1); r.position.set(0, 0, 0); r.updateMatrixWorld(true); // fit it to the model standing straight
+    this.worn = wearOutfit(this.vrm, this.outfitId);
+    r.rotation.y = turn; r.scale.copy(scale); r.position.copy(pos);
   }
 
   clear() {
+    this.worn = null; // (its pieces are thrown away with the model)
     if (this.root) {
       this.scene.remove(this.root);
       if (this.vrm) VRMUtils.deepDispose(this.vrm.scene);
@@ -199,6 +237,7 @@ export class Character {
     }
     this.frameCamera();
     this.attachAccessories();
+    this.applyOutfit();
     return ok;
   }
 
@@ -568,7 +607,8 @@ export class Character {
 
     const em = this.vrm.expressionManager;
     if (em) {
-      for (const e of EMOTIONS) em.setValue(e, w[e] * (e === 'surprised' ? 0.8 : 1));
+      // 'happy' at full strength squeezes the eyes shut, which looks like squinting while she talks: keep it to a smile
+      for (const e of EMOTIONS) em.setValue(e, w[e] * (e === 'surprised' ? 0.8 : e === 'happy' ? 0.45 : 1));
       em.setValue('aa', Math.min(1, this.mouth * 1.2));
       em.setValue('blink', w.happy > 0.5 ? 0 : blink);
     }

@@ -735,3 +735,26 @@ button.avatar:hover em { opacity: 1; }
 .st-char small { position: absolute; top: -4px; right: 0; padding: 0 6px; border-radius: 6px; font-size: .6rem; font-weight: 800; color: #fff; background: var(--accent); }
 .st-sub { font-size: .85rem; color: var(--muted); }
 .ai-tag { color: var(--accent); font-size: .9rem; text-shadow: 0 0 8px var(--accent); }
+
+/* ---------- the character stands in the room: a contact shadow right under the feet ---------- */
+#floor { left: var(--feet-x, 50vw); top: var(--feet-y, 88vh); bottom: auto; width: 40vh; height: 7vh; margin: -3.4vh 0 0 -20vh; transition: none;
+  background: radial-gradient(ellipse at center, rgba(10,4,24,.7) 0%, rgba(10,4,24,.38) 38%, rgba(10,4,24,.12) 60%, transparent 72%); }
+
+/* ---------- character cards: light, in the colour of their rarity (the dark blue looked heavy) ---------- */
+.ccard { background: linear-gradient(180deg, color-mix(in srgb, var(--rc) 18%, #fff8fd) 0%, color-mix(in srgb, var(--rc) 42%, #ffe9f6) 55%, color-mix(in srgb, var(--rc) 80%, #fff) 100%); }
+.ccard::after { background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--rc) 70%, #3a1f5c) 85%); }
+.ccard.locked { background: linear-gradient(180deg, #cfc6e0 0%, #9d92b8 100%); }
+.ccard.locked img { filter: brightness(.25) saturate(.3); opacity: .75; }
+.d-art { background: radial-gradient(circle at 50% 30%, #fff 0%, color-mix(in srgb, var(--rc) 35%, #fff2fa) 45%, color-mix(in srgb, var(--rc) 70%, #c9a6f0) 100%); }
+.tile, .dress-action img { background: radial-gradient(circle at 50% 35%, #ffffff 0%, #f1e2ff 55%, #cfb2f2 100%); }
+.tile:hover { background: radial-gradient(circle at 50% 35%, #ffffff 0%, #ffe6f5 55%, #f0b2dc 100%); }
+.tile.locked img { filter: none; opacity: .92; }
+.bthumb { background: linear-gradient(120deg, #ffd9ec, #cfc0ff); }
+
+/* ---------- small buttons that used to look like web links ---------- */
+.chip-btn { padding: 3px 12px; border-radius: 99px; font: 700 .68rem "M PLUS Rounded 1c", sans-serif; letter-spacing: .06em; text-transform: uppercase;
+  color: #2a1c05; border: 0; background: linear-gradient(180deg, #fff3cf, #ffc24f); box-shadow: 0 2px 8px rgba(255,194,79,.4); }
+.chip-btn:hover { background: linear-gradient(180deg, #fff, #ffd27a); transform: translateY(-1px); }
+button.focus-pill { cursor: pointer; font: inherit; font-weight: 700; color: inherit; }
+.pull-btn { letter-spacing: .04em; }
+.dress-cats button:nth-child(6) { --h: #ff9d6b; }

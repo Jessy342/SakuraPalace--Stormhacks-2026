@@ -52,11 +52,29 @@ ROOMS = {
 }
 
 
+# Rooms in the look of a Makoto Shinkai film: luminous skies, towering clouds, rain and reflections
+SHINKAI = ("Background painting in the style of a Makoto Shinkai anime film: breathtaking luminous sky, hyper-detailed scenery, "
+           "vivid saturated colours, glowing light, lens flare, crisp reflections, strong depth from foreground to far distance. "
+           "Wide shot at eye level. The lower centre of the picture is open, level ground where a character could stand. "
+           "No people, no characters, no animals, no text, no logos, no UI. 16:9.")
+SHINKAI_ROOMS = {
+    "summer_sky": "A grassy hilltop on a brilliant summer afternoon: towering white cumulonimbus clouds in a deep blue sky, wind in the long grass, a distant seaside town and glittering ocean far below.",
+    "train_crossing": "A quiet Japanese railway crossing at golden hour: crossing gates and signal, overhead wires, a narrow street running downhill to the sea, long warm shadows, glowing orange and pink clouds.",
+    "comet_lake": "A mountain lake at twilight with a magnificent comet splitting into glowing trails across a star-filled sky, the trails reflected in the still water, a small town's lights on the far shore, grassy shore in the foreground.",
+    "rain_garden": "A Japanese garden pavilion in summer rain: wooden shelter with benches, lush wet green maple leaves, a pond rippling with raindrops, soft overcast light, wet stone path in the foreground.",
+    "city_stairs": "A stone stairway landing between houses in a Tokyo neighbourhood at late afternoon: red handrail, the city spreading out below, power lines, a huge sky of sunlit clouds, warm light on the pavement.",
+    "twilight_station": "A small rural train station platform at blue-hour twilight: a single lit lamp and bench, rails stretching away through rice fields filled with water reflecting a purple and pink sky, first stars appearing.",
+    "tokyo_rain": "A Tokyo street at night just after rain: glowing shop signs and vending machines, wet asphalt mirroring the lights, a pedestrian crossing in the foreground, skyscrapers and a soft purple sky beyond.",
+    "sky_island": "Above the clouds at sunrise: a small grassy floating island with a lone tree and stone lantern, an endless sea of golden clouds below, shafts of sunlight and a vast pastel sky.",
+}
+ROOMS.update(SHINKAI_ROOMS)
+
+
 def paint(room_id, description):
     client = genai.Client(api_key=GEMINI_API_KEY)
     response = client.models.generate_content(
         model=MODEL,
-        contents=f"{description}\n\n{STYLE}",
+        contents=f"{description}\n\n{SHINKAI if room_id in SHINKAI_ROOMS else STYLE}",
         config=types.GenerateContentConfig(response_modalities=["IMAGE"], image_config=types.ImageConfig(aspect_ratio="16:9", image_size="2K")),
     )
     for part in response.candidates[0].content.parts:

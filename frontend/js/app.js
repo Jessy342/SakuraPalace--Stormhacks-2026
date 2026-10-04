@@ -2,6 +2,7 @@
 import { api, post } from './api.js';
 import { Character } from './character.js';
 import { accessoryThumbs } from './accessories.js';
+import { outfitThumb } from './outfits.js';
 import { Environment } from './environment.js';
 import * as voice from './voice.js';
 import { playCutscene, stars, portrait, portraitImg, LOTUS } from './gacha.js';
@@ -23,6 +24,9 @@ const character = new Character($('stage'), voice.mouthLevel);
 const environment = new Environment($('env'), $('envfx'));
 window.character = character; // handy for debugging in DevTools (F12)
 window.environment = environment;
+environment.follow = [$('stage'), $('floor')];              // they slide with the room, so the character stays planted on its ground
+environment.onTheme = rgb => character.setRoomLight(rgb);  // and is lit in the room's colour
+environment.applyTheme();
 
 const charById = id => S.catalog.characters.find(c => c.id === id);
 const activeChar = () => charById(S.active_character);
@@ -806,8 +810,8 @@ function renderGacha() {
   const g = S.gacha;
   const banners = S.catalog.banners || [];
   const b = banners.find(x => x.id === bannerId) || banners[0];
-  $('pull1').innerHTML = `${LOTUS}×${g.pull_cost}&nbsp;&nbsp; Summon ×1`;
-  $('pull10').innerHTML = `${LOTUS}×${g.ten_pull_cost}&nbsp;&nbsp; Summon ×10`;
+  $('pull1').innerHTML = `${LOTUS}×${g.pull_cost}&nbsp;&nbsp; SUMMON ×1`;
+  $('pull10').innerHTML = `${LOTUS}×${g.ten_pull_cost}&nbsp;&nbsp; SUMMON ×10`;
   $('pull1').disabled = S.points < g.pull_cost;
   $('pull10').disabled = S.points < g.ten_pull_cost;
   $('pity-limit').textContent = g.pity_limit;
@@ -894,7 +898,7 @@ function renderChars() {
       <div class="initial">${esc(c.name[0])}</div>${portraitImg(c.id, true)}
       <span class="cls" title="${classOf(c)[0]}">${classOf(c)[1]}</span>
       ${c.id === S.active_character ? '<span class="tag">Companion</span>' : ''}
-      ${owned(c.id) ? '' : '<div class="notidx">Not Indexed</div>'}
+      ${owned(c.id) ? '' : '<div class="notidx">Not Collected</div>'}
       <div class="cname">${esc(c.name)}</div><div class="stars">${stars(c.rarity)}</div>
     </div>`).join('') || '<small>No characters of this type yet.</small>';
   renderCharDetail();
@@ -933,28 +937,31 @@ function previewVoice(id, lang) {
 // Laid out like a character screen in a game: categories and the picked item on the left, the list of items
 // on the right, the character in the middle on a soft backdrop of their own colour.
 // Clicking an item in the list previews it on the character; the button on the left wears, takes off or buys it.
-let dressCat = 'head';   // head | face | room | persona | voice
+let dressCat = 'outfit'; // outfit | head | face | room | persona | voice
 let picked = null;       // { kind: 'accessory' | 'background', id }: the item selected in the list
 let accThumbs = null;    // little pictures of the accessories, made the first time the dressing room opens
-const CAT_NAMES = { head: 'Headwear', face: 'Eyewear', room: 'Rooms', persona: 'Personality', voice: 'Voice' };
+const CAT_NAMES = { outfit: 'Outfits', head: 'Headwear', face: 'Eyewear', room: 'Rooms', persona: 'Personality', voice: 'Voice' };
 
-const ownsItem = (kind, id) => (kind === 'accessory' ? S.owned_accessories : S.owned_backgrounds).includes(id);
-const findItem = (kind, id) => (kind === 'accessory' ? S.catalog.accessories : S.catalog.backgrounds).find(x => x.id === id);
-const isOn = (kind, id) => (kind === 'accessory' ? S.equipped_accessories.includes(id) : S.background === id);
-const thumbOf = (kind, id) => (kind === 'accessory'
+const OWNED = { accessory: 'owned_accessories', background: 'owned_backgrounds', outfit: 'owned_outfits' };
+const CATALOG = { accessory: 'accessories', background: 'backgrounds', outfit: 'outfits' };
+const ownsItem = (kind, id) => S[OWNED[kind]].includes(id);
+const findItem = (kind, id) => S.catalog[CATALOG[kind]].find(x => x.id === id);
+const isOn = (kind, id) => (kind === 'accessory' ? S.equipped_accessories.includes(id) : kind === 'outfit' ? S.outfit === id : S.background === id);
+const thumbOf = (kind, id) => (kind === 'outfit' ? outfitThumb(id) : kind === 'accessory'
   ? (accThumbs ||= accessoryThumbs(S.catalog.accessories.map(a => a.id)))[id] : environment.thumb(id));
 
 /** Shows what is equipped, plus the picked item as a preview. */
 function applyTry() {
   const preview = picked?.kind === 'accessory' && !S.equipped_accessories.includes(picked.id) ? [picked.id] : [];
   character.setAccessories([...S.equipped_accessories, ...preview]);
+  character.setOutfit(picked?.kind === 'outfit' ? picked.id : S.outfit);
   applyEnv();
 }
 
 function tile(kind, it) {
   const owned = ownsItem(kind, it.id), on = isOn(kind, it.id);
-  const badge = on ? (kind === 'accessory' ? '✓ Wearing' : '✓ In use') : owned ? 'Owned' : `${LOTUS} ${it.price}`;
-  return `<button class="tile ${kind === 'accessory' ? 'acc' : ''} ${on ? 'worn' : ''} ${owned ? '' : 'locked'} ${picked?.id === it.id ? 'trying' : ''}"
+  const badge = on ? (kind !== 'background' ? '✓ Wearing' : '✓ In use') : owned ? 'Owned' : `${LOTUS} ${it.price}`;
+  return `<button class="tile ${kind !== 'background' ? 'acc' : ''} ${on ? 'worn' : ''} ${owned ? '' : 'locked'} ${picked?.id === it.id ? 'trying' : ''}"
     data-item="${kind}:${it.id}" title="${esc(it.name)}"><img src="${thumbOf(kind, it.id)}" alt="" draggable="false">
     <span class="badge">${badge}</span><span class="tname">${esc(it.name)}</span></button>`;
 }
@@ -963,22 +970,22 @@ function renderDress() {
   document.querySelectorAll('#dress-cats button').forEach(b => b.classList.toggle('active', b.dataset.cat === dressCat));
   $('dress-cat-title').textContent = CAT_NAMES[dressCat];
   $('dress-points').textContent = S.points;
-  const items = ['head', 'face', 'room'].includes(dressCat);
+  const items = ['outfit', 'head', 'face', 'room'].includes(dressCat);
   $('dress-grid').classList.toggle('hidden', !items);
   $('dress-action').classList.toggle('hidden', !items);
   $('dress-persona').classList.toggle('hidden', dressCat !== 'persona');
   $('dress-voice').classList.toggle('hidden', dressCat !== 'voice');
   if (currentTab === 'dress' && items) { // (skip the picture work while the dressing room is closed)
-    const kind = dressCat === 'room' ? 'background' : 'accessory';
-    const list = kind === 'background' ? S.catalog.backgrounds : S.catalog.accessories.filter(a => (a.slot || 'head') === dressCat);
+    const kind = dressCat === 'room' ? 'background' : dressCat === 'outfit' ? 'outfit' : 'accessory';
+    const list = kind === 'accessory' ? S.catalog.accessories.filter(a => (a.slot || 'head') === dressCat) : S.catalog[CATALOG[kind]];
     $('dress-grid').innerHTML = list.map(it => tile(kind, it)).join('');
     const it = picked && findItem(picked.kind, picked.id);
     if (it) {
       const owned = ownsItem(picked.kind, it.id), on = isOn(picked.kind, it.id), short = it.price - S.points;
       const label = !owned ? (short > 0 ? `Need ${short} more ${LOTUS}` : `Buy · ${LOTUS} ${it.price}`)
-        : picked.kind === 'accessory' ? (on ? 'Take off' : 'Wear') : (on ? 'In use' : 'Use this room');
-      $('dress-action').innerHTML = `<img class="${picked.kind === 'accessory' ? 'acc' : ''}" src="${thumbOf(picked.kind, it.id)}" alt="">
-        <div class="what"><small>${on ? (picked.kind === 'accessory' ? 'Wearing' : 'In use') : owned ? 'Owned' : 'Previewing · not owned'}</small><b>${esc(it.name)}</b></div>
+        : picked.kind !== 'background' ? (on ? 'Take off' : 'Wear') : (on ? 'In use' : 'Use this room');
+      $('dress-action').innerHTML = `<img class="${picked.kind !== 'background' ? 'acc' : ''}" src="${thumbOf(picked.kind, it.id)}" alt="">
+        <div class="what"><small>${on ? (picked.kind !== 'background' ? 'Wearing' : 'In use') : owned ? 'Owned' : 'Previewing · not owned'}</small><b>${esc(it.name)}</b></div>
         <button class="primary big" data-apply ${(!owned && short > 0) || (owned && on && picked.kind === 'background') ? 'disabled' : ''}>${label}</button>`;
     } else {
       $('dress-action').innerHTML = `<div class="what">Pick an item on the right to see it on ${esc(activeChar().name)}.<br>Items with a price can be previewed first, then bought here.</div>`;
@@ -1013,7 +1020,7 @@ async function applyPicked() {
     vfx.burst(innerWidth / 2, innerHeight * 0.4, '#ff8fc4', 60);
     await setState(await post('/equip', { kind, id, on: true })); // wear / use it right away
     say('Ooh, thank you! I love it!', { emotion: 'happy' });
-  } else if (kind === 'accessory') {
+  } else if (kind !== 'background') {
     const on = !isOn(kind, id);
     await setState(await post('/equip', { kind, id, on }));
     if (on) character.setEmotion('happy', 3);

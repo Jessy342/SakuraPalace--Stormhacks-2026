@@ -471,7 +471,15 @@ const PICTURE = id => `assets/backgrounds/${id}.webp`;
 const NO_PICTURE = new Set(['soft']); // drawn in the character's colour, so it can't be a fixed picture
 // Effects that go with each picture: [behind the character], and what drifts in front of the character
 const ROOM = [['motes'], 'bokeh'];
+// The Makoto Shinkai-style rooms (picture only; a plain gradient stands in if the picture is missing)
+for (const [id, name, top, bottom] of [['summer_sky', 'Summer Sky Hill', '#3f8fe0', '#bfe6a8'], ['train_crossing', 'Sunset Crossing', '#ff9a6b', '#5a4a7a'],
+  ['comet_lake', 'Comet Lake', '#1a1f5c', '#5a3f8a'], ['rain_garden', 'Garden in the Rain', '#8fb89a', '#3f6a55'], ['city_stairs', 'City Stairway', '#7fc0f0', '#e9c9a0'],
+  ['twilight_station', 'Twilight Station', '#3a3f8a', '#e08fb0'], ['tokyo_rain', 'Tokyo After Rain', '#2a1f5a', '#b0508a'], ['sky_island', 'Island Above the Clouds', '#9fd0ff', '#ffe0b0']]) {
+  SCENES[id] = { name, fx: [], paint(g, w, h) { g.fillStyle = vgrad(g, 0, h, [top, bottom]); g.fillRect(0, 0, w, h); } };
+}
 const PICTURE_FX = {
+  summer_sky: [['sparkles'], 'bokeh'], train_crossing: [['motes', 'rays'], 'bokeh'], comet_lake: [['twinkle', 'shooting'], 'fireflies'], rain_garden: [['rain'], 'rain'],
+  city_stairs: [['motes', 'rays'], 'bokeh'], twilight_station: [['twinkle'], 'fireflies'], tokyo_rain: [['rain'], 'rain'], sky_island: [['rays', 'motes'], 'bokeh'],
   bedroom: ROOM, bedroom_modern: ROOM, bedroom_study: ROOM, bedroom_gamer: [['sparkles'], 'bokeh'], bedroom_penthouse: [['twinkle'], 'bokeh'],
   sakura: [['petals', 'twinkle'], 'petals'], courtyard: [['petals', 'rays'], 'petals'], rooftop: [['petals'], 'petals'],
   classroom: [['motes', 'rays'], 'bokeh'], cafe: [['motes'], 'bokeh'], library: [['embers', 'twinkle'], 'bokeh'],
@@ -630,6 +638,7 @@ export class Environment {
     root.setProperty('--panel', `rgba(${rgb.join(',')},.9)`);
     root.setProperty('--panel-solid', `rgb(${rgb.join(',')})`);
     root.setProperty('--panel-soft', `rgba(${rgb.join(',')},.72)`);
+    if (this.onTheme) this.onTheme([R / n, G / n, B / n]); // the room's average colour, for lighting the character
   }
 
   draw(t) {
@@ -733,6 +742,11 @@ export class Environment {
         for (let i = 0; i < 28; i++) { const a = i * TAU / 28; g.beginPath(); g.arc(b.x + Math.cos(a) * rad, b.y + Math.sin(a) * rad + age * age * 30, 2.2, 0, TAU); g.fill(); }
       }
       g.globalAlpha = 1;
+    }
+    // the character (and the shadow under their feet) slide together with the room, so they stay planted on its ground
+    if (this.follow) {
+      const tr = `translate(${(-this.mx * innerWidth * 0.016).toFixed(1)}px, ${(-this.my * innerWidth * 0.008).toFixed(1)}px)`;
+      if (tr !== this.lastShift) { this.lastShift = tr; for (const el of this.follow) el.style.transform = tr; }
     }
     this.drawFront(t);
   }

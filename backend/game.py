@@ -101,6 +101,7 @@ def public_state(state):
         "catalog": {
             "characters": CHARACTERS["characters"],
             "accessories": SHOP["accessories"],
+            "outfits": SHOP.get("outfits", []),
             "backgrounds": SHOP["backgrounds"],
             "banners": active_banners(),
         },
@@ -285,17 +286,20 @@ def delete_note(note_id: str):
 
 # ---------------- Shop ----------------
 class BuyIn(BaseModel):
-    kind: str  # "accessory" or "background"
+    kind: str  # "accessory", "background" or "outfit"
     id: str
 
 
 @router.post("/shop/buy")
 def buy(body: BuyIn):
-    catalog = SHOP["accessories"] if body.kind == "accessory" else SHOP["backgrounds"]
+    kinds = {"accessory": ("accessories", "owned_accessories"), "background": ("backgrounds", "owned_backgrounds"), "outfit": ("outfits", "owned_outfits")}
+    if body.kind not in kinds:
+        raise HTTPException(400, "Unknown kind")
+    catalog = SHOP.get(kinds[body.kind][0], [])
     item = next((i for i in catalog if i["id"] == body.id), None)
     if not item:
         raise HTTPException(404, "Item not found")
-    owned_key = "owned_accessories" if body.kind == "accessory" else "owned_backgrounds"
+    owned_key = kinds[body.kind][1]
     with Transaction() as state:
         if item["id"] in state[owned_key]:
             raise HTTPException(400, "You already own this")
@@ -323,6 +327,10 @@ def equip(body: EquipIn):
                 eq.append(body.id)
             if not body.on and body.id in eq:
                 eq.remove(body.id)
+        elif body.kind == "outfit":
+            if body.id not in state["owned_outfits"]:
+                raise HTTPException(400, "Not owned")
+            state["outfit"] = body.id if body.on else ""
         elif body.kind == "background":
             if body.id not in state["owned_backgrounds"]:
                 raise HTTPException(400, "Not owned")

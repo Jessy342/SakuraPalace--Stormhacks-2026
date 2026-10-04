@@ -1,11 +1,32 @@
 {
-  "_help": "Everything here is sold and worn in the Dressing Room. Accessories are simple 3D shapes attached to the character's head (see frontend/js/accessories.js); 'slot' is head or face. Rooms are painted pictures in frontend/assets/backgrounds/<id>.webp (made by tools/make_backgrounds.py), with effects added by frontend/js/environment.js. Price 0 = owned from the start.",
+  "_help": "Everything here is sold and worn in the Dressing Room. Outfits are built from 3D shapes fitted to any model (frontend/js/outfits.js; the id must match an entry in OUTFITS there). Accessories are simple 3D shapes attached to the character's head (see frontend/js/accessories.js); 'slot' is head or face. Rooms are painted pictures in frontend/assets/backgrounds/<id>.webp (made by tools/make_backgrounds.py), with effects added by frontend/js/environment.js. Price 0 = owned from the start.",
+  "outfits": [
+    {"id": "hoodie", "name": "Cozy Hoodie", "price": 300},
+    {"id": "blazer", "name": "School Blazer", "price": 350},
+    {"id": "tracksuit", "name": "Track Suit", "price": 400},
+    {"id": "kimono_pink", "name": "Sakura Kimono", "price": 450},
+    {"id": "kimono_navy", "name": "Indigo Kimono", "price": 450},
+    {"id": "kimono_red", "name": "Crimson Kimono", "price": 450},
+    {"id": "kimono_black", "name": "Midnight Kimono", "price": 450},
+    {"id": "maid", "name": "Maid Outfit", "price": 500},
+    {"id": "scout", "name": "Scout Uniform", "price": 600},
+    {"id": "idol", "name": "Idol Dress", "price": 650},
+    {"id": "onesie_cat", "name": "Cat Onesie", "price": 800},
+    {"id": "onesie_bear", "name": "Bear Onesie", "price": 800},
+    {"id": "onesie_shark", "name": "Shark Onesie", "price": 800}
+  ],
   "accessories": [
     {"id": "cat_ears", "name": "Cat Ears", "price": 150, "slot": "head"},
     {"id": "bow", "name": "Big Ribbon Bow", "price": 200, "slot": "head"},
     {"id": "halo", "name": "Golden Halo", "price": 300, "slot": "head"},
     {"id": "witch_hat", "name": "Witch Hat", "price": 400, "slot": "head"},
     {"id": "crown", "name": "Royal Crown", "price": 500, "slot": "head"},
+    {"id": "star_clip", "name": "Star Hair Clips", "price": 150, "slot": "head"},
+    {"id": "headphones", "name": "Headphones", "price": 180, "slot": "head"},
+    {"id": "butterfly_clips", "name": "Butterfly Hair Clips", "price": 200, "slot": "head"},
+    {"id": "bunny_ears", "name": "Bunny Ears", "price": 220, "slot": "head"},
+    {"id": "captain_hat", "name": "Sailor Captain Hat", "price": 350, "slot": "head"},
+    {"id": "mahoraga", "name": "Mahoraga Wheel", "price": 900, "slot": "head"},
     {"id": "glasses", "name": "Study Glasses", "price": 120, "slot": "face"}
   ],
   "backgrounds": [
@@ -28,6 +49,14 @@
     {"id": "library", "name": "Celestial Library", "price": 500},
     {"id": "festival", "name": "Festival Night", "price": 500},
     {"id": "stage", "name": "Idol Stage", "price": 600},
-    {"id": "bedroom_penthouse", "name": "Luxury Penthouse", "price": 700}
+    {"id": "bedroom_penthouse", "name": "Luxury Penthouse", "price": 700},
+    {"id": "summer_sky", "name": "Summer Sky Hill", "price": 350},
+    {"id": "train_crossing", "name": "Sunset Crossing", "price": 350},
+    {"id": "city_stairs", "name": "City Stairway", "price": 350},
+    {"id": "rain_garden", "name": "Garden in the Rain", "price": 400},
+    {"id": "twilight_station", "name": "Twilight Station", "price": 400},
+    {"id": "tokyo_rain", "name": "Tokyo After Rain", "price": 450},
+    {"id": "sky_island", "name": "Island Above the Clouds", "price": 550},
+    {"id": "comet_lake", "name": "Comet Lake", "price": 600}
   ]
 }

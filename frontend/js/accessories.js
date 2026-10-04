@@ -51,6 +51,109 @@ export function buildAccessory(id, face = DEFAULT_FACE) {
       g.add(bridge);
       break;
     }
+    case 'headphones': {
+      const shell = mat('#f4f4f8'), pad = mat('#ff7eb6');
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.112, 0.012, 10, 28, Math.PI), shell);
+      band.position.set(0, 0.085, -0.005);
+      g.add(band);
+      for (const side of [-1, 1]) {
+        const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 20), shell);
+        cup.rotation.z = Math.PI / 2;
+        cup.position.set(side * 0.112, 0.08, -0.005);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 8, 20), pad);
+        ring.rotation.y = Math.PI / 2;
+        ring.position.set(side * 0.134, 0.08, -0.005);
+        g.add(cup, ring);
+      }
+      break;
+    }
+    case 'bunny_ears': {
+      for (const side of [-1, 1]) {
+        const ear = new THREE.Mesh(new THREE.CapsuleGeometry(0.024, 0.15, 6, 12), mat('#ffffff'));
+        ear.position.set(side * 0.05, HEAD_TOP + 0.085, -0.01);
+        ear.rotation.z = -side * 0.16;
+        ear.scale.z = 0.6;
+        const inner = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.12, 4, 10), mat('#ffb3d1'));
+        inner.position.set(0, 0, 0.016);
+        ear.add(inner);
+        g.add(ear);
+      }
+      break;
+    }
+    case 'captain_hat': {
+      const white = mat('#fbfbff'), navy = mat('#1c2a5a'), gold = mat('#ffcc33', { metalness: 0.8, roughness: 0.3 });
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.1, 0.045, 28), white);
+      top.position.set(0, HEAD_TOP + 0.045, -0.01);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.035, 28), navy);
+      band.position.set(0, HEAD_TOP + 0.008, -0.01);
+      const visor = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.008, 24, 1, false, -Math.PI / 2, Math.PI), mat('#11131f'));
+      visor.position.set(0, HEAD_TOP - 0.008, 0.045);
+      visor.rotation.x = 0.22;
+      const badge = new THREE.Mesh(new THREE.SphereGeometry(0.018, 12, 10), gold);
+      badge.position.set(0, HEAD_TOP + 0.02, 0.092);
+      badge.scale.z = 0.5;
+      g.add(top, band, visor, badge);
+      break;
+    }
+    case 'star_clip': {
+      const star = new THREE.Shape();
+      for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5, r = i % 2 ? 0.012 : 0.028; star[i ? 'lineTo' : 'moveTo'](Math.sin(a) * r, Math.cos(a) * r); }
+      const geo = new THREE.ExtrudeGeometry(star, { depth: 0.008, bevelEnabled: false });
+      for (const side of [-1, 1]) {
+        const clip = new THREE.Mesh(geo, mat('#e9d9ff', { emissive: '#b79cff', emissiveIntensity: 0.5 }));
+        clip.position.set(side * 0.085, 0.135, 0.085);
+        clip.rotation.set(-0.25, side * 0.55, side * 0.2);
+        g.add(clip);
+      }
+      break;
+    }
+    case 'butterfly_clips': {
+      const black = mat('#17151f'), green = mat('#c9e86a');
+      for (const side of [-1, 1]) {
+        const clip = new THREE.Group();
+        for (const up of [-1, 1]) { // two wings
+          const wing = new THREE.Mesh(new THREE.ConeGeometry(0.038, 0.085, 4), black);
+          wing.position.set(0, up * 0.03, 0);
+          wing.rotation.z = up > 0 ? Math.PI + side * 0.5 : side * 0.5;
+          wing.scale.z = 0.25;
+          const mark = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.05, 4), green);
+          mark.position.set(0, -0.012, 0.012);
+          mark.scale.z = 0.25;
+          wing.add(mark);
+          clip.add(wing);
+        }
+        for (const k of [-1, 1]) { // ribbon tails
+          const tail = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.16, 0.004), black);
+          tail.position.set(k * 0.012, -0.12, 0);
+          tail.rotation.z = k * 0.08;
+          clip.add(tail);
+        }
+        clip.position.set(side * 0.118, 0.155, 0.0);
+        clip.rotation.y = side * 1.2;
+        g.add(clip);
+      }
+      break;
+    }
+    case 'mahoraga': { // an eight-handled wheel floating above the head
+      const gold = mat('#e8b84a', { metalness: 0.9, roughness: 0.25, emissive: '#5a3a00', emissiveIntensity: 0.4 });
+      const wheel = new THREE.Group();
+      wheel.add(new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.009, 10, 48), gold));
+      wheel.add(new THREE.Mesh(new THREE.SphereGeometry(0.022, 14, 12), gold));
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.13), gold);
+        spoke.position.set(Math.cos(a) * 0.065, Math.sin(a) * 0.065, 0);
+        spoke.rotation.z = a + Math.PI / 2;
+        const knob = new THREE.Mesh(new THREE.SphereGeometry(0.02, 14, 12), gold);
+        knob.position.set(Math.cos(a) * 0.15, Math.sin(a) * 0.15, 0);
+        wheel.add(spoke, knob);
+      }
+      wheel.rotation.x = Math.PI / 2;
+      wheel.position.set(0, HEAD_TOP + 0.13, -0.01);
+      wheel.userData.spin = true;
+      g.add(wheel);
+      break;
+    }
     case 'halo': {
       const halo = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.009, 12, 48),
         mat('#ffd75e', { emissive: '#ffcc33', emissiveIntensity: 1.4 }));
