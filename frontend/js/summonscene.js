@@ -3,7 +3,9 @@
 // are drawn toward it and a summoning circle turns on the water. The bud glows through the rarity colours, shooting
 // stars fall from the sky into it (one per pull, each in its rarity colour), and it bursts into bloom with a pillar
 // of light as the camera rushes in.
-// Every surface is textured (the textures are painted here on small canvases, so there are no image files).
+// The sky, the cherry trees, the lily pads and the rocks are painted pictures (frontend/assets/summon/, made by
+// tools/make_summon_art.py). Everything else is textured with small canvases painted here. If a picture is missing,
+// the simple drawn version of that thing is used instead.
 import * as THREE from 'three';
 
 const RARITY = { Common: '#9aa5b1', Rare: '#4ea8ff', Epic: '#b06bff', Legendary: '#ffb627', Mythic: '#ff3b5c', Unbound: 'rainbow' };
@@ -199,6 +201,13 @@ const RINGS = [ // from the heart outward: how many petals, their size, how far 
   { n: 12, len: 1.48, wid: 0.48, r: 0.21, closed: 0.25, open: 1.36, turn: 0.4 },
 ];
 
+const ART = 'assets/summon/';
+/** Fetches the painted pictures ahead of time (called when the app starts), so the scene opens with them in place. */
+export function preloadSummonArt() {
+  for (const n of ['sky', 'tree1', 'tree2', 'lilypad', 'rocks']) new Image().src = `${ART}${n}.webp`;
+}
+const paintedTexture = (name, onLoad) => new THREE.TextureLoader().load(`${ART}${name}.webp`, tex => { tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; onLoad(tex); }, undefined, () => {});
+
 /** Starts the scene inside `overlay`. Returns the controls the cutscene uses. */
 export function startScene(overlay) {
   const canvas = document.createElement('canvas');
@@ -233,7 +242,9 @@ export function startScene(overlay) {
   scene.add(heart);
 
   // --- sky: painted dome, bright stars, the moon, drifting clouds, mountains around the lake ---
-  scene.add(new THREE.Mesh(new THREE.SphereGeometry(200, 32, 20), new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false })));
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(200, 32, 20), new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false }));
+  scene.add(dome);
+  const drawnSky = []; // the drawn stand-ins (hills, clouds, aurora, small stars) step aside once the painted sky has loaded
   const starField = (n, size) => {
     const p = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) { const a = Math.random() * TAU, up = Math.acos(rnd(0.07, 0.99)); p.set([Math.sin(up) * Math.cos(a) * 160, Math.cos(up) * 160, Math.sin(up) * Math.sin(a) * 160], i * 3); }
@@ -256,6 +267,7 @@ export function startScene(overlay) {
     const a = i * TAU / 12 + rnd(-0.2, 0.2);
     cl.position.set(Math.cos(a) * 150, rnd(14, 46), Math.sin(a) * 150); cl.scale.set(rnd(70, 120), rnd(26, 40), 1);
     clouds.push({ cl, a, y: cl.position.y, s: rnd(0.004, 0.012) });
+    drawnSky.push(cl);
     scene.add(cl);
   }
   const hillMap = mountainTexture();
@@ -263,6 +275,14 @@ export function startScene(overlay) {
   const hills = new THREE.Mesh(new THREE.CylinderGeometry(170, 170, 46, 64, 1, true), new THREE.MeshBasicMaterial({ map: hillMap, transparent: true, side: THREE.BackSide, fog: false, depthWrite: false }));
   hills.position.y = 11;
   scene.add(hills);
+  drawnSky.push(hills, starsSmall);
+  paintedTexture('sky', tex => { // the painting is wrapped round the sky twice, mirrored, so it has no seam; its bottom edge is the horizon
+    tex.wrapS = THREE.MirroredRepeatWrapping; tex.repeat.set(2, 1);
+    dome.geometry.dispose();
+    dome.geometry = new THREE.SphereGeometry(200, 48, 24, 0, TAU, 0, Math.PI / 2 + 0.15); // (reaches a little below the horizon, so the mountains sit low)
+    dome.material.map.dispose(); dome.material.map = tex; dome.material.needsUpdate = true;
+    for (const o of drawnSky) o.visible = false;
+  });
 
   // --- the lake: a see-through surface (so the flower's reflection shows), with two layers of moving glints ---
   const water = new THREE.Mesh(new THREE.CircleGeometry(190, 64), new THREE.MeshBasicMaterial({ map: waterTexture(), transparent: true, opacity: 0.86, fog: false }));
@@ -330,8 +350,10 @@ export function startScene(overlay) {
   // lily pads: one under the flower and a scatter across the lake
   const padMap = padTexture();
   const padMat = new THREE.MeshStandardMaterial({ map: padMap, roughness: 0.75, transparent: true, opacity: 0.94 });
+  const pads = [];
   for (const [x, z, r, turn] of [[0, 0, 1.45, 0.4], [3.4, 1.6, 0.8, 2], [-3, 2.8, 0.62, 4.1], [-4.6, -1.9, 0.95, 1.2], [2.3, -3.8, 0.7, 5.2], [6.2, -1.2, 0.55, 3], [-1.1, 5.4, 0.85, 0.2], [5.1, 4.6, 0.6, 2.6], [-6.6, 3.2, 0.5, 5.9]]) {
     const pad = new THREE.Mesh(new THREE.CircleGeometry(r, 36, 0.22, TAU - 0.44), padMat); // (the gap is the pad's notch)
+    pads.push([pad, r]);
     pad.rotation.x = -Math.PI / 2; pad.rotation.z = turn; pad.position.set(x, 0.025, z);
     scene.add(pad);
   }
@@ -339,7 +361,10 @@ export function startScene(overlay) {
   // --- scenery around the lake: cherry trees on little islands, a torii gate, lanterns, an aurora ---
   const blossom = blossomTexture();
   const bark = new THREE.MeshStandardMaterial({ color: 0x4a2c2a, roughness: 0.9 }), moss = new THREE.MeshStandardMaterial({ color: 0x2f6a4a, roughness: 0.9 });
-  for (const [a, d, size] of [[0.4, 18, 1.2], [1.7, 20, 1.5], [2.9, 17.5, 1.0], [4.0, 22, 1.6], [5.2, 19, 1.25], [0.95, 27, 1.9], [3.5, 29, 2.0]]) {
+  const TREES = [[0.4, 18, 1.2], [1.7, 20, 1.5], [2.9, 17.5, 1.0], [4.0, 22, 1.6], [5.2, 19, 1.25], [0.95, 27, 1.9], [3.5, 29, 2.0]]; // angle, distance, size
+  const drawnTrees = new THREE.Group();
+  scene.add(drawnTrees);
+  for (const [a, d, size] of TREES) {
     const tree = new THREE.Group();
     const islet = new THREE.Mesh(new THREE.SphereGeometry(2.1, 18, 10), moss); islet.scale.set(1, 0.16, 1);
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.24, 2.4, 8), bark); trunk.position.y = 1.2; trunk.rotation.z = rnd(-0.15, 0.15);
@@ -352,9 +377,34 @@ export function startScene(overlay) {
       tree.add(puff);
     }
     tree.position.set(Math.cos(a) * d, 0, Math.sin(a) * d); tree.scale.setScalar(size);
-    scene.add(tree);
+    drawnTrees.add(tree);
   }
-  const red = new THREE.MeshStandardMaterial({ color: 0xd6402f, emissive: 0x5a1208, emissiveIntensity: 0.5, roughness: 0.6 });
+  // painted pictures standing upright and always facing the camera, each with a faint reflection on the water
+  const standing = (tex, x, z, height, sink = 0.05) => {
+    const width = height * tex.image.width / tex.image.height;
+    const pic = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, alphaTest: 0.35 }));
+    pic.center.set(0.5, sink); pic.scale.set(width, height, 1); pic.position.set(x, 0, z);
+    const mirrored = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.2, depthWrite: false }));
+    mirrored.center.set(0.5, sink); mirrored.scale.set(width, -height * 0.8, 1); mirrored.position.set(x, 0.02, z);
+    scene.add(mirrored, pic);
+  };
+  let treesLoaded = 0;
+  ['tree1', 'tree2'].forEach((name, k) => paintedTexture(name, tex => {
+    if (++treesLoaded === 1) drawnTrees.visible = false;
+    TREES.forEach(([a, d, size], i) => { if (i % 2 === k) standing(tex, Math.cos(a) * d, Math.sin(a) * d, 5.2 * size, 0.07); });
+  }));
+  paintedTexture('rocks', tex => { // rocks and reeds dotted around the near water
+    for (const [a, d, hgt] of [[0.1, 14.2, 2.2], [1.25, 15.5, 2.6], [2.35, 14, 2.0], [3.3, 16.4, 2.8], [4.55, 14.6, 2.3], [5.6, 16.8, 2.7], [0.75, 21, 3.0], [3.95, 23, 3.2]] /* (all beyond the camera's path) */) standing(tex, Math.cos(a) * d, Math.sin(a) * d, hgt, 0.1);
+  });
+  paintedTexture('lilypad', tex => { // each drawn pad becomes the painted one
+    const painted = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7, alphaTest: 0.4 });
+    for (const [pad, r] of pads) { pad.geometry.dispose(); pad.geometry = new THREE.PlaneGeometry(r * 2.15, r * 2.15); pad.material = painted; }
+  });
+  const grain = canvasTexture(64, 256, (g, w, h) => { // weathered lacquer: lighter and darker streaks down the grain
+    g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 70; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '70,10,10' : '255,200,180'},${rnd(0.05, 0.3)})`; g.fillRect(Math.random() * w, Math.random() * h, rnd(1, 3), rnd(20, 120)); }
+  }, true);
+  const red = new THREE.MeshStandardMaterial({ map: grain, color: 0xd6402f, emissive: 0x5a1208, emissiveIntensity: 0.5, roughness: 0.6 });
   const torii = new THREE.Group(); // a shrine gate standing in the water
   for (const x of [-2.6, 2.6]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 6.4, 12), red); post.position.set(x, 3.2, 0); torii.add(post); }
   const beamTop = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 0.7), new THREE.MeshStandardMaterial({ color: 0x1c1420, roughness: 0.7 })); beamTop.position.y = 6.6;
@@ -363,7 +413,15 @@ export function startScene(overlay) {
   torii.add(beamTop, beamRed, beamLow);
   torii.position.set(Math.cos(3.75) * 24, 0, Math.sin(3.75) * 24); torii.lookAt(0, 0, 0);
   scene.add(torii);
-  const lanternMat = new THREE.MeshBasicMaterial({ color: 0xffc98a }), lanternGeo = new THREE.BoxGeometry(0.22, 0.3, 0.22);
+  const paper = canvasTexture(64, 96, (g, w, h) => { // a paper lantern: warm light through paper, dark wooden frame and ribs
+    const gr = g.createRadialGradient(w / 2, h * 0.55, 2, w / 2, h * 0.55, h * 0.6);
+    gr.addColorStop(0, '#fff6d0'); gr.addColorStop(0.5, '#ffc56a'); gr.addColorStop(1, '#e8742c');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(120,50,20,.45)'; g.lineWidth = 1; for (let y = 14; y < h - 8; y += 9) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+    g.fillStyle = '#3a1c12'; g.fillRect(0, 0, w, 8); g.fillRect(0, h - 8, w, 8); g.fillRect(0, 0, 4, h); g.fillRect(w - 4, 0, 4, h);
+    g.fillStyle = 'rgba(190,40,60,.8)'; g.beginPath(); g.arc(w / 2, h * 0.52, 9, 0, TAU); g.fill(); // a little crest
+  });
+  const lanternMat = new THREE.MeshBasicMaterial({ map: paper }), lanternGeo = new THREE.BoxGeometry(0.24, 0.34, 0.24);
   const lanterns = Array.from({ length: 34 }, (_, i) => { // paper lanterns: most float on the water, some rise into the sky
     const sky = i >= 22, a = Math.random() * TAU, d = sky ? rnd(8, 34) : rnd(3.5, 17);
     const g = new THREE.Group(), box = new THREE.Mesh(lanternGeo, lanternMat);
@@ -377,6 +435,7 @@ export function startScene(overlay) {
     const ribbon = new THREE.Mesh(new THREE.CylinderGeometry(175, 175, 70, 48, 1, true, i * 2.6 + 0.4, 1.7), new THREE.MeshBasicMaterial({ map, color: c, side: THREE.BackSide, ...additive({ opacity: 0.22 }) }));
     ribbon.position.y = 78 + i * 10;
     scene.add(ribbon);
+    drawnSky.push(ribbon);
     return map;
   });
 

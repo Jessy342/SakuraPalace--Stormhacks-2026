@@ -6,6 +6,7 @@ import { tintFilter } from './outfits.js';
 import { Environment } from './environment.js';
 import * as voice from './voice.js';
 import { playCutscene, stars, portrait, portraitImg, LOTUS } from './gacha.js';
+import { preloadSummonArt } from './summonscene.js';
 import * as vfx from './vfx.js';
 import { ModelViewer } from './viewer.js';
 
@@ -1313,6 +1314,7 @@ async function boot() {
   if (reminder) addMsg('sys', '⏰ ' + reminder);
   character.wave(3);
   setTimeout(watchFrameRate, 2500); // once the model has settled in
+  setTimeout(preloadSummonArt, 4000); // the summon scene's painted pictures
   setTimeout(checkEvents, 8000);
 
   // Browsers block sound until the first click or key press, so greet out loud on the first interaction.

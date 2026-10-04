@@ -42,6 +42,7 @@ frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. th
   js/gacha.js            summon cutscene (gate, rarity tease, starfall, eruption, then a cinematic reveal: the character large on the right in front of their own `scene` from characters.json, slim info block on the left; summary cards)
   assets/portraits/      <id>.webp + <id>_bust.webp, rendered from the VRM models by tools/make_portraits.mjs
 models/                  char1.vrm ... char9.vrm (from VRoid Studio), served at /models/
+tools/make_summon_art.py dev tool: paints the summon scene's artwork (sky, cherry trees, lily pad, rocks) into frontend/assets/summon/ with Gemini's image model; cut-outs are keyed from a blue background
 tools/make_portraits.mjs dev tool: re-render portraits after adding/changing a model (see the comment at the top of the file)
 ```
 
