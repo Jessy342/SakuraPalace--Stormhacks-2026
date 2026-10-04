@@ -1,19 +1,23 @@
 {
-  "_help": "Everything here is sold and worn in the Dressing Room. Outfits are built from 3D shapes fitted to any model (frontend/js/outfits.js; the id must match an entry in OUTFITS there). Accessories are simple 3D shapes attached to the character's head (see frontend/js/accessories.js); 'slot' is head or face. Rooms are painted pictures in frontend/assets/backgrounds/<id>.webp (made by tools/make_backgrounds.py), with effects added by frontend/js/environment.js. Price 0 = owned from the start.",
+  "_help": "Everything here is sold and worn in the Dressing Room. Outfits are the real clothes of a VRoid model: 'model' is a file in models/, 'portrait' is the character id whose picture shows it, and hue / saturate / brightness (optional) recolour it. To add an outfit, make a VRoid model wearing it, put the .vrm in models/ and add a line here. Accessories are simple 3D shapes attached to the character's head (see frontend/js/accessories.js); 'slot' is head or face. Rooms are painted pictures in frontend/assets/backgrounds/<id>.webp (made by tools/make_backgrounds.py), with effects added by frontend/js/environment.js. Price 0 = owned from the start.",
   "outfits": [
-    {"id": "hoodie", "name": "Cozy Hoodie", "price": 300},
-    {"id": "blazer", "name": "School Blazer", "price": 350},
-    {"id": "tracksuit", "name": "Track Suit", "price": 400},
-    {"id": "kimono_pink", "name": "Sakura Kimono", "price": 450},
-    {"id": "kimono_navy", "name": "Indigo Kimono", "price": 450},
-    {"id": "kimono_red", "name": "Crimson Kimono", "price": 450},
-    {"id": "kimono_black", "name": "Midnight Kimono", "price": 450},
-    {"id": "maid", "name": "Maid Outfit", "price": 500},
-    {"id": "scout", "name": "Scout Uniform", "price": 600},
-    {"id": "idol", "name": "Idol Dress", "price": 650},
-    {"id": "onesie_cat", "name": "Cat Onesie", "price": 800},
-    {"id": "onesie_bear", "name": "Bear Onesie", "price": 800},
-    {"id": "onesie_shark", "name": "Shark Onesie", "price": 800}
+    {"id": "tracksuit", "name": "Track Suit (Red)", "price": 300, "model": "char7.vrm", "portrait": "itsuki"},
+    {"id": "tracksuit_blue", "name": "Track Suit (Blue)", "price": 300, "model": "char7.vrm", "portrait": "itsuki", "hue": 220},
+    {"id": "tracksuit_green", "name": "Track Suit (Green)", "price": 300, "model": "char7.vrm", "portrait": "itsuki", "hue": 120},
+    {"id": "tracksuit_grey", "name": "Track Suit (Charcoal)", "price": 350, "model": "char7.vrm", "portrait": "itsuki", "saturate": 0, "brightness": 0.95},
+    {"id": "summer", "name": "Summer Blouse", "price": 300, "model": "char9.vrm", "portrait": "reze"},
+    {"id": "uniform", "name": "School Uniform", "price": 350, "model": "char5.vrm", "portrait": "marin"},
+    {"id": "blazer", "name": "School Blazer", "price": 350, "model": "char2.vrm", "portrait": "miyamura"},
+    {"id": "gakuran", "name": "Black Gakuran", "price": 400, "model": "char4.vrm", "portrait": "gojo"},
+    {"id": "suit", "name": "Agent's Suit", "price": 450, "model": "char6.vrm", "portrait": "lloyd"},
+    {"id": "trench", "name": "Trench Coat", "price": 450, "model": "char8.vrm", "portrait": "levi"},
+    {"id": "trench_navy", "name": "Trench Coat (Navy)", "price": 450, "model": "char8.vrm", "portrait": "levi", "hue": 190, "saturate": 1.6, "brightness": 0.6},
+    {"id": "maid", "name": "Maid Dress (Pink)", "price": 500, "model": "char3.vrm", "portrait": "waguri"},
+    {"id": "maid_blue", "name": "Maid Dress (Blue)", "price": 500, "model": "char3.vrm", "portrait": "waguri", "hue": 240},
+    {"id": "maid_mint", "name": "Maid Dress (Mint)", "price": 500, "model": "char3.vrm", "portrait": "waguri", "hue": 140},
+    {"id": "party", "name": "Rose Party Dress", "price": 600, "model": "char1.vrm", "portrait": "nino"},
+    {"id": "party_violet", "name": "Party Dress (Violet)", "price": 600, "model": "char1.vrm", "portrait": "nino", "hue": 285},
+    {"id": "party_teal", "name": "Party Dress (Teal)", "price": 600, "model": "char1.vrm", "portrait": "nino", "hue": 180}
   ],
   "accessories": [
     {"id": "cat_ears", "name": "Cat Ears", "price": 150, "slot": "head"},
@@ -27,7 +31,14 @@
     {"id": "bunny_ears", "name": "Bunny Ears", "price": 220, "slot": "head"},
     {"id": "captain_hat", "name": "Sailor Captain Hat", "price": 350, "slot": "head"},
     {"id": "mahoraga", "name": "Mahoraga Wheel", "price": 900, "slot": "head"},
-    {"id": "glasses", "name": "Study Glasses", "price": 120, "slot": "face"}
+    {"id": "glasses", "name": "Study Glasses", "price": 120, "slot": "face"},
+    {"id": "round_glasses", "name": "Round Glasses", "price": 150, "slot": "face"},
+    {"id": "sunglasses", "name": "Round Sunglasses", "price": 200, "slot": "face"},
+    {"id": "heart_glasses", "name": "Heart Glasses", "price": 220, "slot": "face"},
+    {"id": "monocle", "name": "Monocle", "price": 250, "slot": "face"},
+    {"id": "eyepatch", "name": "Eyepatch", "price": 250, "slot": "face"},
+    {"id": "blindfold", "name": "Sorcerer's Blindfold", "price": 400, "slot": "face"},
+    {"id": "pointed_shades", "name": "Pointed Shades", "price": 450, "slot": "face"}
   ],
   "backgrounds": [
     {"id": "bedroom", "name": "Cozy Bedroom", "price": 0},

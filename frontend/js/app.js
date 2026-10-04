@@ -2,7 +2,7 @@
 import { api, post } from './api.js';
 import { Character } from './character.js';
 import { accessoryThumbs } from './accessories.js';
-import { outfitThumb } from './outfits.js';
+import { tintFilter } from './outfits.js';
 import { Environment } from './environment.js';
 import * as voice from './voice.js';
 import { playCutscene, stars, portrait, portraitImg, LOTUS } from './gacha.js';
@@ -207,6 +207,7 @@ function applyShift() {
 /** Picks the backdrop: your room in the lobby and menus, each banner's themed room on Convene, and in the
  *  dressing room a soft glow in the character's colour (or the room you are looking at in the Rooms list). */
 function applyEnv() {
+  environment.calm = currentTab === 'gacha';
   if (currentTab === 'gacha') {
     const banners = S.catalog.banners || [];
     environment.set((banners.find(b => b.id === bannerId) || banners[0])?.scene || S.background);
@@ -288,13 +289,12 @@ function render() {
   // HUD
   $('hud-char').textContent = char.name;
   $('hud-title').textContent = char.title || '';
-  $('hud-avatar-fallback').textContent = char.name[0];
   const av = $('hud-avatar');
   if (av.dataset.id !== char.id) {
     av.dataset.id = char.id;
     av.style.display = '';
-    av.onerror = () => { av.style.display = 'none'; };
-    av.onload = () => { $('hud-avatar-fallback').textContent = ''; }; // the letter is only for characters without a picture
+    $('hud-avatar-fallback').textContent = '';
+    av.onerror = () => { av.style.display = 'none'; $('hud-avatar-fallback').textContent = char.name[0]; }; // the letter is only for characters without a picture
     av.src = portrait(char.id, true);
   }
   $('hud-level').textContent = S.level;
@@ -831,7 +831,9 @@ function renderGacha() {
   $('banner-glyph').textContent = b.name;
   $('banner-art').innerHTML = b.featured.map((id, i) => {
     const c = charById(id);
-    return `<div class="art a${i} r-${c.rarity}"><div class="initial">${esc(c.name[0])}</div>${portraitImg(id)}
+    // a few glints around each character, in their own colour (the room's own particles are switched off on this screen)
+    const glints = Array.from({ length: 5 }, (_, k) => `<i style="left:${8 + ((k * 37 + i * 23) % 80)}%;top:${6 + ((k * 29 + i * 17) % 52)}%;animation-delay:${(k * 0.9 + i * 0.4).toFixed(1)}s"></i>`).join('');
+    return `<div class="art a${i} r-${c.rarity}" style="--cc:${c.color}"><div class="initial">${esc(c.name[0])}</div><div class="art-body">${portraitImg(id)}</div><div class="art-fx">${glints}</div>
       <div class="plate"><i>${classOf(c)[1]}</i><div><b>${esc(c.name)}</b><div class="stars">${stars(c.rarity)}</div></div></div></div>`;
   }).join('');
 }
@@ -947,14 +949,14 @@ const CATALOG = { accessory: 'accessories', background: 'backgrounds', outfit: '
 const ownsItem = (kind, id) => S[OWNED[kind]].includes(id);
 const findItem = (kind, id) => S.catalog[CATALOG[kind]].find(x => x.id === id);
 const isOn = (kind, id) => (kind === 'accessory' ? S.equipped_accessories.includes(id) : kind === 'outfit' ? S.outfit === id : S.background === id);
-const thumbOf = (kind, id) => (kind === 'outfit' ? outfitThumb(id) : kind === 'accessory'
+const thumbOf = (kind, id) => (kind === 'outfit' ? portrait(findItem(kind, id).portrait) : kind === 'accessory'
   ? (accThumbs ||= accessoryThumbs(S.catalog.accessories.map(a => a.id)))[id] : environment.thumb(id));
 
 /** Shows what is equipped, plus the picked item as a preview. */
 function applyTry() {
   const preview = picked?.kind === 'accessory' && !S.equipped_accessories.includes(picked.id) ? [picked.id] : [];
   character.setAccessories([...S.equipped_accessories, ...preview]);
-  character.setOutfit(picked?.kind === 'outfit' ? picked.id : S.outfit);
+  character.setOutfit(findItem('outfit', picked?.kind === 'outfit' ? picked.id : S.outfit) || null);
   applyEnv();
 }
 
@@ -962,7 +964,7 @@ function tile(kind, it) {
   const owned = ownsItem(kind, it.id), on = isOn(kind, it.id);
   const badge = on ? (kind !== 'background' ? '✓ Wearing' : '✓ In use') : owned ? 'Owned' : `${LOTUS} ${it.price}`;
   return `<button class="tile ${kind !== 'background' ? 'acc' : ''} ${on ? 'worn' : ''} ${owned ? '' : 'locked'} ${picked?.id === it.id ? 'trying' : ''}"
-    data-item="${kind}:${it.id}" title="${esc(it.name)}"><img src="${thumbOf(kind, it.id)}" alt="" draggable="false">
+    data-item="${kind}:${it.id}" title="${esc(it.name)}"><img src="${thumbOf(kind, it.id)}" alt="" draggable="false"${kind === 'outfit' ? ` class="fit" style="filter:${tintFilter(it)}"` : ''}>
     <span class="badge">${badge}</span><span class="tname">${esc(it.name)}</span></button>`;
 }
 
@@ -984,7 +986,7 @@ function renderDress() {
       const owned = ownsItem(picked.kind, it.id), on = isOn(picked.kind, it.id), short = it.price - S.points;
       const label = !owned ? (short > 0 ? `Need ${short} more ${LOTUS}` : `Buy · ${LOTUS} ${it.price}`)
         : picked.kind !== 'background' ? (on ? 'Take off' : 'Wear') : (on ? 'In use' : 'Use this room');
-      $('dress-action').innerHTML = `<img class="${picked.kind !== 'background' ? 'acc' : ''}" src="${thumbOf(picked.kind, it.id)}" alt="">
+      $('dress-action').innerHTML = `<img class="${picked.kind !== 'background' ? 'acc' : ''} ${picked.kind === 'outfit' ? 'fit' : ''}" src="${thumbOf(picked.kind, it.id)}" alt=""${picked.kind === 'outfit' ? ` style="filter:${tintFilter(it)}"` : ''}>
         <div class="what"><small>${on ? (picked.kind !== 'background' ? 'Wearing' : 'In use') : owned ? 'Owned' : 'Previewing · not owned'}</small><b>${esc(it.name)}</b></div>
         <button class="primary big" data-apply ${(!owned && short > 0) || (owned && on && picked.kind === 'background') ? 'disabled' : ''}>${label}</button>`;
     } else {

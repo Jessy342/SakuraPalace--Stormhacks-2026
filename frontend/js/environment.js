@@ -642,7 +642,8 @@ export class Environment {
   }
 
   draw(t) {
-    const { ctx: g, w, h, fx } = this;
+    const { ctx: g, w, h } = this;
+    const fx = this.calm ? {} : this.fx; // calm: just the picture (the summon screen has its own small effects)
     this.mx += (this.tx - this.mx) * 0.08; this.my += (this.ty - this.my) * 0.08;
     // the room, slightly oversized so it can slide with the mouse and breathe in and out very slowly
     const m = w * (0.02 + 0.004 * Math.sin(t * 0.22));

@@ -5,7 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { buildAccessory, DEFAULT_FACE } from './accessories.js';
 import { REST, GESTURES, DEFAULT, blend, writePose } from './poses.js';
-import { wearOutfit } from './outfits.js';
+import { wearModelOutfit } from './outfits.js';
 
 const EMOTIONS = ['happy', 'angry', 'sad', 'surprised', 'relaxed'];
 const MAX_YAW = 0.7;    // how far she can turn her head left/right (radians, ~40°)
@@ -45,6 +45,8 @@ export class Character {
     this.equipped = [];
     this.face = DEFAULT_FACE; // eye positions in accessory space (used by glasses)
     this.outfitId = '';
+    this.outfit = null;
+    this.outfitTurn = 0;
     this.worn = null;
 
     // View: menus cover the right side of the screen, so the character slides over to stay centred in what's left.
@@ -170,20 +172,25 @@ export class Character {
     this.ambient.color.setRGB(...rgb.map(v => 0.68 + 0.32 * v / max));
   }
 
-  /** Wears an outfit from outfits.js ('' = the model's own clothes). */
-  setOutfit(id) {
-    if ((id || '') === this.outfitId) return;
-    this.outfitId = id || '';
+  /** Wears an outfit: { id, model, hue, saturate, brightness } from the shop list, or null for the model's own clothes. */
+  setOutfit(outfit) {
+    if ((outfit?.id || '') === this.outfitId) return;
+    this.outfitId = outfit?.id || '';
+    this.outfit = outfit || null;
     this.applyOutfit();
   }
 
-  applyOutfit() {
+  async applyOutfit() {
+    const turn = ++this.outfitTurn; // if the outfit changes again while this one is loading, the newer one wins
     if (this.worn) { this.worn.remove(); this.worn = null; }
-    if (!this.vrm || !this.outfitId) return;
-    const r = this.root, turn = r.rotation.y, scale = r.scale.clone(), pos = r.position.clone();
-    r.rotation.set(0, 0, 0); r.scale.set(1, 1, 1); r.position.set(0, 0, 0); r.updateMatrixWorld(true); // fit it to the model standing straight
-    this.worn = wearOutfit(this.vrm, this.outfitId);
-    r.rotation.y = turn; r.scale.copy(scale); r.position.copy(pos);
+    const vrm = this.vrm, o = this.outfit;
+    if (!vrm || !o) return;
+    const tint = o.hue || o.saturate != null || o.brightness != null ? o : null;
+    try {
+      const worn = await wearModelOutfit(vrm, `/models/${o.model}`, tint);
+      if (turn !== this.outfitTurn || vrm !== this.vrm) worn.remove();
+      else this.worn = worn;
+    } catch (e) { console.warn('[outfit] could not load', o.model, e.message); }
   }
 
   clear() {
@@ -253,10 +260,19 @@ export class Character {
       return p.applyQuaternion(this.accBasis.clone().invert());
     };
     const a = toAcc(l), b = toAcc(r);
-    const eyeX = Math.abs(a.x - b.x) / 2;
-    if (!(eyeX > 0.01 && eyeX < 0.1)) return DEFAULT_FACE; // weird rig, keep the defaults
-    // eye bones sit inside the eyeball, so push the frames forward to the face surface
-    return { eyeX, eyeY: (a.y + b.y) / 2, frontZ: Math.max(a.z, b.z) + 0.035 };
+    // The eye bones give the height of the eyes, but they sit close to the middle of the head and deep inside it,
+    // so the spacing is a fixed value and the face surface is found by pointing a ray at the face from the front.
+    const eyeX = 0.031, eyeY = (a.y + b.y) / 2;
+    let frontZ = Math.max(a.z, b.z) + 0.07;
+    vrm.scene.updateMatrixWorld(true);
+    const toWorld = p => this.head.localToWorld(p.applyQuaternion(this.accBasis));
+    const from = toWorld(new THREE.Vector3(eyeX, eyeY, 0.4)), to = toWorld(new THREE.Vector3(eyeX, eyeY, 0));
+    const ray = new THREE.Raycaster(from, to.sub(from).normalize(), 0, 1);
+    const faces = [];
+    vrm.scene.traverse(o => { if (o.isMesh && /^Face/.test(o.name)) faces.push(o); });
+    const hit = ray.intersectObjects(faces, false)[0];
+    if (hit) frontZ = this.head.worldToLocal(hit.point.clone()).applyQuaternion(this.accBasis.clone().invert()).z + 0.012;
+    return { eyeX, eyeY, frontZ };
   }
 
   /** Chibi anime schoolgirl built from simple shapes, shown until a real VRoid .vrm model is added. */

@@ -758,3 +758,21 @@ button.avatar:hover em { opacity: 1; }
 button.focus-pill { cursor: pointer; font: inherit; font-weight: 700; color: inherit; }
 .pull-btn { letter-spacing: .04em; }
 .dress-cats button:nth-child(6) { --h: #ff9d6b; }
+
+/* ---------- summon banner: the characters breathe and sway a little, with a few glints in their own colour ---------- */
+.art-body { height: 100%; transform-origin: 50% 100%; animation: breathe 4.6s ease-in-out infinite; }
+.art.a1 .art-body { animation-duration: 5.4s; animation-delay: -1.7s; }
+.art.a2 .art-body { animation-duration: 5s; animation-delay: -3.1s; }
+@keyframes breathe { 0%, 100% { transform: scale(1, 1) rotate(0deg); } 30% { transform: scale(1.004, 1.012) rotate(.35deg); } 65% { transform: scale(1, 1.004) rotate(-.3deg); } }
+.art-fx { position: absolute; inset: 0; pointer-events: none; }
+.art-fx i { position: absolute; width: 16px; height: 16px; background: #fff; opacity: 0; filter: drop-shadow(0 0 6px var(--cc)) drop-shadow(0 0 2px #fff);
+  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%); animation: glint 4.5s ease-in-out infinite; }
+@keyframes glint { 0%, 70%, 100% { opacity: 0; transform: scale(.3) rotate(0deg); } 82% { opacity: 1; transform: scale(1.15) rotate(45deg); } }
+.art::before { content: ""; position: absolute; left: 12%; right: 12%; bottom: 5vh; height: 9vh; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(ellipse, color-mix(in srgb, var(--cc) 55%, transparent) 0%, transparent 70%); animation: aura 3.6s ease-in-out infinite; }
+@keyframes aura { 50% { opacity: .45; transform: scaleX(1.12); } }
+.art-body img, .art-body .initial { height: 100%; }
+/* outfit pictures in the dressing room: show the clothes, not the face */
+.tile img.fit { object-fit: cover; object-position: 50% 14%; padding: 0; transform: scale(1.5); transform-origin: 50% 46%; }
+.dress-action img.fit { object-fit: cover; object-position: 50% 30%; padding: 0; }
+.art:has(.art-body.noimg) > .initial { display: grid; }
