@@ -36,13 +36,13 @@ frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. th
 ```
 
 ## Rules
-1. **Ownership to avoid merge conflicts:** Coder A owns `frontend/`. Coder B owns `backend/`. If you must touch the other side, keep it tiny and tell the human so they can tell their teammate.
+1. **One coder:** Jonathan is the only person changing code, through his Claude session. You may edit any file. Teammates deliver assets (VRM models, voice IDs, images, sound effects) that you drop in.
 2. Keep the API contract stable. If you change an endpoint's request/response shape, update both sides in the same commit and list the change in your summary.
 3. No new frameworks (no React, no bundlers, no databases). Plain JS modules + FastAPI only. New Python packages go in `requirements.txt`.
 4. Never commit `.env` or API keys. Read keys only through `config.py`.
 5. Every feature must degrade gracefully with no API keys (fallback text/voice), so the demo can't crash.
 6. Test before saying done: run the server, hit the endpoint with curl or open the page, check the browser console (F12) for errors.
-7. Commit small and often with clear messages, e.g. `feat(gacha): add pity counter UI`. Tell the human to Push in GitHub Desktop after each working feature.
+7. Commit small and often with clear messages, e.g. `feat(gacha): add pity counter UI`. If you can't push yourself, tell the human to Commit and Push in GitHub Desktop after each working feature.
 8. Explain what you changed in 2-4 plain-English sentences at the end. No jargon.
 
 ## Useful facts

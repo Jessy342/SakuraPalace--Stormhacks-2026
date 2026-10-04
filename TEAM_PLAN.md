@@ -1,35 +1,33 @@
-# Team plan: 2 coders + 2 support, ~12–24 hours left
+# Team plan: 1 coder + 3 support, ~12–24 hours left
 
 The whole app already runs end to end. Your job now: **real characters, real voices, polish, and a killer demo.** Don't start new big features until the "Must" list is done.
 
 ## Roles
 
-### Coder A: Frontend (owns `frontend/`)
-Character look and feel, gacha cutscene, UI polish. Starter prompts for Claude Code:
-1. "Read CLAUDE.md. Load our VRoid models and check that accessories sit correctly on each head. Tweak offsets in accessories.js if needed."
-2. "Make the character wave when I complete a task and cross arms when angry (edit poseVRM in character.js)."
-3. "On the gacha splash screen, render the pulled character's 3D model instead of the big letter."
-4. "Add a level-up celebration overlay with confetti."
-5. "Make the shop show a live preview when hovering an accessory."
-
-### Coder B: Backend + ElevenLabs (owns `backend/`)
-Voice quality, AI personality, focus watcher. Starter prompts:
-1. "Read CLAUDE.md. Test /api/tts, /api/stt and /api/sfx with our real ElevenLabs key and fix any errors."
-2. "Put each character's voice_id into characters.json (Support 2 has the IDs) and make sub mode use a Japanese-capable voice."
-3. "Test focus.py on Windows: open Discord and YouTube during a focus session and make sure warning → drain → close works."
-4. "Make the assistant remember the user's name and interests between chats (store in save.json)."
-5. (Stretch) "Add hands-free conversation using ElevenLabs realtime speech-to-text."
+### Jonathan: the coder (with Claude)
+All code changes go through Jonathan's Claude session. Nobody else edits code, so there are no merge conflicts. Work in this order:
+1. Get real keys working: voice reply, mic to text, chat, teacher mode.
+2. Drop in the VRoid models and voice IDs as Support 1 and 2 deliver them.
+3. Test the focus watcher on Windows (open Discord / YouTube during a session).
+4. Polish: character animations, gacha splash with the 3D model, level-up celebration.
+5. Feature freeze, then rehearse the demo with Support 3.
 
 ### Support 1: Characters and art
-- Make 4–6 **original** characters in VRoid Studio. Export as VRM 1.0 → `char1.vrm` … `char6.vrm` and send them to Coder A (or add them via GitHub Desktop).
-- Give each one a name, title, rarity (Common/Rare/Epic/Legendary/Mythic/Unbound), personality and an intro line. Paste these into `backend/data/characters.json` (or give them to Coder B).
-- Optional: draw or generate background images (put them in `frontend/assets/backgrounds/`). Figma mockups for the pitch.
+- Make 4–6 **original** characters in VRoid Studio. Export as VRM 1.0 → `char1.vrm` … `char6.vrm` and send them to Jonathan.
+- For each one write: name, title, rarity (Common/Rare/Epic/Legendary/Mythic/Unbound), personality (tsundere / cheerful / sensei / chill / rival) and a one-line intro.
+- Optional: background images (`frontend/assets/backgrounds/`) and Figma mockups for the pitch.
 
-### Support 2: Voices, keys, pitch, QA
-- Create the Gemini and ElevenLabs API keys and share them privately.
-- Pick ElevenLabs voices (Voice Library or Voice Design) for each character. Send the Voice IDs to Coder B.
-- Build the pitch deck and write the demo script (below).
-- Be the tester: try to break the app, and report bugs to the coders with exact steps.
+### Support 2: Voices and keys
+- Create the Gemini and ElevenLabs API keys; share them privately with Jonathan only.
+- In ElevenLabs, pick or design one voice per character (male and female, anime-style). Send Jonathan the Voice IDs.
+- Pick a Japanese-capable voice for "sub" mode.
+- Generate any extra sound effects wanted (ElevenLabs sound generation) and send the mp3s.
+
+### Support 3: Pitch, demo and QA
+- Build the pitch deck and write the demo script (below). Lead with the ElevenLabs angle.
+- Be the tester: try to break the app and report bugs to Jonathan with exact steps and screenshots.
+- Record a backup demo video once the app is stable.
+- Fill in the hackathon submission form.
 
 ## Timeline (adjust to your deadline)
 
