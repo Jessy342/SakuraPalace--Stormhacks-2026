@@ -956,7 +956,8 @@ const thumbOf = (kind, id) => (kind === 'outfit' ? portrait(findItem(kind, id).p
 function applyTry() {
   const preview = picked?.kind === 'accessory' && !S.equipped_accessories.includes(picked.id) ? [picked.id] : [];
   character.setAccessories([...S.equipped_accessories, ...preview]);
-  character.setOutfit(findItem('outfit', picked?.kind === 'outfit' ? picked.id : S.outfit) || null);
+  const outfit = findItem('outfit', picked?.kind === 'outfit' ? picked.id : S.outfit);
+  character.setOutfit(outfit && outfit.for === activeChar().gender ? outfit : null); // clothes only fit a body of the same build
   applyEnv();
 }
 
@@ -979,8 +980,10 @@ function renderDress() {
   $('dress-voice').classList.toggle('hidden', dressCat !== 'voice');
   if (currentTab === 'dress' && items) { // (skip the picture work while the dressing room is closed)
     const kind = dressCat === 'room' ? 'background' : dressCat === 'outfit' ? 'outfit' : 'accessory';
-    const list = kind === 'accessory' ? S.catalog.accessories.filter(a => (a.slot || 'head') === dressCat) : S.catalog[CATALOG[kind]];
-    $('dress-grid').innerHTML = list.map(it => tile(kind, it)).join('');
+    const list = kind === 'accessory' ? S.catalog.accessories.filter(a => (a.slot || 'head') === dressCat)
+      : kind === 'outfit' ? S.catalog.outfits.filter(o => o.for === activeChar().gender) : S.catalog[CATALOG[kind]];
+    // outfits are listed under headings (Casual, School, Formal, Dress-up)
+    $('dress-grid').innerHTML = list.map((it, i) => (it.group && it.group !== list[i - 1]?.group ? `<div class="grid-head">${esc(it.group)}</div>` : '') + tile(kind, it)).join('');
     const it = picked && findItem(picked.kind, picked.id);
     if (it) {
       const owned = ownsItem(picked.kind, it.id), on = isOn(picked.kind, it.id), short = it.price - S.points;

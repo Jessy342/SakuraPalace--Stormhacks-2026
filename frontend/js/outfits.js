@@ -18,6 +18,7 @@ export async function wearModelOutfit(vrm, url, tint = null) {
   const gltf = await loader.loadAsync(url);
   const donor = gltf.userData.vrm;
   VRMUtils.rotateVRM0(donor);
+  donor.update(0); // readies the donor's toon materials (without this their outlines are drawn far too thick, as black spikes)
   donor.scene.updateMatrixWorld(true);
   vrm.scene.updateMatrixWorld(true);
 
@@ -27,7 +28,7 @@ export async function wearModelOutfit(vrm, url, tint = null) {
   holder.name = 'outfit';
   vrm.scene.add(holder);
 
-  const adopted = [], meshes = [];
+  const adopted = [], meshes = [], repainted = new Map();
   donor.scene.traverse(o => { if (o.isSkinnedMesh && isBodyPart(o)) meshes.push(o); });
   for (const mesh of meshes) {
     // use the wearer's bone of the same name; a bone only the donor has (skirt, coat tails) is moved over with its branch
@@ -42,7 +43,7 @@ export async function wearModelOutfit(vrm, url, tint = null) {
     holder.add(mesh);
     mesh.bind(new THREE.Skeleton(mapped, mesh.skeleton.boneInverses), mesh.bindMatrix);
     mesh.frustumCulled = false;
-    if (tint && /_CLOTH/.test(matName(mesh)) && !/Shoes/.test(matName(mesh))) recolour(mesh, tint);
+    if (tint && /_CLOTH/.test(matName(mesh)) && !/Shoes/.test(matName(mesh))) recolour(mesh, tint, repainted);
   }
   const hidden = [];
   vrm.scene.traverse(o => { if (o.isMesh && !meshes.includes(o) && isBodyPart(o) && o.visible) { o.visible = false; hidden.push(o); } });
@@ -59,16 +60,23 @@ export async function wearModelOutfit(vrm, url, tint = null) {
 }
 
 /** Repaints a mesh's textures with a colour shift, to make colour variants of the same clothes. */
-function recolour(mesh, { hue = 0, saturate = 1, brightness = 1 }) {
+function recolour(mesh, { hue = 0, saturate = 1, brightness = 1 }, done) {
   for (const m of [].concat(mesh.material)) {
     for (const key of ['map', 'shadeMultiplyTexture']) {
       const tex = m[key];
       if (!tex?.image || tex.userData.recoloured) continue;
-      const c = document.createElement('canvas'); c.width = tex.image.width; c.height = tex.image.height;
-      const g = c.getContext('2d');
-      g.filter = `hue-rotate(${hue}deg) saturate(${saturate}) brightness(${brightness})`;
-      g.drawImage(tex.image, 0, 0);
-      const copy = tex.clone(); copy.image = c; copy.userData.recoloured = true; copy.needsUpdate = true;
+      // Several textures and materials share one picture. Each picture is repainted exactly once and given its own
+      // source: repainting the shared one in place shifted the colour again for every material that used it.
+      let source = done.get(tex.source);
+      if (!source) {
+        const c = document.createElement('canvas'); c.width = tex.image.width; c.height = tex.image.height;
+        const g = c.getContext('2d');
+        g.filter = `hue-rotate(${hue}deg) saturate(${saturate}) brightness(${brightness})`;
+        g.drawImage(tex.image, 0, 0);
+        source = new THREE.Source(c);
+        done.set(tex.source, source);
+      }
+      const copy = tex.clone(); copy.source = source; copy.userData.recoloured = true; copy.needsUpdate = true;
       m[key] = copy;
       if (m.uniforms?.[key]) m.uniforms[key].value = copy;
     }

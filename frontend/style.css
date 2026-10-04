@@ -776,3 +776,6 @@ button.focus-pill { cursor: pointer; font: inherit; font-weight: 700; color: inh
 .tile img.fit { object-fit: cover; object-position: 50% 14%; padding: 0; transform: scale(1.5); transform-origin: 50% 46%; }
 .dress-action img.fit { object-fit: cover; object-position: 50% 30%; padding: 0; }
 .art:has(.art-body.noimg) > .initial { display: grid; }
+.grid-head { grid-column: 1 / -1; margin: 4px 2px -2px; font: 700 .78rem var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--cyan);
+  display: flex; align-items: center; gap: 8px; }
+.grid-head::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--cyan), transparent); }
