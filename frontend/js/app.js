@@ -204,6 +204,7 @@ async function setState(newState) {
   const char = activeChar();
   if (loadedModelFor !== char.id) {
     loadedModelFor = char.id;
+    character.setStance(char.idle);
     const ok = await character.load(`/models/${char.model}`, char.color);
     $('model-hint').classList.toggle('hidden', ok);
     $('model-hint').textContent = `Placeholder shown: export ${char.name} from VRoid Studio as models/${char.model}`;

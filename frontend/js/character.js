@@ -13,6 +13,19 @@ const IDLE_LOOK_BACK = 4; // seconds without mouse movement before she looks bac
 // Idle gestures: every so often, when she's calm and quiet, she does a little something on her own.
 const IDLE_LENGTH = { stretch: 3.4, lookAround: 4.2, hairTouch: 3.2, handsBehind: 4.5, headTilt: 2.8, yawn: 3.4, handOnHip: 3.8 };
 const IDLE_GAP = [7, 16]; // seconds between gestures (random in this range)
+// Signature idle stances: the always-on "standing around" loop (like Mario's bob or Sonic's foot tap).
+// Each character picks one with "idle" in characters.json. Arm poses are for VRM normalized bones (right side; left is mirrored).
+export const ARMS = {
+  crossed: { upper: [-0.3, 0.45, 1.12], lower: [0, 1.75, 1.05], leftUpper: [-0.42, 0.45, 1.12], leftLower: [0, 1.6, 1.05] }, // arms folded across the chest (left forearm in front)
+  clasped: { upper: [-0.15, 0.35, 1.2], lower: [0, 1.2, 0.5] },      // hands held together in front
+  behind: { upper: [0.45, 0, 1.3], lower: [0, 0, 0.5] },          // hands clasped behind the back
+  pockets: { upper: [0.25, -0.15, 1.2], lower: [0, 1.2, 0.7] },     // thumbs hooked in the pockets
+};
+const mirror = ([x, y, z]) => [x, -y, -z];
+const armPose = name => {
+  const a = ARMS[name];
+  return { rightUpperArm: a.upper, rightLowerArm: a.lower, leftUpperArm: mirror(a.leftUpper || a.upper), leftLowerArm: mirror(a.leftLower || a.lower) };
+};
 const smooth = (a, b, x) => { const k = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return k * k * (3 - 2 * k); };
 
 export class Character {
@@ -87,6 +100,9 @@ export class Character {
     this.idleAmt = 0;     // fades gestures in/out when she gets interrupted
     this.nextIdle = 6;
     this.gesture = null;  // this frame's gesture pose (see idlePose)
+    this.stanceName = 'polite'; // signature idle loop (see stancePose)
+    this.stanceAmt = 1;   // eases off while she shows a strong emotion
+    this.stance = null;
     canvas.addEventListener('pointerdown', e => {
       const r = canvas.getBoundingClientRect();
       const ndc = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 };
@@ -426,8 +442,11 @@ export class Character {
     if (!this.dragRotate) this.spin += (0 - this.spin) * Math.min(1, dt * 5);
 
     this.updateIdle(t, dt);
-    this.updateLook(dt, t);
     const w = this.weights;
+    const strongEmotion = Math.max(w.happy, w.angry, w.sad, w.surprised);
+    this.stanceAmt += ((1 - strongEmotion * 0.85) - this.stanceAmt) * Math.min(1, dt * 5);
+    this.stance = this.stancePose(t);
+    this.updateLook(dt, t);
     if (this.root) {
       // whole-body motion: happy bounce, surprised hop, angry shake
       this.root.position.y = Math.abs(Math.sin(t * 6)) * 0.04 * w.happy + Math.max(0, Math.sin(t * 9)) * 0.03 * w.surprised;
@@ -438,6 +457,7 @@ export class Character {
       const squish = since < 0.6 ? Math.sin(since * 22) * Math.exp(-since * 7) * 0.12 : 0;
       this.root.scale.set(1 + squish * 0.6, 1 - squish, 1 + squish * 0.6);
       if (this.gesture) this.root.position.y += this.gesture.rise * this.gesture.k;
+      this.root.position.y -= this.stance.drop; // knees bending in the idle bob
     }
     this.blush += ((t < this.blushUntil ? 1 : 0) - this.blush) * Math.min(1, dt * 5);
     this.waveAmt += ((t < this.waveUntil ? 1 : 0) - this.waveAmt) * Math.min(1, dt * 6);
@@ -464,6 +484,78 @@ export class Character {
   /** Waves hello with her right arm for a few seconds. */
   wave(seconds = 2.5) {
     this.waveUntil = this.clock.elapsedTime + seconds;
+  }
+
+  /** Picks the signature idle loop: a name from "idle" in characters.json. */
+  setStance(name) { this.stanceName = name || 'polite'; }
+
+  /** The always-on idle loop for the current stance. Same shape as idlePose, plus knee bob, foot tap and drop. */
+  stancePose(t) {
+    const k = this.stanceAmt;
+    const st = { k, arms: {}, add: {}, bob: { left: 0, right: 0 }, tap: 0, drop: 0, ph: { armX: 0 } };
+    const knees = (left, right = left) => { st.bob.left = left * k; st.bob.right = right * k; };
+    switch (this.stanceName) {
+      case 'tsundere': { // arms crossed, chin up, looking a bit away, impatient foot tapping now and then
+        const c = t % 7, tapping = smooth(0, 0.3, c) * (1 - smooth(2.6, 3, c));
+        st.arms = armPose('crossed');
+        st.tap = Math.max(0, Math.sin(t * 9)) * 0.4 * tapping * k;
+        st.add = { hips: [0, 0, 0.04], spine: [0, 0, -0.03], head: [-0.06, -0.12, 0.05] };
+        st.ph.armX = -1.2;
+        break;
+      }
+      case 'stoic': // arms crossed, still and unimpressed
+        st.arms = armPose('crossed');
+        st.add = { chest: [-0.03, 0, 0], head: [0.05, 0, 0] };
+        st.ph.armX = -1.2;
+        break;
+      case 'shy': { // hands together in front, a little hunched, head down, rocking gently
+        const r = Math.sin(t * 0.9);
+        st.arms = armPose('clasped');
+        st.add = { hips: [0, 0, 0.03 * r], spine: [0.06, 0, -0.02 * r], neck: [0.08, 0, 0], head: [0.06, 0, 0.08 * Math.sin(t * 0.6)] };
+        st.ph.armX = -0.4;
+        break;
+      }
+      case 'polite': { // hands together in front, swaying side to side, head tilting with it
+        const r = Math.sin(t * 1.2);
+        st.arms = armPose('clasped');
+        st.add = { hips: [0, 0, 0.04 * r], spine: [0, 0, -0.03 * r], head: [0, 0, 0.08 * Math.sin(t * 1.2 - 0.6)] };
+        st.ph.armX = -0.4;
+        break;
+      }
+      case 'proper': // hands together in front, standing up straight, small nods
+        st.arms = armPose('clasped');
+        st.add = { chest: [-0.04, 0, 0], head: [0.03 * Math.sin(t * 0.8), 0, 0] };
+        st.ph.armX = -0.4;
+        break;
+      case 'bouncy': { // bopping to a beat: knees bounce, arms swing, head bobs side to side
+        const beat = t * Math.PI * 2 * 1.6, half = Math.sin(beat / 2);
+        knees(0.13 * (0.5 - 0.5 * Math.cos(beat)));
+        st.arms = { rightUpperArm: [0.2 * half, 0, 1.3], leftUpperArm: [-0.2 * half, 0, -1.3], rightLowerArm: [0, 0.35, 0], leftLowerArm: [0, -0.35, 0] };
+        st.add = { hips: [0, 0, 0.05 * half], spine: [0, 0, -0.03 * half], head: [0.04 * Math.sin(beat), 0, 0.08 * half] };
+        break;
+      }
+      case 'composed': // hands behind the back, chest out, calm
+        st.arms = armPose('behind');
+        st.add = { chest: [-0.05, 0, 0], head: [-0.03, 0, 0] };
+        st.ph.armX = 0.6;
+        break;
+      case 'playful': { // hands behind the back, rocking heel to toe, head tilting
+        const r = Math.sin(t * 2.2);
+        knees(0.05 * (0.5 - 0.5 * Math.cos(t * 4.4)));
+        st.arms = armPose('behind');
+        st.add = { hips: [0.04 * r, 0, 0.03 * Math.sin(t * 1.1)], head: [-0.03 * r, 0, 0.12 * Math.sin(t * 1.1)] };
+        st.ph.armX = 0.6;
+        break;
+      }
+      case 'cocky': // hands in pockets, leaning back, weight on one leg, nodding along to music in his head
+        knees(0.12, 0);
+        st.arms = armPose('pockets');
+        st.add = { hips: [0, 0, 0.05], spine: [-0.02, 0, 0.03], chest: [-0.03, 0, 0], head: [-0.07 + 0.04 * Math.sin(t * 2.4), 0.08, 0.1] };
+        st.ph.armX = 0.3;
+        break;
+    }
+    st.drop = 0.85 * (1 - Math.cos((st.bob.left + st.bob.right) / 2));
+    return st;
   }
 
   /** Plays an idle gesture now. Random if no name given. Try it in DevTools: character.playIdle('stretch') */
@@ -598,11 +690,6 @@ export class Character {
     set('rightUpperArm', 0, 0, armDown - breathe * 0.02);
     set('leftLowerArm', 0, -elbow, 0);
     set('rightLowerArm', 0, elbow, 0);
-    if (this.waveAmt > 0.01) { // wave: raise the right arm and swing the forearm
-      const wv = this.waveAmt;
-      set('rightUpperArm', 0, 0, armDown * (1 - wv) - 1.0 * wv);
-      set('rightLowerArm', 0, elbow * (1 - wv) + 0.2 * wv, wv * (-0.6 + Math.sin(t * 12) * 0.45));
-    }
     const sway = Math.sin(t * 0.35); // slow weight shift from one leg to the other
     set('hips', 0, sway * 0.05, sway * 0.02);
     set('spine', 0.02 * breathe + w.angry * 0.08 + w.sad * 0.1, -sway * 0.03, -sway * 0.02);
@@ -613,17 +700,34 @@ export class Character {
     set('head', talkNod + w.sad * 0.15 - w.surprised * 0.1 + pitch * 0.6,
       yaw * 0.6 + Math.sin(t * 25) * 0.05 * w.angry, Math.sin(t * 0.7) * 0.05 + w.happy * 0.1);
 
-    const g = this.gesture;
-    if (g) { // blend in the idle gesture
-      for (const [name, [x, y, z]] of Object.entries(g.arms)) {
+    // arms: k=1 replaces the pose above; body/head angles in `add` go on top
+    const blend = (pose, k) => {
+      for (const [name, [x, y, z]] of Object.entries(pose.arms)) {
         const n = b(name);
-        if (n) n.rotation.set(n.rotation.x + (x - n.rotation.x) * g.k, n.rotation.y + (y - n.rotation.y) * g.k, n.rotation.z + (z - n.rotation.z) * g.k);
+        if (n) n.rotation.set(n.rotation.x + (x - n.rotation.x) * k, n.rotation.y + (y - n.rotation.y) * k, n.rotation.z + (z - n.rotation.z) * k);
       }
-      for (const [name, [x, y, z]] of Object.entries(g.add)) {
+      for (const [name, [x, y, z]] of Object.entries(pose.add)) {
         const n = b(name);
-        if (n) { n.rotation.x += x * g.k; n.rotation.y += y * g.k; n.rotation.z += z * g.k; }
+        if (n) { n.rotation.x += x * k; n.rotation.y += y * k; n.rotation.z += z * k; }
+      }
+    };
+    const st = this.stance;
+    blend(st, st.k);
+    for (const side of ['left', 'right']) { // knee bob (and the right foot's tap)
+      const bend = st.bob[side];
+      set(`${side}UpperLeg`, -bend, 0, 0);
+      set(`${side}LowerLeg`, bend * 2, 0, 0);
+      set(`${side}Foot`, -bend - (side === 'right' ? st.tap : 0), 0, 0);
+    }
+    if (this.waveAmt > 0.01) { // wave: raise the right arm and swing the forearm
+      const wv = this.waveAmt, ua = b('rightUpperArm'), la = b('rightLowerArm');
+      if (ua && la) {
+        ua.rotation.set(ua.rotation.x * (1 - wv), ua.rotation.y * (1 - wv), ua.rotation.z * (1 - wv) - 1.0 * wv);
+        la.rotation.set(la.rotation.x * (1 - wv), la.rotation.y * (1 - wv) + 0.2 * wv, la.rotation.z * (1 - wv) + wv * (-0.6 + Math.sin(t * 12) * 0.45));
       }
     }
+    const g = this.gesture;
+    if (g) blend(g, g.k); // the occasional idle gesture
 
     const em = this.vrm.expressionManager;
     if (em) {
@@ -646,6 +750,7 @@ export class Character {
         a.rotation.z += (2.6 + Math.sin(t * 12) * 0.35 - a.rotation.z) * this.waveAmt;
         a.rotation.x *= 1 - this.waveAmt;
       }
+      a.rotation.x += this.stance.ph.armX * this.stance.k;
       const g = this.gesture, up = g && (sd === 1 ? g.ph.armR : g.ph.armL);
       if (up != null) a.rotation.z += (sd * up - a.rotation.z) * g.k;
       if (g) a.rotation.x += g.ph.armX * g.k;
