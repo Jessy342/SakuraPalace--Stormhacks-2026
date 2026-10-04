@@ -1,7 +1,8 @@
 // Dev tool (not part of the app): renders the character portraits used by the menus and the gacha cutscene.
 // Run it again whenever a VRoid model is added or changed in models/:
-//   1. start the app (start.bat)   2. in an empty temp folder: npm install puppeteer-core
-//   3. node <path to>/tools/make_portraits.mjs <path to>/frontend/assets/portraits   (needs Google Chrome installed)
+//   1. start the app (start.bat)
+//   2. copy this file into an empty temp folder and run there: npm install puppeteer-core
+//   3. node make_portraits.mjs <path to>/frontend/assets/portraits   (needs Google Chrome installed)
 import puppeteer from 'puppeteer-core';
 import fs from 'fs';
 const OUT = process.argv[2];
