@@ -1,5 +1,5 @@
 @echo off
-title Anime Assistant (server)
+title Anime Assistant (starting...)
 cd /d "%~dp0"
 if not exist .venv (
   echo Creating Python environment, first run only...
@@ -12,5 +12,5 @@ if not exist .env (
   copy .env.example .env >nul
   echo Created .env - open it in VS Code and paste your API keys, then run start.bat again.
 )
-python backend\main.py
-pause
+rem The app opens in its own window; closing that window quits it. Problems are logged to backend\data\app.log
+start "" .venv\Scripts\pythonw.exe backend\main.py

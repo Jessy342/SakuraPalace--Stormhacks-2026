@@ -1,18 +1,30 @@
 {
-  "_help": "Accessories are simple 3D shapes attached to the character's head (see frontend/js/accessories.js). Backgrounds are CSS backgrounds or image files in frontend/assets/backgrounds/.",
+  "_help": "Everything here is sold and worn in the Dressing Room. Accessories are simple 3D shapes attached to the character's head (see frontend/js/accessories.js); 'slot' is head or face. Rooms are drawn by frontend/js/environment.js (the id must match a scene there). Price 0 = owned from the start.",
   "accessories": [
-    {"id": "cat_ears", "name": "Cat Ears", "price": 150},
-    {"id": "glasses", "name": "Study Glasses", "price": 120},
-    {"id": "halo", "name": "Golden Halo", "price": 300},
-    {"id": "crown", "name": "Royal Crown", "price": 500},
-    {"id": "witch_hat", "name": "Witch Hat", "price": 400},
-    {"id": "bow", "name": "Big Ribbon Bow", "price": 200}
+    {"id": "cat_ears", "name": "Cat Ears", "price": 150, "slot": "head"},
+    {"id": "bow", "name": "Big Ribbon Bow", "price": 200, "slot": "head"},
+    {"id": "halo", "name": "Golden Halo", "price": 300, "slot": "head"},
+    {"id": "witch_hat", "name": "Witch Hat", "price": 400, "slot": "head"},
+    {"id": "crown", "name": "Royal Crown", "price": 500, "slot": "head"},
+    {"id": "glasses", "name": "Study Glasses", "price": 120, "slot": "face"}
   ],
   "backgrounds": [
-    {"id": "sakura", "name": "Sakura Evening", "price": 0, "css": "linear-gradient(180deg,#ffd1e8 0%,#ff9fc8 45%,#7b4f9e 100%)"},
-    {"id": "night_city", "name": "Neon Night", "price": 200, "css": "linear-gradient(180deg,#0f0c29 0%,#302b63 55%,#ff2e88 130%)"},
-    {"id": "classroom", "name": "Sunny Classroom", "price": 150, "css": "linear-gradient(180deg,#fff6d6 0%,#ffe2a8 50%,#c9a27a 100%)"},
-    {"id": "beach", "name": "Sunset Beach", "price": 250, "css": "linear-gradient(180deg,#ff9a8b 0%,#ff6a88 40%,#3a6ea5 75%,#f6d365 100%)"},
-    {"id": "galaxy", "name": "Galaxy Dream", "price": 400, "css": "radial-gradient(circle at 30% 20%,#6a3093 0%,#1a1a40 45%,#000 100%)"}
+    {"id": "bedroom", "name": "Cozy Bedroom", "price": 0},
+    {"id": "sakura", "name": "Sakura Horizon", "price": 0},
+    {"id": "classroom", "name": "After-School Classroom", "price": 150},
+    {"id": "rooftop", "name": "Rooftop at Sunset", "price": 200},
+    {"id": "night_city", "name": "Neon Night", "price": 200},
+    {"id": "courtyard", "name": "Cherry Blossom Courtyard", "price": 250},
+    {"id": "beach", "name": "Sunset Beach", "price": 250},
+    {"id": "cafe", "name": "Rainy Day Cafe", "price": 300},
+    {"id": "bedroom_modern", "name": "Modern Room", "price": 300},
+    {"id": "bedroom_study", "name": "Study Room", "price": 300},
+    {"id": "bedroom_gamer", "name": "Gamer Room", "price": 350},
+    {"id": "balcony", "name": "Moonlit Balcony", "price": 400},
+    {"id": "galaxy", "name": "Galaxy Dream", "price": 400},
+    {"id": "library", "name": "Celestial Library", "price": 500},
+    {"id": "festival", "name": "Festival Night", "price": 500},
+    {"id": "stage", "name": "Idol Stage", "price": 600},
+    {"id": "bedroom_penthouse", "name": "Luxury Penthouse", "price": 700}
   ]
 }

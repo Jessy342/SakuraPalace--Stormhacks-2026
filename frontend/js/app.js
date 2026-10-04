@@ -1,6 +1,7 @@
 // Main UI logic: connects the game-style menus to the backend and the 3D character.
 import { api, post } from './api.js';
 import { Character } from './character.js';
+import { accessoryThumbs } from './accessories.js';
 import { Environment } from './environment.js';
 import * as voice from './voice.js';
 import { playCutscene, stars, portrait, portraitImg } from './gacha.js';
@@ -10,7 +11,6 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 
 let S = null;            // full game state from the backend
 let chatHistory = [];
-let teachHistory = [];
 let loadedModelFor = null;
 let lastPoints = null;
 let lastEventId = 0;
@@ -157,6 +157,13 @@ function applyShift() {
   character.setShift(px);
 }
 
+/** Picks the backdrop: each full-screen menu has its own, the dressing room is a boutique, the lobby is your room. */
+function applyEnv() {
+  const room = trying?.kind === 'background' ? trying.id : S.background;
+  environment.set(currentTab === 'gacha' ? 'convene' : currentTab === 'chars' ? 'archive'
+    : currentTab === 'dress' ? (dressCat === 'room' ? room : 'dressing') : S.background);
+}
+
 function openTab(name) {
   if (name === currentTab) name = null; // pressing the same button again closes the menu
   const isFull = FULL.includes(name);
@@ -165,6 +172,9 @@ function openTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + name));
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.body.dataset.view = !name ? 'lobby' : isFull ? 'full' : 'drawer';
+  document.body.dataset.tab = name || '';
+  character.paused = isFull;
+  if (name !== 'dress' && trying) { trying = null; applyTry(); renderDress(); } // stop trying things on when leaving
   if (name && !isFull) $('drawer-title').textContent = $('tab-' + name).dataset.title;
   $('rates-pop').classList.add('hidden');
   applyShift();
@@ -172,6 +182,8 @@ function openTab(name) {
   if (name !== 'dress') setFrame('full');
   if (name === 'chat') $('chat-log').scrollTop = 1e9;
   if (name === 'chars') { charPick = S.active_character; renderChars(); }
+  if (name === 'dress') renderDress();
+  applyEnv();
 }
 const closeTab = () => openTab(null);
 
@@ -209,7 +221,7 @@ async function setState(newState) {
     $('model-hint').classList.toggle('hidden', ok);
     $('model-hint').textContent = `Placeholder shown: export ${char.name} from VRoid Studio as models/${char.model}`;
   }
-  character.setAccessories(S.equipped_accessories);
+  applyTry();
 }
 
 function render() {
@@ -223,21 +235,19 @@ function render() {
     av.dataset.id = char.id;
     av.style.display = '';
     av.onerror = () => { av.style.display = 'none'; };
+    av.onload = () => { $('hud-avatar-fallback').textContent = ''; }; // the letter is only for characters without a picture
     av.src = portrait(char.id, true);
   }
   $('hud-level').textContent = S.level;
   $('hud-xp').style.width = (100 * S.xp / S.xp_to_next) + '%';
   $('hud-xptext').textContent = `${S.xp} / ${S.xp_to_next} XP`;
   updatePoints(S.points);
-  const bg = S.catalog.backgrounds.find(b => b.id === S.background);
-  document.body.style.background = bg ? bg.css : '';
-  environment.set(S.background);
+  applyEnv();
 
   renderTasks();
   renderFocusSettings();
   renderGacha();
   renderChars();
-  renderShop();
   renderDress();
   renderOptions();
 }
@@ -613,7 +623,8 @@ async function doPull(count) {
   try {
     voice.stopSpeaking();
     const res = await post('/gacha/pull', { count, force_rarity: $('force-rarity').value || null, banner: bannerId });
-    await playCutscene(res.results, res.best_rarity);
+    environment.paused = true;
+    await playCutscene(res.results, res.best_rarity).finally(() => { environment.paused = false; });
     await setState(res.state);
     const news = res.results.filter(r => r.new);
     addMsg('sys', `✨ Pulled: ${res.results.map(r => `${r.name} (${r.rarity})`).join(', ')}`);
@@ -675,35 +686,54 @@ function previewVoice(id, lang) {
   voice.speak(lang === 'ja' ? (c.intro_line_ja || c.intro_line) : c.intro_line, { characterId: c.id, lang, gender: c.gender });
 }
 
-// ======================= Shop + Dressing Room =======================
-const accIcon = id => ({ cat_ears: '🐱', glasses: '👓', halo: '😇', crown: '👑', witch_hat: '🧙', bow: '🎀' }[id] || '✨');
-const accSwatch = 'background:linear-gradient(135deg,#3b3f8f,#b0478f)';
+// ======================= Dressing Room (wardrobe + shop in one) =======================
+// Like a dress-up game: pick a category, click a tile to wear it. Locked items show their price;
+// clicking one tries it on the character (or previews the room) and a Buy button appears.
+let dressCat = 'head';   // head | face | room | persona | voice
+let trying = null;       // { kind: 'accessory' | 'background', id } being previewed but not owned yet
+let accThumbs = null;    // little pictures of the accessories, made the first time the dressing room opens
 
-function renderShop() {
-  $('shop-acc').innerHTML = S.catalog.accessories.map(a => {
-    const owned = S.owned_accessories.includes(a.id);
-    return `<div class="card"><div class="swatch" style="${accSwatch}">${accIcon(a.id)}</div><b>${esc(a.name)}</b>
-      ${owned ? '<span class="owned">✓ Owned</span>'
-              : `<button data-buy="accessory:${a.id}" ${S.points < a.price ? 'disabled' : ''}><span class="gem">◆</span> ${a.price}</button>`}</div>`;
-  }).join('');
-  $('shop-bg').innerHTML = S.catalog.backgrounds.map(b => {
-    const owned = S.owned_backgrounds.includes(b.id);
-    return `<div class="card"><div class="swatch" style="background:${b.css}"></div><b>${esc(b.name)}</b>
-      ${owned ? '<span class="owned">✓ Owned</span>'
-              : `<button data-buy="background:${b.id}" ${S.points < b.price ? 'disabled' : ''}><span class="gem">◆</span> ${b.price}</button>`}</div>`;
-  }).join('');
+const ownsItem = (kind, id) => (kind === 'accessory' ? S.owned_accessories : S.owned_backgrounds).includes(id);
+const findItem = (kind, id) => (kind === 'accessory' ? S.catalog.accessories : S.catalog.backgrounds).find(x => x.id === id);
+
+/** Shows what is equipped, plus the item being tried on. */
+function applyTry() {
+  character.setAccessories(trying?.kind === 'accessory' ? [...S.equipped_accessories, trying.id] : S.equipped_accessories);
+  applyEnv();
+}
+
+function tile(kind, it, img) {
+  const owned = ownsItem(kind, it.id);
+  const on = kind === 'accessory' ? S.equipped_accessories.includes(it.id) : S.background === it.id;
+  const badge = on ? (kind === 'accessory' ? '✓ Wearing' : '✓ In use') : owned ? 'Owned' : `◆ ${it.price}`;
+  return `<button class="tile ${kind === 'accessory' ? 'acc' : ''} ${on ? 'worn' : ''} ${owned ? '' : 'locked'} ${trying?.id === it.id ? 'trying' : ''}"
+    data-item="${kind}:${it.id}" title="${esc(it.name)}"><img src="${img}" alt="" draggable="false">
+    <span class="badge">${badge}</span><span class="tname">${esc(it.name)}</span></button>`;
 }
 
 function renderDress() {
-  const mine = S.catalog.accessories.filter(a => S.owned_accessories.includes(a.id));
-  $('dress-acc').innerHTML = mine.map(a => {
-    const on = S.equipped_accessories.includes(a.id);
-    return `<div class="card ${on ? 'selected' : ''}"><div class="swatch" style="${accSwatch}">${accIcon(a.id)}</div><b>${esc(a.name)}</b>
-      <button data-equip="${a.id}" data-on="${!on}">${on ? 'Take off' : 'Wear'}</button></div>`;
-  }).join('') || '<small>No accessories yet. <button class="link" data-open="shop">Visit the Shop</button></small>';
-  $('bg-select').innerHTML = S.catalog.backgrounds.filter(b => S.owned_backgrounds.includes(b.id)).map(b => `
-    <div class="card ${S.background === b.id ? 'selected' : ''}"><div class="swatch" style="background:${b.css}"></div>
-    <b>${esc(b.name)}</b><button data-bg="${b.id}" ${S.background === b.id ? 'disabled' : ''}>${S.background === b.id ? 'In use' : 'Use'}</button></div>`).join('');
+  document.querySelectorAll('#dress-cats button').forEach(b => b.classList.toggle('active', b.dataset.cat === dressCat));
+  const items = ['head', 'face', 'room'].includes(dressCat);
+  $('dress-grid').classList.toggle('hidden', !items);
+  $('dress-action').classList.toggle('hidden', !items);
+  $('dress-persona').classList.toggle('hidden', dressCat !== 'persona');
+  $('dress-voice').classList.toggle('hidden', dressCat !== 'voice');
+  if (currentTab === 'dress' && items) { // (skip the picture work while the dressing room is closed)
+    if (dressCat === 'room') {
+      $('dress-grid').innerHTML = S.catalog.backgrounds.map(b => tile('background', b, environment.thumb(b.id))).join('');
+    } else {
+      accThumbs ||= accessoryThumbs(S.catalog.accessories.map(a => a.id));
+      $('dress-grid').innerHTML = S.catalog.accessories.filter(a => (a.slot || 'head') === dressCat)
+        .map(a => tile('accessory', a, accThumbs[a.id])).join('');
+    }
+    const it = trying && findItem(trying.kind, trying.id);
+    const short = it ? it.price - S.points : 0;
+    $('dress-action').innerHTML = it
+      ? `<div class="what">${trying.kind === 'accessory' ? 'Trying on' : 'Previewing'}<b>${esc(it.name)}</b></div>
+         <button class="primary big" data-buyitem ${short > 0 ? 'disabled' : ''}>${short > 0 ? `Need ${short} more ◆` : `Buy · ◆ ${it.price}`}</button>`
+      : `<div class="what">Click an item to ${dressCat === 'room' ? 'use' : 'wear'} it. Items with a price can be tried first, then bought right here.</div>
+         <div class="pill hud-points"><span class="gem">◆</span><b>${S.points}</b></div>`;
+  }
   const char = activeChar();
   const p = S.personality_overrides[char.id] || char.personality;
   const presets = Object.keys(CLASSES);
@@ -713,6 +743,32 @@ function renderDress() {
     if (!presets.includes(p)) $('personality-custom').value = p;
   }
   document.querySelectorAll('input[name=vmode]').forEach(r => { r.checked = r.value === S.settings.voice_mode; });
+}
+
+async function clickItem(kind, id) {
+  if (ownsItem(kind, id)) {
+    trying = null;
+    if (kind === 'accessory') {
+      const on = !S.equipped_accessories.includes(id);
+      await setState(await post('/equip', { kind, id, on }));
+      if (on) character.setEmotion('happy', 3);
+    } else {
+      await setState(await post('/equip', { kind, id }));
+    }
+  } else { // not owned: try it on (click again to take it off)
+    trying = trying?.id === id ? null : { kind, id };
+    applyTry();
+    renderDress();
+  }
+}
+
+async function buyTrying() {
+  const { kind, id } = trying;
+  await setState(await post('/shop/buy', { kind, id }));
+  trying = null;
+  voice.sfx('task_done');
+  await setState(await post('/equip', { kind, id, on: true })); // wear / use it right away
+  say('Ooh, thank you! I love it!', { emotion: 'happy' });
 }
 
 function setFrame(view) {
@@ -738,7 +794,7 @@ document.querySelectorAll('input[name=vmode]').forEach(r => r.addEventListener('
 
 // ======================= One click handler for all the generated buttons =======================
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-buy],[data-equip],[data-bg],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del]');
+  const t = e.target.closest('[data-item],[data-buyitem],[data-cat],[data-turn],[data-char],[data-pick],[data-filter],[data-banner],[data-frame],[data-preview],[data-open],[data-close],[data-done],[data-del]');
   if (!t || t.disabled) return;
   const d = t.dataset;
   try {
@@ -746,17 +802,18 @@ document.addEventListener('click', async e => {
       await completeTask(d.done);
     } else if (d.del) {
       await setState(await api(`/tasks/${d.del}`, { method: 'DELETE' }));
-    } else if (d.buy) {
-      const [kind, id] = d.buy.split(':');
-      await setState(await post('/shop/buy', { kind, id }));
-      voice.sfx('task_done');
-      say('Ooh, thank you! I love it!', { emotion: 'happy' });
-      await setState(await post('/equip', { kind, id, on: true })); // wear / use it right away
-    } else if (d.equip) {
-      await setState(await post('/equip', { kind: 'accessory', id: d.equip, on: d.on === 'true' }));
-      if (d.on === 'true') character.setEmotion('happy', 3);
-    } else if (d.bg) {
-      await setState(await post('/equip', { kind: 'background', id: d.bg }));
+    } else if (d.item) {
+      const [kind, id] = d.item.split(':');
+      await clickItem(kind, id);
+    } else if ('buyitem' in d) {
+      await buyTrying();
+    } else if (d.cat) {
+      dressCat = d.cat;
+      trying = null;
+      applyTry();
+      renderDress();
+    } else if (d.turn) {
+      character.turn(+d.turn);
     } else if (d.char) {
       await setState(await post('/equip', { kind: 'character', id: d.char }));
       const c = activeChar();
@@ -784,63 +841,37 @@ document.addEventListener('click', async e => {
   } catch (err) { toastError(err); }
 });
 
-// ======================= Teacher =======================
-function renderMarkdown(md) {
-  const lines = esc(md).split('\n');
-  let html = '', list = null;
-  const inline = s => s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>').replace(/`(.+?)`/g, '<code>$1</code>');
-  for (const line of lines) {
-    const m = line.match(/^\s*([-*]|\d+\.)\s+(.*)/);
-    if (m) {
-      const tag = /\d/.test(m[1]) ? 'ol' : 'ul';
-      if (list !== tag) { if (list) html += `</${list}>`; html += `<${tag}>`; list = tag; }
-      html += `<li>${inline(m[2])}</li>`;
-      continue;
-    }
-    if (list) { html += `</${list}>`; list = null; }
-    const h = line.match(/^(#{1,3})\s+(.*)/);
-    if (h) html += `<h${h[1].length + 1}>${inline(h[2])}</h${h[1].length + 1}>`;
-    else if (line.trim()) html += `<p>${inline(line)}</p>`;
-  }
-  if (list) html += `</${list}>`;
-  return html;
-}
-
-$('teach-upload').addEventListener('click', async () => {
-  const f = $('teach-file').files[0];
-  if (!f) return;
-  const form = new FormData();
-  form.append('file', f);
-  $('teach-file-name').textContent = 'Uploading…';
-  try {
-    await api('/teacher/upload', { method: 'POST', form });
-    teachHistory = [];
-    $('teach-file-name').textContent = `📄 ${f.name} ready.`;
-    await teach('Teach me the key ideas in this file, starting from the basics.');
-  } catch (err) { $('teach-file-name').textContent = '⚠ ' + err.message; }
-});
-
-$('teach-start').addEventListener('click', () => teach('Teach me the key ideas in this file, starting from the basics.'));
-$('teach-form').addEventListener('submit', e => {
-  e.preventDefault();
-  const q = $('teach-q').value.trim();
-  if (q) { $('teach-q').value = ''; teach(q); }
-});
-
-async function teach(question) {
-  $('lesson').innerHTML = '<p><i>Preparing your lesson…</i></p>';
-  try {
-    const res = await post('/teacher/ask', { question, history: teachHistory });
-    teachHistory.push({ role: 'user', text: question }, { role: 'model', text: res.text });
-    $('lesson').innerHTML = renderMarkdown(res.text);
-    say(res.speech, { emotion: res.emotion, ja: res.speech_ja });
-  } catch (err) { $('lesson').textContent = '⚠ ' + err.message; }
-}
-
 // ======================= Options =======================
 function renderOptions() {
   $('sys-status').innerHTML = `<small>ElevenLabs voice: ${elevenOn ? '✅ connected' : '❌ no key (using browser voice)'}<br>
     Quests done: ${S.stats.tasks_done} · Pulls: ${S.stats.pulls} · Distractions caught: ${S.stats.distractions}</small>`;
+}
+
+// Performance mode: lower resolution and fewer effects, for laptops without a dedicated graphics card
+let perfMode = false;
+try { perfMode = localStorage.getItem('perfMode') === 'on'; } catch { /* storage blocked */ }
+function setPerfMode(on) {
+  perfMode = on;
+  $('perf-mode').checked = on;
+  character.setQuality(on);
+  environment.setQuality(on);
+  try { localStorage.setItem('perfMode', on ? 'on' : 'off'); } catch { /* storage blocked */ }
+}
+$('perf-mode').addEventListener('change', () => setPerfMode($('perf-mode').checked));
+if (perfMode) setPerfMode(true);
+
+/** Counts frames for a few seconds; if the app is running slowly, turns performance mode on by itself. */
+function watchFrameRate() {
+  if (perfMode) return;
+  let frames = 0;
+  const start = performance.now();
+  const tick = () => {
+    frames++;
+    if (performance.now() - start < 4000) return requestAnimationFrame(tick);
+    if (document.hidden) return; // a hidden window is throttled by the browser, so the count means nothing
+    if (frames / 4 < 30) { setPerfMode(true); addMsg('sys', 'Performance mode turned on to keep things smooth. You can change it in Options (O).'); }
+  };
+  requestAnimationFrame(tick);
 }
 
 $('reset-btn').addEventListener('click', async () => {
@@ -881,6 +912,7 @@ async function boot() {
   const reminder = reminderLine();
   if (reminder) addMsg('sys', '⏰ ' + reminder);
   character.wave(3);
+  setTimeout(watchFrameRate, 2500); // once the model has settled in
 
   // Browsers block sound until the first click or key press, so greet out loud on the first interaction.
   let greeted = false;

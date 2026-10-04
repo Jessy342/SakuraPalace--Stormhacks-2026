@@ -9,9 +9,9 @@ tasks → XP → levels → points → shop accessories/backgrounds + Genshin-st
 Opening blocked apps/sites during a focus session makes the character yell, drains points, then force-closes the app.
 
 ## How to run
-- Windows: double-click `start.bat` (creates `.venv`, installs `requirements.txt`, runs `backend/main.py`, opens an Edge app window at http://127.0.0.1:8765).
+- Windows: double-click `start.bat` (creates `.venv`, installs `requirements.txt`, runs `backend/main.py`, opens the app in its own desktop window via pywebview; closing that window quits the app. If pywebview can't load it falls back to an Edge app window at http://127.0.0.1:8765. Errors go to `backend/data/app.log`).
 - Any OS: `pip install -r requirements.txt` then `python backend/main.py`. Set `NO_WINDOW=1` to skip opening a window.
-- After changing **Python** files: close the server window and run `start.bat` again. After changing **frontend** files: just press Ctrl+R in the app window.
+- After changing **Python** files: close the app window and run `start.bat` again. After changing **frontend** files: just press Ctrl+R in the app window.
 - The app works with no API keys (browser voice + canned replies), so you can always test the UI.
 
 ## Architecture (keep it this simple)
@@ -28,7 +28,8 @@ backend/                 Python 3.12, FastAPI. One file per system.
 frontend/                Plain HTML/CSS/JS ES modules. NO build step, NO npm. three.js + three-vrm are vendored in frontend/vendor/.
   index.html, style.css  game-style HUD: lobby (dock, quest tracker, dialogue box), side drawer menus, full-screen Convene + Characters
   js/app.js              all UI wiring (menus + keyboard shortcuts, chat, quests, focus polling, convene, characters, dressing room, shop, teacher)
-  js/environment.js      animated room behind the character (one canvas scene per background id in shop.json)
+  js/environment.js      rooms behind the character, drawn with canvas shapes: each scene is painted once, then only small effects animate at 30fps (keep it that way: full-screen redraws and CSS backdrop-filter made the app lag on integrated graphics). One scene per background id in shop.json, plus 'dressing', 'convene' and 'archive' for the menus
+  (Dressing Room = wardrobe + shop in one: locked items are tried on, then bought there. Teacher mode is hidden from the UI for now; its /api/teacher endpoints still exist.)
   js/character.js        3D scene, VRM loading, procedural idle/emotion animation, blink, lip sync, placeholder chibi
   js/accessories.js      accessories built from three.js shapes, attached to the head bone
   js/voice.js            speak() with lip-sync analyser, mic recording -> /api/stt, sound effects w/ beep fallback

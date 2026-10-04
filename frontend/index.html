@@ -35,6 +35,11 @@
       <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M5.500 11.500a6.500 6.500 0 0 0 13 0 M12 18v3"/></symbol>
       <symbol id="i-close" viewBox="0 0 24 24"><path d="M5 5l14 14 M19 5L5 19"/></symbol>
       <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6 M12 7.500v.500"/></symbol>
+      <symbol id="i-crown" viewBox="0 0 24 24"><path d="M4 18h16l1-10-5 4-4-7-4 7-5-4z"/></symbol>
+      <symbol id="i-glasses" viewBox="0 0 24 24"><circle cx="7" cy="13" r="3.5"/><circle cx="17" cy="13" r="3.5"/><path d="M10.5 13h3 M3.5 12l1-4 M20.5 12l-1-4"/></symbol>
+      <symbol id="i-room" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z M10 20v-6h4v6"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></symbol>
+      <symbol id="i-turn" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 1 2.6 5.7 M4 19v-5h5"/></symbol>
     </defs>
   </svg>
 
@@ -71,9 +76,7 @@
     <button data-tab="focus" data-key="f"><svg><use href="#i-focus"/></svg><span>Focus</span><kbd>F</kbd></button>
     <button data-tab="gacha" data-key="g"><svg><use href="#i-convene"/></svg><span>Convene</span><kbd>G</kbd></button>
     <button data-tab="chars" data-key="c"><svg><use href="#i-chars"/></svg><span>Characters</span><kbd>C</kbd></button>
-    <button data-tab="dress" data-key="d"><svg><use href="#i-dress"/></svg><span>Dressing Room</span><kbd>D</kbd></button>
-    <button data-tab="shop" data-key="s"><svg><use href="#i-shop"/></svg><span>Shop</span><kbd>S</kbd></button>
-    <button data-tab="teacher" data-key="t"><svg><use href="#i-teacher"/></svg><span>Teacher</span><kbd>T</kbd></button>
+    <button data-tab="dress" data-key="d"><svg><use href="#i-dress"/></svg><span>Dressing Room &amp; Shop</span><kbd>D</kbd></button>
     <button data-tab="chat" data-key="l"><svg><use href="#i-log"/></svg><span>Log</span><kbd>L</kbd></button>
     <button data-tab="settings" data-key="o"><svg><use href="#i-settings"/></svg><span>Options</span><kbd>O</kbd></button>
   </nav>
@@ -98,6 +101,14 @@
       <input id="chat-input" placeholder="Press Enter to talk… (try: remind me to study at 5pm)" autocomplete="off" />
       <button type="submit" class="primary">Send</button>
     </form>
+  </div>
+
+  <!-- Dressing room controls under the character -->
+  <div id="dress-stage">
+    <button class="icon-btn" data-turn="-1" title="Turn left"><svg><use href="#i-turn"/></svg></button>
+    <button data-frame="full" class="active">Full body</button>
+    <button data-frame="face">Close-up</button>
+    <button class="icon-btn flip" data-turn="1" title="Turn right"><svg><use href="#i-turn"/></svg></button>
   </div>
 
   <!-- Distraction warning banner -->
@@ -182,58 +193,39 @@
       </details>
     </section>
 
-    <!-- DRESSING ROOM -->
+    <!-- DRESSING ROOM: wardrobe and shop in one. Locked items can be tried on, then bought right here. -->
     <section id="tab-dress" class="tab" data-title="Dressing Room">
-      <div class="row view-row">
-        <button data-frame="full" class="active">Full body</button>
-        <button data-frame="face">Close-up</button>
-        <small>Drag the character to turn them around.</small>
+      <div id="dress-cats" class="dress-cats">
+        <button data-cat="head"><svg><use href="#i-crown"/></svg>Headwear</button>
+        <button data-cat="face"><svg><use href="#i-glasses"/></svg>Eyewear</button>
+        <button data-cat="room"><svg><use href="#i-room"/></svg>Rooms</button>
+        <button data-cat="persona"><svg><use href="#i-heart"/></svg>Persona</button>
+        <button data-cat="voice"><svg><use href="#i-mic"/></svg>Voice</button>
       </div>
-      <h3>Accessories</h3>
-      <div id="dress-acc" class="cards"></div>
-      <h3>Room</h3>
-      <div id="bg-select" class="cards"></div>
-      <h3>Personality</h3>
-      <select id="personality">
-        <option value="tsundere">Tsundere</option>
-        <option value="cheerful">Cheerful &amp; supportive</option>
-        <option value="sensei">Strict sensei</option>
-        <option value="chill">Chill &amp; deadpan</option>
-        <option value="rival">Hot-blooded rival</option>
-        <option value="custom">Custom…</option>
-      </select>
-      <textarea id="personality-custom" rows="2" class="hidden" placeholder="Describe the personality you want…"></textarea>
-      <button id="save-personality">Save personality</button>
-      <h3>Voice</h3>
-      <label class="check"><input type="radio" name="vmode" value="dub" /> Dub (English voice)</label>
-      <label class="check"><input type="radio" name="vmode" value="sub" /> Sub (Japanese voice + English subtitles)</label>
-      <div class="row">
-        <button data-preview="en">▶ Hear English voice</button>
-        <button data-preview="ja">▶ Hear Japanese voice</button>
+      <div id="dress-grid" class="dress-grid"></div>
+      <div id="dress-persona" class="dress-pane hidden">
+        <h3>Personality</h3>
+        <select id="personality">
+          <option value="tsundere">Tsundere</option>
+          <option value="cheerful">Cheerful &amp; supportive</option>
+          <option value="sensei">Strict sensei</option>
+          <option value="chill">Chill &amp; deadpan</option>
+          <option value="rival">Hot-blooded rival</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <textarea id="personality-custom" rows="3" class="hidden" placeholder="Describe the personality you want…"></textarea>
+        <button id="save-personality" class="primary">Save personality</button>
       </div>
-    </section>
-
-    <!-- SHOP -->
-    <section id="tab-shop" class="tab" data-title="Shop">
-      <h3>Accessories</h3>
-      <div id="shop-acc" class="cards"></div>
-      <h3>Rooms</h3>
-      <div id="shop-bg" class="cards"></div>
-    </section>
-
-    <!-- TEACHER -->
-    <section id="tab-teacher" class="tab" data-title="Teacher">
-      <div class="row">
-        <input id="teach-file" type="file" accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.docx,.pptx" />
-        <button id="teach-upload" class="primary">Upload</button>
+      <div id="dress-voice" class="dress-pane hidden">
+        <h3>Voice</h3>
+        <label class="check"><input type="radio" name="vmode" value="dub" /> Dub (English voice)</label>
+        <label class="check"><input type="radio" name="vmode" value="sub" /> Sub (Japanese voice + English subtitles)</label>
+        <div class="row">
+          <button data-preview="en">▶ Hear English voice</button>
+          <button data-preview="ja">▶ Hear Japanese voice</button>
+        </div>
       </div>
-      <small id="teach-file-name">No file yet. Upload notes, slides or a textbook chapter.</small>
-      <div id="lesson"></div>
-      <form id="teach-form" class="row">
-        <input id="teach-q" placeholder="Ask a question about the material…" />
-        <button type="submit" class="primary">Ask</button>
-      </form>
-      <button id="teach-start">Teach me this file</button>
+      <div id="dress-action" class="dress-action"></div>
     </section>
 
     <!-- LOG (chat history) -->
@@ -245,11 +237,13 @@
     <section id="tab-settings" class="tab" data-title="Options">
       <h3>Sound</h3>
       <label class="check"><input type="checkbox" id="ui-sounds" checked /> Click sounds on buttons</label>
+      <h3>Graphics</h3>
+      <label class="check"><input type="checkbox" id="perf-mode" /> Performance mode (smoother on slower laptops: lower resolution, fewer effects)</label>
       <h3>Keyboard</h3>
       <div class="keys">
         <span><kbd>Enter</kbd> talk</span><span><kbd>Esc</kbd> close menu</span><span><kbd>Q</kbd> quests</span><span><kbd>F</kbd> focus</span>
-        <span><kbd>G</kbd> convene</span><span><kbd>C</kbd> characters</span><span><kbd>D</kbd> dressing room</span><span><kbd>S</kbd> shop</span>
-        <span><kbd>T</kbd> teacher</span><span><kbd>L</kbd> log</span><span><kbd>O</kbd> options</span>
+        <span><kbd>G</kbd> convene</span><span><kbd>C</kbd> characters</span><span><kbd>D</kbd> dressing room</span>
+        <span><kbd>L</kbd> log</span><span><kbd>O</kbd> options</span>
       </div>
       <h3>System</h3>
       <div id="sys-status"></div>
@@ -284,7 +278,7 @@
       </div>
     </div>
     <div class="g-tools">
-      <button class="icon-btn round" data-open="shop" title="Shop"><svg><use href="#i-shop"/></svg></button>
+      <button class="icon-btn round" data-open="dress" title="Dressing Room &amp; Shop"><svg><use href="#i-dress"/></svg></button>
       <button class="icon-btn round" data-open="chars" title="Characters"><svg><use href="#i-chars"/></svg></button>
       <button class="icon-btn round" id="rates-btn" title="Drop rates"><svg><use href="#i-info"/></svg></button>
     </div>
@@ -301,7 +295,6 @@
 
   <!-- ===================== CHARACTERS (data bank) ===================== -->
   <section id="tab-chars" class="tab full">
-    <div class="full-bg stars"></div>
     <div class="full-top">
       <div class="full-title"><svg><use href="#i-chars"/></svg><div><small>Data Bank</small>Characters</div></div>
       <div class="full-right">

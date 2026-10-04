@@ -106,3 +106,33 @@ export function buildAccessory(id, face = DEFAULT_FACE) {
   }
   return g;
 }
+
+/** Small pictures of the accessories for the dressing room tiles. Returns { id: image data URL }. */
+export function accessoryThumbs(ids, size = 160) {
+  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  renderer.setSize(size, size);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+  const key = new THREE.DirectionalLight(0xffffff, 2.2);
+  key.position.set(1, 2, 3);
+  scene.add(key);
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 10);
+  const out = {};
+  for (const id of ids) {
+    const acc = buildAccessory(id);
+    if (!acc) continue;
+    scene.add(acc);
+    const bounds = new THREE.Box3().setFromObject(acc);
+    const center = bounds.getCenter(new THREE.Vector3());
+    const reach = bounds.getSize(new THREE.Vector3()).length();
+    camera.position.set(center.x + reach * 0.45, center.y + reach * 0.3, center.z + reach * 1.9);
+    camera.lookAt(center);
+    renderer.render(scene, camera);
+    out[id] = renderer.domElement.toDataURL();
+    scene.remove(acc);
+  }
+  renderer.dispose();
+  renderer.forceContextLoss();
+  return out;
+}
