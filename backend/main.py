@@ -34,6 +34,14 @@ app.include_router(voice.router)
 app.include_router(focus.router)
 
 
+@app.middleware("http")
+async def always_fresh(request, call_next):
+    """Makes the app window re-check every file with the server, so it never keeps running an old copy of the code."""
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True}
