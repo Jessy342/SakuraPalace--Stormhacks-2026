@@ -4,6 +4,8 @@ A Windows desktop study and focus companion, built for StormHacks 2026.
 
 A 3D anime character talks to you with an ElevenLabs voice, manages your quests and schedule, and rewards you for staying on task. Open a blocked app during a focus session and the character scolds you, drains your Sakura Petals, and finally closes the app. Petals pay for outfits, backgrounds and summons for new characters.
 
+https://devpost.com/software/sakuraassistant
+
 **Built with:** Python (FastAPI), Google Gemini (chat, planning, live search, artwork), ElevenLabs (voices in English and Japanese, speech-to-text, sound effects), three.js + three-vrm (3D VRoid characters).
 
 ## Run it (Windows)
